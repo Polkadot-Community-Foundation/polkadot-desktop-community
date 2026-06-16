@@ -1,0 +1,96 @@
+name: Release
+
+# Builds the desktop installers on a v* tag (3-OS matrix via electron-builder)
+# and publishes them to the PCF downloads host: the R2 bucket `pcf-downloads`
+# served at https://get.polkadotcommunity.foundation/desktop/ (provisioned in
+# PCF/pcf-infra terraform/downloads.tf). Mirrors the polkadot-android-community
+# release flow — same bucket, same versioned + latest.<ext> + .sha256 convention.
+#
+# Artifacts (electron-builder.js): mac dmg/zip, linux AppImage, win nsis (.exe);
+# filenames already carry the version (artifactName ${productName}-${version}-${arch}).
+#
+# Required for publishing (repo Actions secrets) — step self-skips if R2 token unset:
+#   R2_UPLOAD_TOKEN        Cloudflare API token, R2 Object R/W on pcf-downloads
+#   CLOUDFLARE_ACCOUNT_ID  account owning the bucket
+#
+# NOTE on signing: builds run UNSIGNED here (CSC_IDENTITY_AUTO_DISCOVERY=false) so
+# CI never fails on a missing cert. A downloaded unsigned build still installs but
+# warns (Gatekeeper / SmartScreen). For warning-free downloads, add code-signing +
+# notarization secrets (mac: CSC_LINK/CSC_KEY_PASSWORD + APPLE_ID/APPLE_APP_SPECIFIC_PASSWORD/APPLE_TEAM_ID;
+# win: CSC_LINK/CSC_KEY_PASSWORD) and drop the auto-discovery override.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  HAS_R2: ${{ secrets.R2_UPLOAD_TOKEN != '' }}
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            exts: 'dmg zip'
+          - os: ubuntu-latest
+            exts: 'AppImage'
+          - os: windows-latest
+            exts: 'exe'
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Node
+        uses: ./.github/actions/setup-node
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build + package installers
+        env:
+          # build unsigned in CI (see header) — avoids failing on absent certs
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          npm run build
+          npm run dist
+
+      - name: Publish installers to downloads host
+        if: ${{ startsWith(github.ref, 'refs/tags/v') && env.HAS_R2 == 'true' }}
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.R2_UPLOAD_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          BUCKET: pcf-downloads
+          EXTS: ${{ matrix.exts }}
+        run: |
+          set -euo pipefail
+          base="https://get.polkadotcommunity.foundation/desktop"
+          shopt -s nullglob
+          published=0
+          for ext in $EXTS; do
+            for f in release/dist/*."$ext"; do
+              # slugify the target name (productName has a space) for clean URLs
+              name="$(basename "$f" | tr ' ' '-')"
+              sha="$(sha256sum "$f" | awk '{print $1}')"
+              printf '%s' "$sha" > "/tmp/$name.sha256"
+              npx --yes wrangler@3 r2 object put "$BUCKET/desktop/$name"        --file="$f"             --content-type="application/octet-stream"
+              npx --yes wrangler@3 r2 object put "$BUCKET/desktop/$name.sha256" --file="/tmp/$name.sha256" --content-type="text/plain"
+              # stable per-extension pointer (latest.dmg / latest.AppImage / latest.exe / latest.zip)
+              npx --yes wrangler@3 r2 object put "$BUCKET/desktop/latest.$ext"  --file="$f"             --content-type="application/octet-stream"
+              echo "- $base/$name (sha256 $sha)" >> "$GITHUB_STEP_SUMMARY"
+              echo "- $base/latest.$ext" >> "$GITHUB_STEP_SUMMARY"
+              published=$((published+1))
+            done
+          done
+          if [ "$published" -eq 0 ]; then
+            echo "No installers matched in release/dist for: $EXTS" >&2
+            exit 1
+          fi
