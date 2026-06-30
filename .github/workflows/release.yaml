@@ -1,0 +1,148 @@
+name: Release (Paseo / DEV)
+
+# Builds Polkadot Desktop installers for the PUBLIC PASEO testnet channel — the public
+# DEV distribution — and publishes them on a v* tag. The Paseo network wiring is
+# delivered at runtime from Firebase Remote Config (chains_v2 / dot_ns_config /
+# ipfs_gateway_url / identity_backend_url) — this workflow only bakes the env-only values
+# (.env.paseo) and the public Firebase client ids, then packages per-OS via
+# electron-builder. BUILD_CHANNEL=dev gives the installers a distinct electron identity
+# (com.polkadot.desktop.dev / "Polkadot Desktop Dev") so they install side-by-side with
+# the prod/summit build (see config/index.js).
+#
+# Companion artifacts (prepared in summit-deployer-skills):
+#   .env.paseo                                   (committed; env-only Paseo values +
+#                                                 foundation Firebase web ids)
+#   guides/_tools/paseo-remote-config.json       (the RC payload to publish in Firebase)
+#   src/__checks__/paseo-config.spec.ts          (pre-deploy validator)
+#
+# Firebase client ids: the committed .env.paseo already carries the foundation web app's
+# PUBLIC ids; repo VARIABLES (below) override them if set, but are optional now.
+#   VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_PROJECT_ID,
+#   VITE_FIREBASE_STORAGE_BUCKET, VITE_FIREBASE_MESSAGING_SENDER_ID, VITE_FIREBASE_APP_ID
+# Optional SECRETS:
+#   macOS signing/notarization: CERTIFICATE_OSX_APPLICATION (base64 .p12),
+#     CERTIFICATE_PASSWORD, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID
+#     (all set → signed+notarized dmg; unset → unsigned build, Tier A handout)
+#   SENTRY_DSN (optional crash reporting)
+#   Auto-update feed: set repo var AUTO_UPDATE_URL + BUILD_SOURCE (github|s3) to enable.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      # Distinct electron identity for the public DEV distribution (config/index.js):
+      # com.polkadot.desktop.dev / "Polkadot Desktop Dev", installable beside prod/summit.
+      BUILD_CHANNEL: dev
+      # Public Firebase client ids (repo variables) — OPTIONAL OVERRIDES. The committed
+      # .env.paseo already carries the foundation web app's public ids; these are only
+      # appended when set (see "Select Paseo env"). The owning project's Remote Config
+      # must carry the Paseo/nightly values (paseo-remote-config.json).
+      VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
+      VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
+      VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
+      VITE_FIREBASE_STORAGE_BUCKET: ${{ vars.VITE_FIREBASE_STORAGE_BUCKET }}
+      VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+      VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
+      AUTO_UPDATE_URL: ${{ vars.AUTO_UPDATE_URL }}
+      BUILD_SOURCE: ${{ vars.BUILD_SOURCE }}
+      SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+      # true only when an Apple signing cert is configured — gates the mac sign+notarize path
+      HAS_APPLE: ${{ secrets.CERTIFICATE_OSX_APPLICATION != '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Node
+        uses: ./.github/actions/setup-node
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Select the Paseo channel. The committed .env.paseo already carries the foundation
+      # Firebase web ids and the env-only values. Repo variables, when set, are appended
+      # to override them (later keys win in dotenv); EMPTY repo vars are skipped so they
+      # never blank out the committed public ids. Vite reads VITE_* from .env and the
+      # process environment, so both the renderer and the electron main process agree.
+      - name: Select Paseo env
+        shell: bash
+        run: |
+          cp .env.paseo .env
+          append_if_set() {
+            # $1 = key, $2 = value; only override when the repo var is non-empty
+            [ -n "$2" ] && echo "$1=$2" >> .env || true
+          }
+          append_if_set VITE_FIREBASE_API_KEY "${VITE_FIREBASE_API_KEY}"
+          append_if_set VITE_FIREBASE_AUTH_DOMAIN "${VITE_FIREBASE_AUTH_DOMAIN}"
+          append_if_set VITE_FIREBASE_PROJECT_ID "${VITE_FIREBASE_PROJECT_ID}"
+          append_if_set VITE_FIREBASE_STORAGE_BUCKET "${VITE_FIREBASE_STORAGE_BUCKET}"
+          append_if_set VITE_FIREBASE_MESSAGING_SENDER_ID "${VITE_FIREBASE_MESSAGING_SENDER_ID}"
+          append_if_set VITE_FIREBASE_APP_ID "${VITE_FIREBASE_APP_ID}"
+          append_if_set AUTO_UPDATE_URL "${AUTO_UPDATE_URL}"
+          append_if_set BUILD_SOURCE "${BUILD_SOURCE}"
+
+      # ── macOS: import the Developer ID cert only when configured ──────────────────
+      - name: Import signing certificate (macOS, signed path)
+        if: ${{ matrix.os == 'macos-latest' && env.HAS_APPLE == 'true' }}
+        env:
+          CERTIFICATE_OSX_APPLICATION: ${{ secrets.CERTIFICATE_OSX_APPLICATION }}
+          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
+        run: sh .github/add_cert_in_keychain.sh
+
+      - name: Build renderer + main
+        run: npm run build && npm run postbuild
+
+      # ── Package ──────────────────────────────────────────────────────────────────
+      - name: Package (macOS, signed + notarized)
+        if: ${{ matrix.os == 'macos-latest' && env.HAS_APPLE == 'true' }}
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npx cross-env NODE_ENV=production electron-builder --config electron-builder.js -p never
+
+      - name: Package (macOS, unsigned — Tier A)
+        if: ${{ matrix.os == 'macos-latest' && env.HAS_APPLE != 'true' }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npx cross-env NODE_ENV=production electron-builder --config electron-builder.js -p never -c.mac.notarize=false
+
+      - name: Package (Linux / Windows)
+        if: ${{ matrix.os != 'macos-latest' }}
+        run: npx cross-env NODE_ENV=production electron-builder --config electron-builder.js -p never
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: polkadot-desktop-dev-${{ matrix.os }}
+          path: |
+            release/dist/*.dmg
+            release/dist/*.zip
+            release/dist/*.AppImage
+            release/dist/*.exe
+            release/dist/latest*.yml
+          if-no-files-found: warn
+
+      - name: Publish to GitHub Release
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          files: |
+            release/dist/*.dmg
+            release/dist/*.zip
+            release/dist/*.AppImage
+            release/dist/*.exe
+            release/dist/latest*.yml
+          generate_release_notes: true

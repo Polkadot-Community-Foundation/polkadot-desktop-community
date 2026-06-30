@@ -9,10 +9,23 @@ export const author = AUTHOR;
 export const version = VERSION;
 export const description = DESCRIPTION;
 export const electronProtocol = 'polkadot';
-export const title = process.env.NODE_ENV === 'staging' ? 'Polkadot Desktop Stage' : 'Polkadot Desktop';
-export const appId =
-  process.env.NODE_ENV === 'staging'
-    ? 'com.polkadot.desktop.stage'
+
+// Packaging channel. NODE_ENV stays `production` for any packaged build; the channel is
+// selected independently via BUILD_CHANNEL so the public DEV distribution (Paseo testnet
+// + foundation Firebase web app) installs side-by-side with the prod/summit build. The
+// legacy NODE_ENV=staging path keeps its own `.stage` identity unchanged.
+const isStaging = process.env.NODE_ENV === 'staging';
+const isDevChannel = process.env.BUILD_CHANNEL === 'dev';
+
+export const title = isStaging
+  ? 'Polkadot Desktop Stage'
+  : isDevChannel
+    ? 'Polkadot Desktop Dev'
+    : 'Polkadot Desktop';
+export const appId = isStaging
+  ? 'com.polkadot.desktop.stage'
+  : isDevChannel
+    ? 'com.polkadot.desktop.dev'
     : 'com.polkadot.desktop';
 
 export const main = {
