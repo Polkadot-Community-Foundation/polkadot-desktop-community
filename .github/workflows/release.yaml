@@ -45,16 +45,14 @@ jobs:
       # Distinct electron identity for the public DEV distribution (config/index.js):
       # com.polkadot.desktop.dev / "Polkadot Desktop Dev", installable beside prod/summit.
       BUILD_CHANNEL: dev
-      # Public Firebase client ids (repo variables) — OPTIONAL OVERRIDES. The committed
-      # .env.paseo already carries the foundation web app's public ids; these are only
-      # appended when set (see "Select Paseo env"). The owning project's Remote Config
-      # must carry the Paseo/nightly values (paseo-remote-config.json).
-      VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
-      VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
-      VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
-      VITE_FIREBASE_STORAGE_BUCKET: ${{ vars.VITE_FIREBASE_STORAGE_BUCKET }}
-      VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-      VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
+      # NOTE: the public Firebase client id OVERRIDES (repo variables) are intentionally
+      # NOT declared here at job scope. When a repo variable is unset, `${{ vars.X }}`
+      # expands to an empty string; a job-level env var set to "" is exported into the
+      # "Build renderer + main" step's process environment, and Vite gives process-env
+      # vars precedence over .env files — so an empty VITE_FIREBASE_* would BLANK OUT the
+      # public ids committed in .env.paseo and break Remote Config bootstrap. Instead the
+      # overrides are scoped to the "Select Paseo env" step below, where `append_if_set`
+      # only writes them when non-empty (see that step).
       AUTO_UPDATE_URL: ${{ vars.AUTO_UPDATE_URL }}
       BUILD_SOURCE: ${{ vars.BUILD_SOURCE }}
       SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
@@ -77,6 +75,17 @@ jobs:
       # process environment, so both the renderer and the electron main process agree.
       - name: Select Paseo env
         shell: bash
+        # Firebase client-id overrides are scoped HERE (not at job level) so their empty
+        # values — when the repo variables are unset — never reach the build step's process
+        # env and clobber the .env.paseo public ids via Vite's process-env precedence.
+        # append_if_set writes them to .env only when non-empty.
+        env:
+          VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ vars.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
         run: |
           cp .env.paseo .env
           append_if_set() {
