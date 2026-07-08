@@ -120,14 +120,31 @@ jobs:
           NODE_ENV: production
         run: npx electron-builder --config electron-builder.js -p never -c.mac.notarize=false
 
-      # NODE_ENV is set via the step env block (not cross-env): cross-env@10 exits 0
-      # without running electron-builder on the Windows runner (silent no-op — the
-      # windows artifact was missing while the job stayed green).
-      - name: Package (Linux / Windows)
-        if: ${{ matrix.os != 'macos-latest' }}
+      # Linux packages via npx under the default bash shell — works and produces the
+      # AppImage. NODE_ENV is set via the step env block (dropping cross-env, which on
+      # Windows exited 0 without running electron-builder — a silent no-op).
+      - name: Package (Linux)
+        if: ${{ matrix.os == 'ubuntu-latest' }}
         env:
           NODE_ENV: production
         run: npx electron-builder --config electron-builder.js -p never
+
+      # Windows: the `npx electron-builder` indirection returns exit 0 WITHOUT packaging
+      # on the windows runner (the job stayed green while no installer was produced — the
+      # real root cause behind the missing windows artifact, which the cross-env drop did
+      # not address). Invoke the electron-builder CLI directly via node so it actually
+      # runs, then assert an .exe was produced so a future silent no-op fails the job.
+      - name: Package (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        shell: pwsh
+        env:
+          NODE_ENV: production
+        run: |
+          node node_modules\electron-builder\cli.js --config electron-builder.js -p never
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $exe = Get-ChildItem release\dist -Filter *.exe -ErrorAction SilentlyContinue
+          if (-not $exe) { Write-Error "electron-builder produced no .exe in release/dist"; exit 1 }
+          Get-ChildItem release\dist | Format-Table Name,Length
 
       - name: Upload installers
         uses: actions/upload-artifact@v4
