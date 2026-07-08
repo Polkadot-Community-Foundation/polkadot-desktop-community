@@ -39,7 +39,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-latest, windows-latest]
+        os: [windows-latest]
     runs-on: ${{ matrix.os }}
     env:
       # Distinct electron identity for the public DEV distribution (config/index.js):
@@ -123,11 +123,35 @@ jobs:
       # NODE_ENV is set via the step env block (not cross-env): cross-env@10 exits 0
       # without running electron-builder on the Windows runner (silent no-op — the
       # windows artifact was missing while the job stayed green).
+      - name: Debug electron-builder resolution (windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        shell: pwsh
+        run: |
+          node -v; npm -v
+          Write-Host "--- .bin shims ---"
+          Get-ChildItem node_modules\.bin\electron-builder* | Format-Table Name,Length
+          Write-Host "--- npm ls ---"
+          npm ls electron-builder
+          Write-Host "--- direct node invocation ---"
+          node node_modules\electron-builder\cli.js --version
+          Write-Host "direct exit: $LASTEXITCODE"
+          Write-Host "--- npx invocation ---"
+          npx electron-builder --version
+          Write-Host "npx exit: $LASTEXITCODE"
+          Write-Host "--- cmd shim invocation ---"
+          & node_modules\.bin\electron-builder.cmd --version
+          Write-Host "shim exit: $LASTEXITCODE"
+
       - name: Package (Linux / Windows)
         if: ${{ matrix.os != 'macos-latest' }}
         env:
           NODE_ENV: production
-        run: npx electron-builder --config electron-builder.js -p never
+        shell: pwsh
+        run: |
+          node node_modules\electron-builder\cli.js --config electron-builder.js -p never
+          Write-Host "electron-builder exit: $LASTEXITCODE"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-ChildItem release\dist | Format-Table Name,Length
 
       - name: Upload installers
         uses: actions/upload-artifact@v4
