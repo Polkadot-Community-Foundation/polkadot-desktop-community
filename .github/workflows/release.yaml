@@ -110,17 +110,24 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: npx cross-env NODE_ENV=production electron-builder --config electron-builder.js -p never
+          NODE_ENV: production
+        run: npx electron-builder --config electron-builder.js -p never
 
       - name: Package (macOS, unsigned — Tier A)
         if: ${{ matrix.os == 'macos-latest' && env.HAS_APPLE != 'true' }}
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: npx cross-env NODE_ENV=production electron-builder --config electron-builder.js -p never -c.mac.notarize=false
+          NODE_ENV: production
+        run: npx electron-builder --config electron-builder.js -p never -c.mac.notarize=false
 
+      # NODE_ENV is set via the step env block (not cross-env): cross-env@10 exits 0
+      # without running electron-builder on the Windows runner (silent no-op — the
+      # windows artifact was missing while the job stayed green).
       - name: Package (Linux / Windows)
         if: ${{ matrix.os != 'macos-latest' }}
-        run: npx cross-env NODE_ENV=production electron-builder --config electron-builder.js -p never
+        env:
+          NODE_ENV: production
+        run: npx electron-builder --config electron-builder.js -p never
 
       - name: Upload installers
         uses: actions/upload-artifact@v4
