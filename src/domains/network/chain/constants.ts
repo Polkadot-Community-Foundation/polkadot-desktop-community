@@ -21,5 +21,7 @@ export const WellKnownChains = {
   polkadotRelay: v.parse(genesisHash, '0x91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3'),
   kusamaRelay: v.parse(genesisHash, '0xb0a8d493285c2df73290dfb7e61f870f17b41801197a149ca93654499ea3dafe'),
   westendRelay: v.parse(genesisHash, '0xe143f23803ac50e8f6f8e62695d1ce9e4e1d68aa36c1cd2cfd15340213f3423e'),
-  paseoRelay: v.parse(genesisHash, '0x77afd6190f1554ad45fd0d31aee62aacc33c6db0ea801129acb813f913e0764f'),
+  // Relay hosting the paseo-next system chains (paras 1500/1501/1502) the app
+  // targets; supersedes the original Paseo relay (0x77afd619…).
+  paseoRelay: v.parse(genesisHash, '0x374057be67b355151f271ff70c3db98308c62c8adc48dc6724b6a009a1a014fd'),
 } satisfies Record<string, GenesisHash>;
