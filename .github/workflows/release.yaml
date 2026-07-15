@@ -86,6 +86,10 @@ jobs:
           VITE_FIREBASE_STORAGE_BUCKET: ${{ vars.VITE_FIREBASE_STORAGE_BUCKET }}
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
+          # WebRTC TURN static-auth-secret (sensitive) — injected from a repo secret so it
+          # never lands in the committed .env. Scoped here (not job-level) for the same
+          # reason as the Firebase ids: an empty value must not clobber the .env base.
+          VITE_WEBRTC_TURN_SECRET: ${{ secrets.VITE_WEBRTC_TURN_SECRET }}
         run: |
           cp .env.paseo .env
           append_if_set() {
@@ -98,6 +102,7 @@ jobs:
           append_if_set VITE_FIREBASE_STORAGE_BUCKET "${VITE_FIREBASE_STORAGE_BUCKET}"
           append_if_set VITE_FIREBASE_MESSAGING_SENDER_ID "${VITE_FIREBASE_MESSAGING_SENDER_ID}"
           append_if_set VITE_FIREBASE_APP_ID "${VITE_FIREBASE_APP_ID}"
+          append_if_set VITE_WEBRTC_TURN_SECRET "${VITE_WEBRTC_TURN_SECRET}"
           append_if_set AUTO_UPDATE_URL "${AUTO_UPDATE_URL}"
           append_if_set BUILD_SOURCE "${BUILD_SOURCE}"
 
