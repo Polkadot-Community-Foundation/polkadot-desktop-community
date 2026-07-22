@@ -51,3 +51,9 @@ docs/_verification
 
 # nix
 result
+
+# Environment files — never commit. Build-time values are injected by CI
+# from repo variables/secrets (see .github/workflows/release.yaml).
+.env
+.env.*
+!.env.example
