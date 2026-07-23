@@ -289,7 +289,11 @@ jobs:
         with:
           name: ${{ github.ref_name }}
           body_path: NOTES.md
-          fail_on_unmatched_files: true
+          # latest*.yml only exists when an auto-update feed is configured (publish
+          # block in electron-builder.js). Don't fail the release when it's absent —
+          # installer presence is already guaranteed by the SHA256 checksum step,
+          # which exits non-zero if no installers were downloaded.
+          fail_on_unmatched_files: false
           files: |
             dist/*.dmg
             dist/*.zip
