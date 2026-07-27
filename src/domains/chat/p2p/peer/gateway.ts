@@ -79,10 +79,16 @@ const toBytes = (value: unknown): Uint8Array | null => {
 
 const createPeerResolver = async (lazyClient: LazyClient, environmentId: EnvironmentId) => {
   const { backendUrl } = await environmentUseCase.getById(environmentId);
-  // `hostChatNetwork` is an env-provided string — validate it against the
-  // SDK's accepted network union before handing it over.
+  // host-chat's AccountService.search() builds `${identityEndpoint}/usernames`,
+  // so it must receive the identity API base (with `/api/v1`) — not the bare
+  // backend root. Passing the root sends the request to `${backendUrl}/usernames`,
+  // which the Cloudflare origin serves as the SPA index.html (HTTP 200,
+  // text/html); the SDK then runs `response.json()` on that HTML and throws
+  // "Unexpected token '<', "<!DOCTYPE "... is not valid JSON". Other backend
+  // consumers (e.g. notifications) already append `/api/v1/...` themselves.
+  // See products-devnet-issues#1.
   const accountService = createAccountService({
-    identityEndpoint: backendUrl,
+    identityEndpoint: `${backendUrl}/api/v1`,
     client: lazyClient,
   });
 
