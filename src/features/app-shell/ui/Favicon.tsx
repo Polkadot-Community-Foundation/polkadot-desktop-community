@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-import { isDev } from '@/shared/env';
+import { isDev, isDevChannel } from '@/shared/env';
 import { useBrowserTheme } from '@/shared/hooks';
 import { useFavicon } from '../context/FaviconContext';
 
@@ -64,13 +64,16 @@ export const Favicon = () => {
     const link = getFaviconLink();
     if (!link) return;
 
-    const faviconSrc = isDev()
-      ? browserTheme === 'dark'
-        ? faviconDevDark
-        : faviconDev
-      : browserTheme === 'dark'
-        ? faviconProdDark
-        : faviconProd;
+    // isDev() alone misses the shipped DEV build, which is compiled in production
+    // mode; isDevChannel() covers it. Both get the devnet favicon.
+    const faviconSrc =
+      isDev() || isDevChannel()
+        ? browserTheme === 'dark'
+          ? faviconDevDark
+          : faviconDev
+        : browserTheme === 'dark'
+          ? faviconProdDark
+          : faviconProd;
 
     if (!hasBadge) {
       link.href = faviconSrc;

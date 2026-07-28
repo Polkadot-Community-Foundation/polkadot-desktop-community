@@ -1,6 +1,12 @@
-import { appId, author, electronProtocol, folders, title, updateServerUrl } from './config/index.js';
+import { appId, author, electronProtocol, folders, isDevChannel, title, updateServerUrl } from './config/index.js';
 
 const CURRENT_YEAR = new Date().getFullYear();
+
+// The DEV distribution installs side-by-side with prod (own appId and title), so it
+// needs its own dock/taskbar/installer icon or the two are indistinguishable once
+// installed. White tile = test network, per the app icon design language.
+const iconPng = `${folders.resources}/icons/${isDevChannel ? 'icon.dev.png' : 'icon.png'}`;
+const iconIco = `${folders.resources}/icons/${isDevChannel ? 'icon.dev.ico' : 'icon.ico'}`;
 
 /**
  * @type {import('electron-builder').Configuration}
@@ -25,7 +31,7 @@ export default {
   mac: {
     category: 'public.app-category.finance',
     hardenedRuntime: true,
-    icon: `${folders.resources}/icons/icon.png`,
+    icon: iconPng,
     entitlements: `${folders.resources}/entitlements/entitlements.mac.plist`,
     entitlementsInherit: `${folders.resources}/entitlements/entitlements.mac.plist`,
     target: [
@@ -42,7 +48,7 @@ export default {
   },
 
   linux: {
-    icon: `${folders.resources}/icons/icon.png`,
+    icon: iconPng,
     category: 'Finance',
     target: ['AppImage'],
     mimeTypes: [`x-scheme-handler/${electronProtocol}`],
@@ -54,7 +60,7 @@ export default {
   },
 
   win: {
-    icon: `${folders.resources}/icons/icon.ico`,
+    icon: iconIco,
     target: ['nsis'],
   },
 

@@ -15,7 +15,9 @@ export const electronProtocol = 'polkadot';
 // + foundation Firebase web app) installs side-by-side with the prod/summit build. The
 // legacy NODE_ENV=staging path keeps its own `.stage` identity unchanged.
 const isStaging = process.env.NODE_ENV === 'staging';
-const isDevChannel = process.env.BUILD_CHANNEL === 'dev';
+// Exported so electron-builder can pick the matching app icon: identity and icon
+// have to agree, or the side-by-side DEV install is indistinguishable from prod.
+export const isDevChannel = process.env.BUILD_CHANNEL === 'dev';
 
 export const title = isStaging
   ? 'Polkadot Desktop Stage'
