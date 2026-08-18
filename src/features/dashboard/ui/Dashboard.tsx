@@ -4,18 +4,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { DashboardGrid } from '@/shared/components';
 import { useTransformer } from '@/shared/di';
-import { type DashboardCard, cardsUseCase, useDashboardLayouts, useFavoriteProductIds } from '@/domains/application';
-import { useAddProductToDashboard } from '@/aggregates/product-management';
+import { type DashboardCard, useDashboardLayouts, useFavoriteProductIds } from '@/domains/application';
 import { DEFAULT_MARGIN, DEFAULT_ROW_HEIGHT } from '../constants';
 import { dashboardCardContentTransformer } from '../di';
-import { type AddableDashboardCard } from '../di';
 import { type CardRenderProps } from '../types';
 
 import { AddWidgetModalDb } from './AddWidgetModalDb';
+import { DashboardContextMenu } from './DashboardContextMenu';
 import { type DashboardPagerHandle, DashboardPager } from './DashboardPager';
 import { DashboardToolbar } from './DashboardToolbar';
 import { EmptyDashboardView } from './EmptyDashboardView';
-import { buildNativeDashboardCard } from './add-widget/addWidgetList';
 
 import { PageLoadingState } from '@/PageLoadingState';
 
@@ -54,12 +52,6 @@ export const Dashboard = ({ initialPageIndex, onInitialPageIndexApplied }: Dashb
   }, [pages]);
 
   const { data: favoriteProductIds } = useFavoriteProductIds();
-  const addProductToDashboard = useAddProductToDashboard();
-
-  const handleAddNativeCard = useCallback(async (entry: AddableDashboardCard, size: { w: number; h: number }) => {
-    const card = buildNativeDashboardCard(entry, size);
-    return cardsUseCase.addCardToLayout(card);
-  }, []);
 
   const itemTypeMapsPerPage = useMemo(() => {
     return pages.map(page => {
@@ -145,12 +137,12 @@ export const Dashboard = ({ initialPageIndex, onInitialPageIndexApplied }: Dashb
   );
 
   const resolveScrollCrossPageDrop = useCallback(
-    (itemId: string) => {
+    (itemId: string, dropRow?: number) => {
       const visible = pagerRef.current?.getVisiblePageIndex() ?? activePageIndex;
       const delta = visible - dragStartVisiblePageRef.current;
       if (delta === 0) return false;
       setProvisionalTrailingPage(false);
-      moveItemByPageDelta(itemId, delta);
+      moveItemByPageDelta(itemId, delta, dropRow);
       return true;
     },
     [activePageIndex, moveItemByPageDelta],
@@ -218,11 +210,12 @@ export const Dashboard = ({ initialPageIndex, onInitialPageIndexApplied }: Dashb
             onResizeCard={size => isActivePage && resizeWidget(card.i, size)}
             onRemoveCard={() => isActivePage && onRemove()}
             onCleanupCards={handleAutolayout}
+            onOpenAddWidgetModal={() => isActivePage && openAddModal()}
           />
         </div>
       );
     },
-    [removeWidget, resizeWidget, handleAutolayout, removeFolder, openMenuId, handleMenuOpenChange],
+    [removeWidget, resizeWidget, handleAutolayout, removeFolder, openMenuId, handleMenuOpenChange, openAddModal],
   );
 
   const renderPage = useCallback(
@@ -249,13 +242,13 @@ export const Dashboard = ({ initialPageIndex, onInitialPageIndexApplied }: Dashb
               : undefined
           }
           onResolveScrollCrossPageDrop={isActivePage ? resolveScrollCrossPageDrop : undefined}
-          onMoveToAdjacentPage={(itemId, direction) => {
+          onMoveToAdjacentPage={(itemId, direction, dropRow) => {
             if (!isActivePage) return;
             if (direction === -1) {
-              moveItemToPrevPage(itemId);
+              moveItemToPrevPage(itemId, dropRow);
               return;
             }
-            moveItemToNextPage(itemId);
+            moveItemToNextPage(itemId, dropRow);
           }}
           onLayoutChange={newLayout => {
             if (!isActivePage) return;
@@ -288,14 +281,48 @@ export const Dashboard = ({ initialPageIndex, onInitialPageIndexApplied }: Dashb
 
   if (isEmptyDashboard) {
     return (
+      <DashboardContextMenu showCleanup={false} onAddWidget={() => openAddModal()} onCleanup={handleAutolayout}>
+        <div className="flex h-full min-h-0 flex-col bg-bg-surface-main">
+          <div className="min-h-0 flex-1">
+            <EmptyDashboardView onAddWidget={() => openAddModal()} />
+          </div>
+
+          <DashboardToolbar
+            pageCount={pages.length}
+            activePageIndex={activePageIndex}
+            onSelectPage={setActivePageIndex}
+            onAddWidget={() => openAddModal()}
+          />
+
+          <AddWidgetModalDb
+            dashboardPages={pages}
+            favoriteProductIds={favoriteProductIds}
+            isOpen={isAddModalOpen}
+            onClose={closeAddModal}
+            onNavigateToDashboardPage={handleNavigateToDashboardPage}
+          />
+        </div>
+      </DashboardContextMenu>
+    );
+  }
+
+  return (
+    <DashboardContextMenu showCleanup onAddWidget={() => openAddModal()} onCleanup={handleAutolayout}>
       <div className="flex h-full min-h-0 flex-col bg-bg-surface-main">
-        <div className="min-h-0 flex-1">
-          <EmptyDashboardView onAddWidget={() => openAddModal()} />
+        <div className="flex min-h-0 flex-1 flex-col">
+          <DashboardPager
+            ref={pagerRef}
+            pageCount={effectivePageCount}
+            activePageIndex={activePageIndex}
+            renderPage={renderPage}
+            onActivePageIndexChange={setActivePageIndex}
+            onVisiblePageIndexChange={handleVisiblePageIndexChange}
+          />
         </div>
 
         <DashboardToolbar
           pageCount={pages.length}
-          activePageIndex={activePageIndex}
+          activePageIndex={visiblePageIndex}
           onSelectPage={setActivePageIndex}
           onAddWidget={() => openAddModal()}
         />
@@ -306,43 +333,9 @@ export const Dashboard = ({ initialPageIndex, onInitialPageIndexApplied }: Dashb
           isOpen={isAddModalOpen}
           onClose={closeAddModal}
           onNavigateToDashboardPage={handleNavigateToDashboardPage}
-          onSelectProduct={addProductToDashboard}
-          onAddNativeCard={handleAddNativeCard}
         />
       </div>
-    );
-  }
-
-  return (
-    <div className="flex h-full min-h-0 flex-col bg-bg-surface-main">
-      <div className="flex min-h-0 flex-1 flex-col">
-        <DashboardPager
-          ref={pagerRef}
-          pageCount={effectivePageCount}
-          activePageIndex={activePageIndex}
-          renderPage={renderPage}
-          onActivePageIndexChange={setActivePageIndex}
-          onVisiblePageIndexChange={handleVisiblePageIndexChange}
-        />
-      </div>
-
-      <DashboardToolbar
-        pageCount={pages.length}
-        activePageIndex={visiblePageIndex}
-        onSelectPage={setActivePageIndex}
-        onAddWidget={() => openAddModal()}
-      />
-
-      <AddWidgetModalDb
-        dashboardPages={pages}
-        favoriteProductIds={favoriteProductIds}
-        isOpen={isAddModalOpen}
-        onClose={closeAddModal}
-        onNavigateToDashboardPage={handleNavigateToDashboardPage}
-        onSelectProduct={addProductToDashboard}
-        onAddNativeCard={handleAddNativeCard}
-      />
-    </div>
+    </DashboardContextMenu>
   );
 };
 

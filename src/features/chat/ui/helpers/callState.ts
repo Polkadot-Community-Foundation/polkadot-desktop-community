@@ -69,17 +69,28 @@ export function deriveCallStates(messages: ChatMessage[]): Map<string, CallState
   return out;
 }
 
-function saturatingSubtract(a: number, b: number): number {
-  return a >= b ? a - b : 0;
+/**
+ * The `react-intl` key for a call's title. Returns the key rather than the
+ * translated string so the mapping stays pure — the chat list and the call
+ * bubble both translate it at their own call site.
+ */
+export function callTitleKey(state: CallState, isMe: boolean, isVideo: boolean): string {
+  switch (state.kind) {
+    case 'calling':
+      if (isMe) return isVideo ? 'feature.chat.call.title.outgoingVideo' : 'feature.chat.call.title.outgoingVoice';
+
+      return isVideo ? 'feature.chat.call.title.incomingVideo' : 'feature.chat.call.title.incomingVoice';
+    case 'active':
+      return isVideo ? 'feature.chat.call.title.ongoingVideo' : 'feature.chat.call.title.ongoingVoice';
+    case 'finished':
+      return isVideo ? 'feature.chat.call.title.video' : 'feature.chat.call.title.voice';
+    case 'missed':
+      return isVideo ? 'feature.chat.call.title.missedVideo' : 'feature.chat.call.title.missedVoice';
+    case 'cancelled':
+      return isVideo ? 'feature.chat.call.title.canceledVideo' : 'feature.chat.call.title.canceledVoice';
+  }
 }
 
-// `M:SS` for sub-hour calls; `H:MM:SS` past an hour. Matches Figma copy.
-export function formatCallDuration(durationMs: number): string {
-  const totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  const pad = (n: number) => n.toString().padStart(2, '0');
-  if (hours > 0) return `${hours}:${pad(minutes)}:${pad(seconds)}`;
-  return `${minutes}:${pad(seconds)}`;
+function saturatingSubtract(a: number, b: number): number {
+  return a >= b ? a - b : 0;
 }

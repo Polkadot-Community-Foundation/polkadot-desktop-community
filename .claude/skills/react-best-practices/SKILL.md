@@ -9,14 +9,14 @@ Performance optimization guide for React. Rules are split across 6 categories by
 
 ## Rule Categories by Priority
 
-| Priority | Category | Impact | Prefix |
-|----------|----------|--------|--------|
-| 1 | Eliminating Waterfalls | CRITICAL | `async-` |
-| 2 | Bundle Size Optimization | CRITICAL | `bundle-` |
-| 3 | Client-Side Data Fetching | MEDIUM-HIGH | `client-` |
-| 4 | Re-render Optimization | MEDIUM | `rerender-` |
-| 5 | Rendering Performance | MEDIUM | `rendering-` |
-| 6 | Advanced Patterns | LOW | `advanced-` |
+| Priority | Category                  | Impact      | Prefix       |
+| -------- | ------------------------- | ----------- | ------------ |
+| 1        | Eliminating Waterfalls    | CRITICAL    | `async-`     |
+| 2        | Bundle Size Optimization  | CRITICAL    | `bundle-`    |
+| 3        | Client-Side Data Fetching | MEDIUM-HIGH | `client-`    |
+| 4        | Re-render Optimization    | MEDIUM      | `rerender-`  |
+| 5        | Rendering Performance     | MEDIUM      | `rendering-` |
+| 6        | Advanced Patterns         | LOW         | `advanced-`  |
 
 ## Quick Reference
 
@@ -71,6 +71,7 @@ rules/_sections.md
 ```
 
 Each rule file contains:
+
 - Brief explanation of why it matters
 - Incorrect code example with explanation
 - Correct code example with explanation

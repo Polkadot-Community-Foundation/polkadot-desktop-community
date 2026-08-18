@@ -1,10 +1,14 @@
-import { createSideEffect, createSlot } from '@/shared/di';
+import { type ReactNode } from 'react';
+
+import { createSideEffect, createSlot, createTransformer } from '@/shared/di';
 import { type DotNsUrl, type Product } from '@/domains/product';
 import { type TabRef } from '@/aggregates/browser-tabs';
 
 export type AddressBarProductSlotProps = {
+  // Resolved chain/persisted product — only set on `/product/:id` routes. Native SPA
+  // subjects (e.g. chat) use the leading slot with `product=null`; they own their
+  // affordance and must not rely on a legacy product row for the same id.
   product: Product | null;
-  isFocused: boolean;
 };
 
 export const addressBarProductLeadingSlot = createSlot<AddressBarProductSlotProps>({
@@ -15,8 +19,20 @@ export const addressBarProductTrailingSlot = createSlot<AddressBarProductSlotPro
   name: 'addressBarProductTrailingSlot',
 });
 
+// Resolves the address-bar leading icon for a subject that has no persisted
+// product row to derive a favicon from (native SPA subjects such as chat).
+// Providers return their icon node for a matching productId and fall through
+// (null) otherwise, so the generic ProductIcon/Polkadot fallback still renders.
+export const resolveAddressBarProductIconTransformer = createTransformer<
+  { productId: string; product: Product | null },
+  ReactNode
+>({ name: 'resolveAddressBarProductIcon' });
+
 export type AddressBarFocusOptions = {
   newTab?: boolean;
+  // What the bar was showing, so the surface opens on it rather than empty. Only
+  // the bar itself passes this — a new tab starts from nothing by definition.
+  initialText?: string;
 };
 
 export const focusAddressBarSideEffect = createSideEffect<AddressBarFocusOptions>({ name: 'focusAddressBar' });

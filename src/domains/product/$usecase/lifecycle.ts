@@ -4,7 +4,9 @@ import { deleteAliasPermissionsByRequester } from '../alias-permissions/resource
 import { productLocalStorageRepository } from '../local-storage/repository';
 import { deleteProductPermissions } from '../permissions/resource';
 import { EXECUTABLE_KINDS, invalidateExecutableArchive, productDb } from '../product';
+import { declinedUpdatesRepository } from '../product/declined-updates/repository';
 
+import { dotNsUseCase } from './dotns';
 import { offlineCacheUseCase } from './offlineCache';
 
 const onProductForgottenSideEffect = createSideEffect<{ productId: string }>({
@@ -33,9 +35,11 @@ async function purgeProduct(productId: string): Promise<boolean> {
     }
   }
 
+  const tld = await dotNsUseCase.getActiveTld();
+
   const [, , deleteResult] = await Promise.all([
-    deleteProductPermissions(productId),
-    deleteAliasPermissionsByRequester(productId),
+    deleteProductPermissions(productId, tld),
+    deleteAliasPermissionsByRequester(productId, tld),
     productDb.delete(productId),
     offlineCacheUseCase.evictArchives(productId),
     // Best-effort: a failing local-storage wipe must not abort the rest of the
@@ -43,6 +47,11 @@ async function purgeProduct(productId: string): Promise<boolean> {
     // Promise.all would reject and skip them.
     productLocalStorageRepository.clearAllEntries(productId).catch(error => {
       console.warn('clearAllEntries failed for', productId, error);
+    }),
+    // Best-effort: a failing declined-updates wipe must not abort the rest of
+    // the reset, otherwise declined rows would leak past a forget.
+    declinedUpdatesRepository.deleteByBaseName(productId).catch(error => {
+      console.warn('deleteByBaseName (declinedUpdates) failed for', productId, error);
     }),
   ]);
 

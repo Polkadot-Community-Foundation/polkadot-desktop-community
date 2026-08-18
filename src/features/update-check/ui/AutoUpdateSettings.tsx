@@ -51,7 +51,7 @@ export const AutoUpdateSettings = memo(() => {
                 <Select.Item value="experimental">{t('feature.updateCheck.channel.experimental')}</Select.Item>
               </Select.Content>
             </Select>
-            <span className="text-xs text-text-secondary">
+            <span className="text-xs text-fg-secondary">
               {channel === 'experimental'
                 ? t('feature.updateCheck.channel.experimentalHint')
                 : t('feature.updateCheck.channel.stableHint')}

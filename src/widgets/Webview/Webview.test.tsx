@@ -61,6 +61,10 @@ vi.mock('@/domains/product', async importOriginal => {
     ...real,
     useExecutableArchive: (...args: unknown[]) => useExecutableArchiveMock(...args),
     useDisplayedProduct: (...args: unknown[]) => useResolveProductMock(...args),
+    // Settled: the navigation decisions treat an unsettled TLD as "not a dotNS
+    // navigation", so the real hook (no environment here) would answer `allow` to
+    // every case below.
+    useDotNsTld: () => ({ data: '.dot', pending: false, error: null, refresh: vi.fn() }),
   };
 });
 
@@ -229,10 +233,33 @@ describe('Webview — src derivation and reload', () => {
     const { rerender } = render(<Webview kind="app" identifier="app.dot" visible={true} onPathnameChange={() => {}} />, {
       wrapper: Providers,
     });
+    // The guest has loaded (dom-ready) — this is a genuine post-load session change (login
+    // while the product is open), so reload() is a valid call and must fire.
+    act(() => mockTag.dispatch('dom-ready', {}));
     expect(mockTag.reload).not.toHaveBeenCalled();
     useSessionMock.mockReturnValue({ session: 'session-B' });
     rerender(<Webview kind="app" identifier="app.dot" visible={true} onPathnameChange={() => {}} />);
     expect(mockTag.reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not crash when the session changes before the webview attaches (localhost hard-reload race)', () => {
+    // A localhost product is `ready` synchronously, so the session-reload effect can fire on
+    // the initial null→restored session transition before the guest has emitted dom-ready.
+    // reload() throws in that window; the host must swallow it rather than surface the
+    // error-boundary fallback. Regression for the Cmd+Shift+R crash.
+    // Explicit baseline — clearAllMocks() keeps a prior test's mockReturnValue, so pin the
+    // starting session so the null→restored transition below actually fires the effect.
+    useSessionMock.mockReturnValue({ session: 'session-A' });
+    const { rerender } = render(
+      <Webview kind="app" identifier="http://localhost:5173" visible={true} onPathnameChange={() => {}} />,
+      { wrapper: Providers },
+    );
+    // No dom-ready dispatched — the guest is not attached yet.
+    useSessionMock.mockReturnValue({ session: 'session-B' });
+    expect(() =>
+      rerender(<Webview kind="app" identifier="http://localhost:5173" visible={true} onPathnameChange={() => {}} />),
+    ).not.toThrow();
+    expect(mockTag.reload).toHaveBeenCalled();
   });
 
   it('does not reload when session changes while not ready', () => {

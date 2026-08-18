@@ -47,7 +47,11 @@ function createInstance$({
       files,
       entrypoint,
       fetchResolver,
-      deps: { getProduct, getSession, getChatSessions },
+      deps: {
+        getProduct,
+        getSession,
+        getChatSessions,
+      },
       bindings: defaultWorkerBindings,
     })
       .then(inst => {

@@ -19,7 +19,7 @@ export const DegradedBanner: FC<Props> = ({ reason, onReload }) => {
   return (
     <div
       data-testid="degraded-banner"
-      className="absolute top-0 right-0 left-0 z-10 flex items-center justify-between gap-2 bg-general-background/95 px-3 py-2 text-sm text-text-secondary shadow-sm backdrop-blur-sm"
+      className="absolute start-0 end-0 top-0 z-10 flex items-center justify-between gap-2 bg-bg-surface-main/95 px-3 py-2 text-sm text-fg-secondary shadow-sm backdrop-blur-sm"
       style={{ appRegion: 'no-drag' }}
     >
       <span className="flex items-center gap-2">
@@ -34,7 +34,7 @@ export const DegradedBanner: FC<Props> = ({ reason, onReload }) => {
         <button
           data-testid="degraded-banner-dismiss"
           type="button"
-          className="p-1 text-text-tertiary hover:text-text-secondary"
+          className="p-1 text-fg-tertiary hover:text-fg-secondary"
           aria-label={t('widget.webview.degraded.dismiss')}
           onClick={() => setDismissed(true)}
         >

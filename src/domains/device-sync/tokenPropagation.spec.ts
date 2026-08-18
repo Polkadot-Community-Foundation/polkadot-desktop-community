@@ -15,7 +15,7 @@ const OWN_USER_ID = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty';
 const TOKEN_HEX = 'ab'.repeat(32); // stored without 0x, mirroring rooms.peerPushToken
 
 const ctx: ApplierContext = {
-  resolveConsumerInfo: vi.fn().mockResolvedValue({ chatKey: new Uint8Array(65).fill(0x9a), username: 'alice' }),
+  resolveConsumerInfo: vi.fn().mockResolvedValue({ chatKey: new Uint8Array(32).fill(0x9a), username: 'alice' }),
   ownUserId: OWN_USER_ID,
 };
 
@@ -25,7 +25,6 @@ const seedContactAndRoom = async () => {
     sessionId: PEER_SS58,
     peerId: PEER_SS58,
     peerUsername: 'alice',
-    peerP256PublicKey: '0xaa',
     userId: OWN_USER_ID,
     createdAt: 1,
     lastUpdate: 1,
@@ -63,8 +62,8 @@ describe('token propagation (producer row → collector → applier)', () => {
     await seedContactAndRoom();
     await seedTokenRow();
 
-    const { entities } = await collectChangesSince(1);
-    const messages = entities.find(e => e.tag === 'Messages');
+    const { entities: collected } = await collectChangesSince(1);
+    const messages = collected.map(c => c.entity).find(e => e.tag === 'Messages');
     if (messages?.tag !== 'Messages') throw new Error('expected a Messages entity');
 
     const versioned = messages.value[0]!.remote.versioned;
@@ -80,8 +79,8 @@ describe('token propagation (producer row → collector → applier)', () => {
     await seedContactAndRoom();
     await seedTokenRow();
 
-    const { entities } = await collectChangesSince(1);
-    const messages = entities.find(e => e.tag === 'Messages');
+    const { entities: collected } = await collectChangesSince(1);
+    const messages = collected.map(c => c.entity).find(e => e.tag === 'Messages');
     if (messages?.tag !== 'Messages') throw new Error('expected a Messages entity');
 
     // Sibling has the room but no token yet.

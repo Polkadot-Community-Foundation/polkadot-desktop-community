@@ -11,7 +11,7 @@
 import { type CodecType } from 'scale-ts';
 
 import { type MinimalCandidate, minimalToRtcCandidateInit, rtcCandidateToMinimal } from './iceCandidate';
-import { MinimalSetupCodec } from './signaling';
+import { MinimalCandidatesVecCodec, MinimalSetupCodec } from './signaling';
 
 type MinimalSetup = CodecType<typeof MinimalSetupCodec>;
 
@@ -61,6 +61,27 @@ export function encodeMinimalSetup(localSdp: string, gathered: RTCIceCandidate[]
     candidates,
   };
   return MinimalSetupCodec.enc(setup);
+}
+
+/**
+ * Encode trickled ICE candidates as a bare `Vec<MinimalCandidate>` — the wire
+ * format mobile's `SdpCoder.encodeCandidates` produces and puts in a
+ * `dataChannelIceCandidate` message's `sdp` field. This is DISTINCT from
+ * `encodeMinimalSetup` (a full offer/answer setup): trickle-candidate frames
+ * carry ONLY the candidate vector, no session/ice/fingerprint fields.
+ */
+export function encodeCandidates(gathered: RTCIceCandidate[]): Uint8Array {
+  const candidates: MinimalCandidate[] = [];
+  for (const c of gathered) {
+    const m = rtcCandidateToMinimal(c);
+    if (m) candidates.push(m);
+  }
+  return MinimalCandidatesVecCodec.enc(candidates);
+}
+
+/** Decode a `Vec<MinimalCandidate>` trickle-candidate blob (mobile parity). */
+export function decodeCandidates(bytes: Uint8Array): RTCIceCandidateInit[] {
+  return MinimalCandidatesVecCodec.dec(bytes).map(c => minimalToRtcCandidateInit(c));
 }
 
 // ── Internal: parse SDP text → MinimalSetup fields ──────────────────────

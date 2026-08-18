@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 import { electronProtocol } from '~config';
-import { type IpcMainInvokeEvent, type WebContents, app, ipcMain, session, shell } from 'electron';
+import { type IpcMainInvokeEvent, type Session, type WebContents, app, ipcMain, session, shell } from 'electron';
 
 import {
   type DevicePermissionType,
@@ -24,6 +24,7 @@ import { createArchiveStore } from './archive-store';
 import { type SandboxHealthMonitor, createSandboxHealthMonitor } from './health';
 import * as healthConstants from './health/constants';
 import {
+  canServeCachedEntry,
   evaluateNetworkRequest,
   isExternalUrlAllowed,
   listClearablePartitions,
@@ -39,24 +40,25 @@ import {
   validateContenthash,
 } from './lib';
 
-// Allowed IPFS gateway domains for product webviews — comma-separated list of
-// hostnames injected at build time via `SANDBOX_IPFS_ALLOWLIST`. Empty/unset
-// allowlist means every IPFS GET goes through the per-product permission flow
-// (fail-closed), which is the safe default for a fork without dedicated gateway
+// Allowed IPFS gateway and TURN/STUN relay domains for product webviews — comma-separated
+// hostname lists injected at build time via `SANDBOX_IPFS_ALLOWLIST` / `SANDBOX_RELAY_ALLOWLIST`.
+// An empty/unset allowlist sends every such request through the per-product permission flow
+// (fail-closed), which is the safe default for a fork without dedicated gateway or relay
 // infrastructure. Documented in `.env.example` / PUBLISHING.md.
 const ALLOWED_IPFS_DOMAINS = parseHostAllowlist(process.env['SANDBOX_IPFS_ALLOWLIST']);
-
-// Allowed TURN/STUN relay domains for product webviews — comma-separated list of
-// hostnames injected at build time via `SANDBOX_RELAY_ALLOWLIST`. Empty/unset
-// allowlist means every TURN/STUN request goes through the per-product
-// permission flow (fail-closed), which is the safe default for a fork without
-// dedicated relay infrastructure. Documented in `.env.example` / PUBLISHING.md.
 const ALLOWED_RELAY_DOMAINS = parseHostAllowlist(process.env['SANDBOX_RELAY_ALLOWLIST']);
 
 export function setupSandbox(main: () => WebContents | null) {
   // Track configured partitions to avoid duplicate setup. Cleared on session reset
   // so a re-attached webview can have its protocol handlers reinstalled.
   const configuredPartitions = new Set<string>();
+
+  // Per-partition remote-permission gate, keyed by the session object so the
+  // per-webContents navigation handlers (registered in a different scope) can
+  // reach the product-scoped check via `contents.session`. Never dropped, for the
+  // same reason `configuredPartitions` isn't: handlers are bound to the long-lived
+  // session and `session.fromPartition` returns the same instance on reuse.
+  const remotePermissionGateBySession = new Map<Session, (url: string) => Promise<boolean>>();
 
   const archiveStore = createArchiveStore(path.join(app.getPath('userData'), 'product-archives'));
 
@@ -122,15 +124,34 @@ export function setupSandbox(main: () => WebContents | null) {
       }
     }
 
+    remotePermissionGateBySession.set(ses, checkRemotePermission);
+
     // Handle all requests within the widget scheme
     ses.protocol.handle(electronProtocol, async request => {
       const url = new URL(request.url);
-      let archive = archiveCache.get(url.hostname);
-      if (!archive) {
-        const stored = await archiveStore.readCurrent(url.hostname);
+      // Enforce the pinned/frozen version: a persisted (pinned) domain serves its frozen
+      // bytes, never a contenthash-blind in-memory warm that could shadow it. A disk-backed
+      // cache entry already carries the pinned contenthash (kept in sync by persist/delete),
+      // so it is authoritative and skips the disk pointer read — the hot path for a pinned
+      // product's many asset requests. Only a warm or a cache miss reads the pointer.
+      const cached = archiveCache.peek(url.hostname);
+      const pointer = cached && cached.contenthash !== null ? null : await archiveStore.readPointer(url.hostname);
+
+      let archive: ProductArchive | undefined;
+      if (cached && canServeCachedEntry(cached.contenthash, pointer?.contenthash ?? null)) {
+        archive = archiveCache.get(url.hostname); // bumps LRU recency
+      } else if (pointer) {
+        const stored = await archiveStore.read(url.hostname, pointer.contenthash);
         if (stored) {
           archive = { domain: url.hostname, origin: stored.origin, files: stored.files };
-          archiveCache.set(url.hostname, archive, true);
+          archiveCache.set(url.hostname, archive, true, pointer.contenthash);
+        } else if (cached) {
+          // The disk pointer names a pinned version, but its bytes are missing/corrupt
+          // (read returned null). A contenthash-blind warm entry can't *shadow* a version
+          // that isn't actually serveable, so fall back to the warm in-memory bytes: the
+          // product still loads instead of 404ing. Only reachable when the warm entry was
+          // rejected by canServeCachedEntry (its contenthash is null), so no pin is bypassed.
+          archive = archiveCache.get(url.hostname); // bumps LRU recency
         }
       }
       if (!archive) return new Response('Unknown product', { statusText: request.url, status: 404 });
@@ -325,8 +346,9 @@ export function setupSandbox(main: () => WebContents | null) {
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
-    // Just written to disk → re-servable, so safe to evict from memory later.
-    archiveCache.set(validation.domain, pending, true);
+    // Just written to disk → re-servable, so safe to evict from memory later. Tag with
+    // the contenthash so the serve decision recognizes it as the pinned/frozen version.
+    archiveCache.set(validation.domain, pending, true, hashValidation.contenthash);
     pendingArchives.delete(validation.domain);
     return { success: true };
   });
@@ -525,6 +547,22 @@ export function setupSandbox(main: () => WebContents | null) {
       shellWC.send(channel, payload);
     }
 
+    // Open an external URL in the system browser, but only after the product owning this
+    // webview grants the Open-External-URL permission. Shared by both external-open paths
+    // (will-navigate and setWindowOpenHandler); fails closed when no product context is
+    // registered for the session.
+    function openExternalIfPermitted(href: string, context: 'navigation' | 'open'): void {
+      const gate = remotePermissionGateBySession.get(contents.session);
+      if (!gate) {
+        console.warn(`[sandbox] No product context for external ${context}, blocked:`, href);
+        return;
+      }
+      void gate(href).then(granted => {
+        if (granted) shell.openExternal(href);
+        else console.warn(`[sandbox] External ${context} denied by permission:`, href);
+      });
+    }
+
     // Block navigation outside widget scheme (allow localhost for developers, allow .dot domains for cross-product links)
     // TODO: separate dev and prod builds and exclude localhost in prod builds
     contents.on('will-navigate', (event, url) => {
@@ -533,17 +571,19 @@ export function setupSandbox(main: () => WebContents | null) {
 
       event.preventDefault();
       if (decision.openExternalHref) {
-        shell.openExternal(decision.openExternalHref);
+        openExternalIfPermitted(decision.openExternalHref, 'navigation');
       } else {
         console.warn('[sandbox] Blocked navigation to:', url);
       }
     });
 
-    // Forcing default browser usage for external links — only allow https
+    // Forcing default browser usage for external links — only https, and only after the
+    // product's Open-External-URL permission is granted (opened async; the handler must
+    // return synchronously).
     contents.setWindowOpenHandler(({ url }) => {
       const result = isExternalUrlAllowed(url);
-      if (result.allowed) {
-        shell.openExternal(result.href!);
+      if (result.allowed && result.href) {
+        openExternalIfPermitted(result.href, 'open');
       } else {
         console.warn('[sandbox] Blocked shell.openExternal for:', url);
       }

@@ -1,11 +1,13 @@
 import { ArrowDownLeft, ArrowUpRight, Phone, Video } from 'lucide-react';
 import { type MouseEvent } from 'react';
 
+import { useAnyOf } from '@/shared/di';
 import { useTranslation } from '@/shared/translation';
 import { cnTw } from '@/shared/utils';
 import { type CallSignalContent, type ChatMessage } from '@/domains/chat';
-import { type CallState, formatCallDuration } from '../helpers/callState';
-import { formatMessageDate } from '../helpers/message';
+import { canPlaceCallAnyOf } from '../../di';
+import { chatService } from '../../service';
+import { type CallState, callTitleKey } from '../helpers/callState';
 
 import { StatusIcon } from './MessageBubble';
 
@@ -19,10 +21,11 @@ type Props = {
 
 export const CallMessageBubble = ({ message, content, state, isMe, onContextMenu }: Props) => {
   const { t } = useTranslation();
+  const canPlaceCall = useAnyOf(canPlaceCallAnyOf);
   const isVideo = content.purpose === 'video';
 
-  const title = titleFor(state, isMe, isVideo, t);
-  const subtitle = subtitleFor(state, isMe, t);
+  const title = t(callTitleKey(state, isMe, isVideo));
+  const subtitle = subtitleFor(state, isMe, canPlaceCall, t);
   const isMissedOrDeclined = state.kind === 'missed';
 
   const CallIcon = isVideo ? Video : Phone;
@@ -37,8 +40,8 @@ export const CallMessageBubble = ({ message, content, state, isMe, onContextMenu
       )}
       onContextMenu={onContextMenu}
     >
-      <div className="flex w-full items-end justify-between gap-2 pt-1.5 pr-2 pb-1.5 pl-3">
-        <div className="flex items-center gap-2 py-0.5 pr-2">
+      <div className="flex w-full items-end justify-between gap-2 ps-3 pe-2 pt-1.5 pb-1.5">
+        <div className="flex items-center gap-2 py-0.5 pe-2">
           <div
             className={cnTw(
               'flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full',
@@ -71,7 +74,7 @@ export const CallMessageBubble = ({ message, content, state, isMe, onContextMenu
               isMe ? 'text-fg-secondary-inverted' : 'text-fg-tertiary',
             )}
           >
-            {formatMessageDate(message.timestamp)}
+            {chatService.formatMessageDate(message.timestamp)}
           </span>
           {isMe && (
             <div className="flex size-3 items-center justify-center">
@@ -86,34 +89,22 @@ export const CallMessageBubble = ({ message, content, state, isMe, onContextMenu
 
 type Translate = ReturnType<typeof useTranslation>['t'];
 
-function titleFor(state: CallState, isMe: boolean, isVideo: boolean, t: Translate): string {
+function subtitleFor(state: CallState, isMe: boolean, canPlaceCall: boolean, t: Translate): string {
   switch (state.kind) {
     case 'calling':
-      if (isMe) return isVideo ? t('feature.chat.call.title.outgoingVideo') : t('feature.chat.call.title.outgoingVoice');
-      return isVideo ? t('feature.chat.call.title.incomingVideo') : t('feature.chat.call.title.incomingVoice');
+      return canPlaceCall ? t('feature.chat.call.subtitle.tapToCall') : t('feature.chat.call.subtitle.openToCall');
     case 'active':
-      return isVideo ? t('feature.chat.call.title.ongoingVideo') : t('feature.chat.call.title.ongoingVoice');
+      return canPlaceCall ? t('feature.chat.call.subtitle.tapToReturn') : t('feature.chat.call.subtitle.openToReturn');
     case 'finished':
-      return isVideo ? t('feature.chat.call.title.video') : t('feature.chat.call.title.voice');
+      return chatService.formatCallDuration(state.durationMs);
     case 'missed':
-      return isVideo ? t('feature.chat.call.title.missedVideo') : t('feature.chat.call.title.missedVoice');
-    case 'cancelled':
-      return isVideo ? t('feature.chat.call.title.canceledVideo') : t('feature.chat.call.title.canceledVoice');
-  }
-}
-
-function subtitleFor(state: CallState, isMe: boolean, t: Translate): string {
-  switch (state.kind) {
-    case 'calling':
-      return t('feature.chat.call.subtitle.openToCall');
-    case 'active':
-      return t('feature.chat.call.subtitle.openToReturn');
-    case 'finished':
-      return formatCallDuration(state.durationMs);
-    case 'missed':
-      return t('feature.chat.call.subtitle.openToCallBack');
+      return canPlaceCall ? t('feature.chat.call.subtitle.tapToCallBack') : t('feature.chat.call.subtitle.openToCallBack');
     case 'cancelled':
       // Figma uses "again" for outgoing cancellations vs "back" when the contact cancelled.
-      return isMe ? t('feature.chat.call.subtitle.openToCallAgain') : t('feature.chat.call.subtitle.openToCallBack');
+      if (isMe) {
+        return canPlaceCall ? t('feature.chat.call.subtitle.tapToCallAgain') : t('feature.chat.call.subtitle.openToCallAgain');
+      }
+
+      return canPlaceCall ? t('feature.chat.call.subtitle.tapToCallBack') : t('feature.chat.call.subtitle.openToCallBack');
   }
 }

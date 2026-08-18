@@ -1,6 +1,7 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+import { DEFAULT_ENVIRONMENT_ID, networkTld } from '../helpers/dotns';
 import { type StaticServer, startStaticServer } from '../helpers/http-server';
 
 import { test as baseTest } from './base';
@@ -49,7 +50,12 @@ export const test = baseTest.extend<object, LinkTestsWorkerFixtures>({
       }
 
       const fixturePath = path.resolve(__dirname, '../test-products/link-tests');
-      const server: StaticServer = await startStaticServer(fixturePath);
+      // The fixture's cross-product href has to end in the suffix the host will
+      // recognise, or the link reads as an ordinary navigation and replaces the
+      // tab instead of opening a new one.
+      const server: StaticServer = await startStaticServer(fixturePath, {
+        '{{TLD}}': networkTld(DEFAULT_ENVIRONMENT_ID),
+      });
       const identifier = `localhost:${server.port}`;
       await use({
         identifier,

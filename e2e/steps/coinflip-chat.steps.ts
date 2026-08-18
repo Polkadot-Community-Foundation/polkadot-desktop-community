@@ -1,7 +1,8 @@
 import { createBdd } from 'playwright-bdd';
 
 import { TEST_IDS } from '@/shared/test-ids';
-import { authenticatedTest, expect } from '../fixtures/authenticated';
+import { AUTH_TLD, authenticatedTest, expect } from '../fixtures/authenticated';
+import { productName } from '../helpers/dotns';
 import { DEFAULT_TIMEOUT } from '../helpers/timeouts';
 import { BrowserPage } from '../page-objects/BrowserPage';
 import { ChatPage } from '../page-objects/ChatPage';
@@ -13,9 +14,9 @@ const { When, Then } = createBdd(authenticatedTest);
 /**
  * Opens a product in a new browser tab via the address bar.
  */
-When('the user opens {string} in a new tab', async ({ authenticatedApp }, domain: string) => {
+When('the user opens {string} in a new tab', async ({ authenticatedApp }, label: string) => {
   const browser = new BrowserPage(authenticatedApp.window, authenticatedApp.app);
-  await browser.openProductInNewTab(domain);
+  await browser.openProductInNewTab(productName(label, AUTH_TLD));
 });
 
 /**
@@ -77,9 +78,8 @@ When('the user adds the current tab to favorites as a {string} widget', async ({
 
 /**
  * Establishes the product chat session via the ••• product actions menu's
- * "Proceed in Chat" action. Product rooms are declared in-memory on worker load
- * and only persisted — and thus shown in Quick Chat — once the user confirms
- * this dialog, so the test must perform it explicitly before the session appears.
+ * "Proceed in Chat" action. The product's worker persists its room when it
+ * declares it, so the session appears without an explicit confirmation.
  */
 When('the user starts a chat with the product', async ({ authenticatedApp }) => {
   const actions = new ProductActionsPage(authenticatedApp.window);

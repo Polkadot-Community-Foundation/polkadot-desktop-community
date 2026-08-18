@@ -35,11 +35,11 @@ export const topBarRightSlot = createSlot<Props>({ name: 'topBarRightSlot' });
 
 <Slot id={topBarRightSlot} props={props} />;
 
-feature.inject(topBarRightSlot, (props) => <MyComponent/>);
+feature.inject(topBarRightSlot, props => <MyComponent />);
 // or with order:
 feature.inject(topBarRightSlot, {
   order: 1,
-  render: (props) => <MyComponent/>
+  render: props => <MyComponent />,
 });
 ```
 

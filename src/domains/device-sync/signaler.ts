@@ -37,7 +37,9 @@
 import { type Observable, type Subscription } from 'rxjs';
 
 import {
+  type MinimalCandidate,
   MinimalCandidatesVecCodec,
+  bufferIceCandidates,
   decodeMinimalSetup,
   encodeMinimalSetup,
   minimalToRtcCandidateInit,
@@ -52,6 +54,21 @@ type SignalerParams = {
   session: DeviceSessionChannel;
   peerConnection: PeerConnection;
   role: SignalerRole;
+  /**
+   * A previous attempt's offerId that the peer may still be holding, from
+   * persistence. Restart recovery: it tells the peer to dispose that attempt.
+   *
+   * The initiator sends it in the SAME statement as its fresh Offer — the peer
+   * consumes a `Reconnected` together with whatever follows it in that request
+   * (iOS `reconnection(in:)` → `(offerId, following)`), so splitting them makes
+   * the peer reset against an empty `following` and then meet the Offer with a
+   * connection it has just torn down. The acceptor has no Offer to pair it with
+   * and sends it alone, which is the one legitimate lone-`Reconnected` case.
+   *
+   * Undefined when there is nothing to dispose, or on any spawn after the first
+   * (the spec sends it once per process).
+   */
+  reconnectOfferId?: string;
   /**
    * Persists the agreed offerId for restart recovery. Fired:
    *   - acceptor: immediately upon ADOPTING an incoming Offer's offerId,
@@ -76,7 +93,7 @@ export type SignalerHandle = {
 const newOfferId = (): string => crypto.randomUUID();
 
 export function startSignaler(params: SignalerParams): SignalerHandle {
-  const { session, peerConnection: pc, role, onAcceptedOfferId, onResetRequest } = params;
+  const { session, peerConnection: pc, role, reconnectOfferId, onAcceptedOfferId, onResetRequest } = params;
   const subscriptions: Subscription[] = [];
 
   /**
@@ -106,51 +123,103 @@ export function startSignaler(params: SignalerParams): SignalerHandle {
     onResetRequest?.();
   }
 
-  console.debug('WEBRTC [signaler] start role=%s offerId=%s', role, currentOfferId ?? '<pending>');
-
   if (role === 'initiator') {
     void sendOffer(currentOfferId!);
+  } else if (reconnectOfferId !== undefined) {
+    // Acceptor: nothing to pair the Reconnected with — it exists precisely to
+    // prompt the initiator to re-offer, so it goes out on its own.
+    void session
+      .send({ offerId: reconnectOfferId, message: { tag: 'Reconnected', value: undefined } })
+      .catch(err =>
+        console.warn('WEBRTC [signaler] reconnected send failed: %s', err instanceof Error ? err.message : String(err)),
+      );
   }
 
-  // Trickle ICE candidates gathered after the initial Offer/Answer is on the
-  // wire. Each rides the current offerId so a peer that has moved on to a newer
-  // attempt drops them.
-  const candidateSub = pc.localCandidates$.subscribe({
-    next: candidate => {
-      const minimal = rtcCandidateToMinimal(candidate);
-      if (!minimal) return;
-      if (currentOfferId === null) {
-        // Acceptor before it adopted an Offer — nothing to correlate with.
-        // The PC only gathers after applyRemoteOffer, by which point we've
-        // already set currentOfferId, so this is effectively unreachable.
-        console.debug('WEBRTC [signaler] candidate gathered before offerId set — dropping');
-        return;
-      }
-      const candidatesBlob = MinimalCandidatesVecCodec.enc([minimal]);
-      void session.send({
-        offerId: currentOfferId,
-        message: { tag: 'Candidates', value: { candidates: candidatesBlob } },
+  /**
+   * Local candidates, batched (mobile parity — see `bufferIceCandidates`). The
+   * FIRST batch rides the Offer/Answer setup; every later batch trickles as its
+   * own Candidates frame, tagged with the current offerId so a peer that has
+   * moved on to a newer attempt drops it.
+   *
+   * Subscribed at the send site, immediately BEFORE createOffer/createAnswer —
+   * not at construction. `bufferTime` opens its first window on subscribe, so
+   * subscribing here is what anchors that window to the moment gathering starts.
+   * An acceptor that subscribed at construction would resolve its first batch
+   * ~500ms later, long before the peer's Offer arrives, and would answer with an
+   * empty setup — exactly the bug this fixes. Subscribing before the await also
+   * closes the gap in which a candidate could fire and be dropped:
+   * `localCandidates$` is a plain Subject and does not replay.
+   *
+   * Called once per signaler — an initiator reaches it through sendOffer, an
+   * acceptor through sendAnswer, never both.
+   */
+  function startCandidateFlow(): Promise<RTCIceCandidate[]> {
+    return new Promise<RTCIceCandidate[]>(resolve => {
+      let isFirstBatch = true;
+      const candidateSub = pc.localCandidates$.pipe(bufferIceCandidates()).subscribe({
+        next: batch => {
+          if (isFirstBatch) {
+            isFirstBatch = false;
+            resolve(batch);
+
+            return;
+          }
+          sendCandidates(batch);
+        },
       });
-    },
-  });
-  subscriptions.push(candidateSub);
+      subscriptions.push(candidateSub);
+    });
+  }
+
+  function sendCandidates(batch: RTCIceCandidate[]): void {
+    if (batch.length === 0) return;
+    if (currentOfferId === null) {
+      // Acceptor before it adopted an Offer — nothing to correlate with. The PC
+      // only gathers after applyRemoteOffer, by which point we've already set
+      // currentOfferId, so this is effectively unreachable.
+      return;
+    }
+
+    const minimal: MinimalCandidate[] = [];
+    for (const candidate of batch) {
+      const encoded = rtcCandidateToMinimal(candidate);
+      if (encoded) minimal.push(encoded);
+    }
+    if (minimal.length === 0) return;
+
+    void session.send({
+      offerId: currentOfferId,
+      message: { tag: 'Candidates', value: { candidates: MinimalCandidatesVecCodec.enc(minimal) } },
+    });
+  }
 
   async function sendOffer(offerId: string): Promise<void> {
     try {
+      const gathered = startCandidateFlow();
       const offer = await pc.createOffer();
-      const setupBytes = encodeMinimalSetup(offer.sdp ?? '');
-      await session.send({ offerId, message: { tag: 'Offer', value: { sdp: setupBytes } } });
-      console.debug('WEBRTC [signaler] Offer sent (initiator) offerId=%s', offerId);
+      const setupBytes = encodeMinimalSetup(offer.sdp ?? '', await gathered);
+      // close() can land while we wait out the batch window — an external
+      // respawn runs independently of this send.
+      if (closed) return;
+      // One statement, Reconnected first: the peer disposes the old attempt and
+      // adopts this Offer from the same request. See `reconnectOfferId`.
+      const envelopes: SyncSignalingEnvelope[] = [];
+      if (reconnectOfferId !== undefined) {
+        envelopes.push({ offerId: reconnectOfferId, message: { tag: 'Reconnected', value: undefined } });
+      }
+      envelopes.push({ offerId, message: { tag: 'Offer', value: { sdp: setupBytes } } });
+      await session.sendAll(envelopes);
     } catch (err) {
       console.error('WEBRTC [signaler] sendOffer failed: %s', err instanceof Error ? err.message : String(err));
     }
   }
 
   async function sendAnswer(offerId: string): Promise<void> {
+    const gathered = startCandidateFlow();
     const answer = await pc.createAnswer();
-    const setupBytes = encodeMinimalSetup(answer.sdp ?? '');
+    const setupBytes = encodeMinimalSetup(answer.sdp ?? '', await gathered);
+    if (closed) return;
     await session.send({ offerId, message: { tag: 'Answer', value: { sdp: setupBytes } } });
-    console.debug('WEBRTC [signaler] Answer sent (acceptor) offerId=%s', offerId);
   }
 
   // Apply a batch of remote ICE candidates, surviving individual failures — a
@@ -178,14 +247,7 @@ export function startSignaler(params: SignalerParams): SignalerHandle {
       // Spec §5.4: dispose iff the envelope's offerId matches our current
       // active offerId. Otherwise ignore (stale / already replaced).
       if (currentOfferId !== null && envelope.offerId === currentOfferId) {
-        console.debug('WEBRTC [signaler] Reconnected for current offerId=%s — requesting reset', envelope.offerId);
         requestReset();
-      } else {
-        console.debug(
-          'WEBRTC [signaler] Reconnected offerId=%s ignored (current=%s)',
-          envelope.offerId,
-          currentOfferId ?? '<none>',
-        );
       }
       return;
     }
@@ -201,7 +263,6 @@ export function startSignaler(params: SignalerParams): SignalerHandle {
         // so trickle candidates can never be tagged with a later offer's id.
         currentOfferId = envelope.offerId;
         onAcceptedOfferId?.(envelope.offerId);
-        console.debug('WEBRTC [signaler] Offer received (acceptor) — adopted offerId=%s, answering', envelope.offerId);
         const { setupSdp, candidates } = decodeMinimalSetup(content.value.sdp);
         await pc.applyRemoteOffer({ type: 'offer', sdp: setupSdp });
         // An external respawn may have closed us during applyRemoteOffer; don't
@@ -217,7 +278,6 @@ export function startSignaler(params: SignalerParams): SignalerHandle {
         // A duplicate of the attempt we already adopted (statement-store replay
         // under a fresh requestId). Never re-apply — setRemoteDescription on a
         // non-stable PC tears down in-flight DTLS.
-        console.debug('WEBRTC [signaler] Offer dropped (duplicate of adopted offerId=%s)', envelope.offerId);
         return;
       }
 
@@ -226,11 +286,6 @@ export function startSignaler(params: SignalerParams): SignalerHandle {
       // it still reports 'connected' (ICE hasn't timed out yet). Re-adopting in
       // place can't work (the PC can't be rebuilt here), so request a reset and
       // let the orchestrator respawn a fresh PC that adopts the new Offer.
-      console.debug(
-        'WEBRTC [signaler] Offer for new offerId=%s (current=%s) — peer restarted, requesting reset',
-        envelope.offerId,
-        currentOfferId,
-      );
       requestReset();
       return;
     }
@@ -242,17 +297,10 @@ export function startSignaler(params: SignalerParams): SignalerHandle {
       // subscribers; if it's for a previous Offer, drop it. This single check
       // replaces the old rollback-and-reapply dance.
       if (envelope.offerId !== currentOfferId) {
-        console.debug(
-          'WEBRTC [signaler] Answer dropped — offerId=%s != current=%s',
-          envelope.offerId,
-          currentOfferId ?? '<none>',
-        );
         return;
       }
       const signalingState = pc.signalingState();
-      console.debug('WEBRTC [signaler] Answer received (initiator) signaling=%s offerId=%s', signalingState, envelope.offerId);
       if (signalingState !== 'have-local-offer') {
-        console.debug('WEBRTC [signaler] Answer ignored — signaling=%s (expected have-local-offer)', signalingState);
         return;
       }
       const { setupSdp, candidates } = decodeMinimalSetup(content.value.sdp);
@@ -266,11 +314,6 @@ export function startSignaler(params: SignalerParams): SignalerHandle {
 
     if (content.tag === 'Candidates') {
       if (envelope.offerId !== currentOfferId) {
-        console.debug(
-          'WEBRTC [signaler] Candidates dropped — offerId=%s != current=%s',
-          envelope.offerId,
-          currentOfferId ?? '<none>',
-        );
         return;
       }
       let decoded: ReturnType<typeof MinimalCandidatesVecCodec.dec>;

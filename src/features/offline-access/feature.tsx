@@ -3,11 +3,12 @@ import { persistentSlot } from '@/features/app-shell';
 import { addressBarProductTrailingSlot } from '@/features/browser';
 import { productActionsMenuItemsSlot } from '@/features/product-actions-menu';
 import { productSettingsSectionsSlot } from '@/features/product-settings';
+import { PinIndicator } from '@/widgets/PinIndicator';
 
+import { ModalityUpdateToaster } from './ui/ModalityUpdateToaster';
 import { OfflineAccessDialogHost } from './ui/OfflineAccessDialogHost';
 import { OfflineAccessMenuItem } from './ui/OfflineAccessMenuItem';
 import { OfflineAccessSection } from './ui/OfflineAccessSection';
-import { PinIndicator } from './ui/PinIndicator';
 import { UpdateVersionMenuItem } from './ui/UpdateVersionMenuItem';
 
 export const offlineAccessFeature = createFeature({ name: 'browser/offline-access' });
@@ -33,3 +34,4 @@ offlineAccessFeature.inject(productSettingsSectionsSlot, {
 });
 
 offlineAccessFeature.inject(persistentSlot, () => <OfflineAccessDialogHost />);
+offlineAccessFeature.inject(persistentSlot, () => <ModalityUpdateToaster />);

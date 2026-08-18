@@ -1,32 +1,15 @@
-import { environmentsConfig } from './config';
-import { SETTINGS_STORAGE_KEY } from './constants';
+import { environmentsConfig } from './constants';
 import { type DigitalDollarAsset, type Environment, type EnvironmentId } from './types';
-
-// Read the raw key directly: `getActiveId()` runs at module init, before the
-// storage adapter hydrates.
-const LOCAL_STORAGE_VALUE_KEY = `polkadot_${SETTINGS_STORAGE_KEY}_value`;
 
 function isEnvironmentId(value: unknown): value is EnvironmentId {
   return typeof value === 'string' && value in environmentsConfig.channels;
 }
 
-function readPersistedId(): EnvironmentId {
-  try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_VALUE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object' && isEnvironmentId(parsed.environmentId)) {
-        return parsed.environmentId;
-      }
-    }
-  } catch (e) {
-    console.error('[environment] failed to read settings', e);
-  }
-  return environmentsConfig.default;
-}
-
-function getActiveId(): EnvironmentId {
-  return readPersistedId();
+// The one validate-and-fall-back rule for an environment id from an untrusted
+// source — a persisted blob written by an older build, a deeplink, a config.
+// Anything that isn't a known channel resolves to the catalog default.
+function toEnvironmentId(value: unknown): EnvironmentId {
+  return isEnvironmentId(value) ? value : environmentsConfig.default;
 }
 
 // Channel descriptors for the picker — id + display name only.
@@ -34,17 +17,20 @@ function list(): Pick<Environment, 'id' | 'name'>[] {
   return Object.entries(environmentsConfig.channels).map(([id, channel]) => ({ id, name: channel.name }));
 }
 
-// Sync `VITE_ENVIRONMENTS` config (not async Remote Config), so UI reads it
-// without the assembly — no first-render flicker.
-function getActiveDigitalDollarAsset(): DigitalDollarAsset {
-  const channel = environmentsConfig.channels[getActiveId()];
+// Straight off the compile-time channel catalog, not async Remote Config — the UI
+// reads it without waiting for the assembly, so there is no first-render flicker.
+// Takes the id rather than resolving it: resolving the active channel is a
+// repository read, which a service does not do.
+function activeDigitalDollarAsset(id: EnvironmentId): DigitalDollarAsset {
+  const channel = environmentsConfig.channels[id];
   if (!channel) throw new Error('[environment] active channel missing from VITE_ENVIRONMENTS');
+
   return channel.digitalDollarAsset;
 }
 
 export const environmentService = {
-  getActiveId,
   list,
   isEnvironmentId,
-  getActiveDigitalDollarAsset,
+  toEnvironmentId,
+  activeDigitalDollarAsset,
 };

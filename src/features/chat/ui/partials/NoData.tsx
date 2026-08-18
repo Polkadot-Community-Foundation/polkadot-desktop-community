@@ -14,7 +14,7 @@ export const NoData = ({ icon: Icon, title, description }: NoDataProps) => {
           <Icon className="size-5 text-fg-secondary" />
         </div>
         <span className="text-base leading-6 font-semibold text-fg-primary">{title}</span>
-        {description && <span className="text-sm leading-[18px] text-fg-secondary">{description}</span>}
+        {description && <span className="text-sm leading-4.5 text-fg-secondary">{description}</span>}
       </div>
     </div>
   );

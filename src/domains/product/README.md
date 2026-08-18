@@ -4,18 +4,23 @@ The `product` domain owns the runtime side of a Polkadot **product**: how a `pol
 those bytes get on the device, how the product runs in a sandbox, and what it is allowed to do once it runs.
 
 Within this codebase, a _product_ is an application (or set of applications) addressable through a
-dotNS (Polkadot on-chain naming) name and shipped as an IPFS bundle. Once resolved, a product can run in a sandbox,
+[dotNS](https://docs.polkadot.cloud/dotns/) name and shipped as an IPFS bundle. Once resolved, a product can run in a sandbox,
 hold its own per-product key, talk to its own per-product storage, and request scoped device or remote permissions.
 
 ## Vocabulary
 
 ### Resolution
 
-- **dotNS URL** — A parsed, normalized address: `identifier` (a `.dot` name; `.dot.li` aliases collapsed to `.dot`) plus
-  `pathname`. Bare hostnames, `polkadot://` URLs, and localhost forms all reduce to this shape.
+- **Network TLD** — The dotNS suffix of the active network, leading dot included (`.dot`, `.paseo`). It is not a constant:
+  each deployment sets its own at contract initialisation (paritytech/dotns#201). Read from `DotnsProtocolRegistry.tld()` by
+  `dotNsGateway.readTld` and cached per chain-and-registry by `dotNsTldResource`; a deployment that reports none falls back to
+  `DEFAULT_DOTNS_TLD`. React callers read it with `useDotNsTld()`, everyone else with `dotNsUseCase.getActiveTld()`. Every name
+  helper in `dotns/service.ts` takes it as an explicit argument and stays pure.
+- **dotNS URL** — A parsed, normalized address: `identifier` (a name under the network TLD; `<name><tld>.li` gateway aliases
+  collapsed onto it) plus `pathname`. Bare hostnames, `polkadot://` URLs, and localhost forms all reduce to this shape.
 - **dotNS gateway** — `dotns/gateway.ts`. Stateless dotNS contract reads (`readResolver`, `readOwner`, `readText`,
-  `readContentHashAt`) dispatched as `ReviveApi.call` dry-runs against Paseo Asset Hub. The single wire-level boundary this domain
-  crosses to reach dotNS.
+  `readContentHashAt`, `readTld`) dispatched as `ReviveApi.call` dry-runs against Paseo Asset Hub. The single wire-level boundary
+  this domain crosses to reach dotNS.
 
 ### Catalog
 
@@ -37,7 +42,8 @@ modal.
 A two-level structure lets a product publish multiple executable surfaces from one dotNS base name. The host reads manifests
 text-record-by-text-record and assembles them into the canonical `Product`.
 
-- **Base name** — Full dotNS name of the product, e.g. `hackm3.dot`. Holds the root manifest.
+- **Base name** — Full dotNS name of the product: label plus the **network TLD**, e.g. `hackm3.dot` on mainnet and
+  `hackm3.paseo` on Paseo. Holds the root manifest.
 - **Root manifest** — JSON in the `manifest` text record on the base name; carries product-wide metadata (`displayName`,
   `description`, `icon` with Bulletin CID). Schema: `RootManifest` in `product/manifest/schemas.ts`.
 - **Executable manifest** — JSON in the `executable` text record on a well-known subname (`app.<base>`, `widget.<base>`,
@@ -45,22 +51,32 @@ text-record-by-text-record and assembles them into the canonical `Product`.
   Each subname also exposes a `contenthash` record pointing at that executable's IPFS bundle.
 - **Product (aggregated)** — Post-resolution struct combining the root manifest, the present subset of executable manifests, and
   optionally the canonical owner address. The canonical `Product` type for the whole renderer.
-- **`fetchProductFromChain`** — `$usecase/resolve.ts`. The canonical chain-resolve primitive: namehash the base, read the registry
-  resolver, assemble the root + per-executable manifests (or fall back to the legacy contenthash path), return a `Product` or
-  `null`. The single multi-source read every other flow composes; exposed on `resolveProductUseCase`, never called raw.
+- **`fetchProductFromChain`** — `$usecase/resolve.ts`. The canonical chain-resolve entry point: resolve the active environment,
+  then call `readProductFromChain`. Exposed on `resolveProductUseCase`, never called raw. Deliberately **uncached** — it does not
+  go through `chainResolveResource`, because that cache holds only uncommitted resolutions and `reconcileUnpinnedProducts`
+  re-resolves committed rows.
+- **`readProductFromChain`** — `product/resource.ts`. The chain read itself: namehash the base, read the registry resolver,
+  assemble the root + per-executable manifests (or fall back to the legacy contenthash path), return a `Product` or `null`. Takes
+  the environment as a **parameter** and reads only `dotNsGateway`, so it needs nothing from a use case. Both the use case above
+  and `chainResolveResource` below call it, so there is one implementation.
 - **`resolveProduct`** — `$usecase/resolve.ts`. The imperative blend read: prefer the committed DB row, else
   `fetchProductFromChain`. **Pure** — it never writes the DB, never distinguishes pinned from unpinned, and never refreshes in the
   background (that is `reconcileUnpinnedProducts`). For non-React callers needing the value once, on demand (e.g. a dashboard icon
   press). Its React twin is `useDisplayedProduct`.
-- **`chainResolveResource`** — `product/resource.ts`. A 60 s in-memory cache over `fetchProductFromChain`, keyed by
-  `baseNameOf(identifier)`. Holds **only uncommitted** resolutions — a committed product is served from `productsResource` (the
-  live DB) and never lands here, so the two caches cannot duplicate or diverge. The documented resource-over-use-case carve-out:
-  it adds nothing but caching. Bound to React via the internal `useChainResolvedProduct`, the fallback inside
-  `useDisplayedProduct`.
-- **`executableArchiveResource`** — `product/manifest/resource.ts`. Per-executable archive read, keyed by `Executable.identifier`
-  (the subname). A **thin content-addressed cache** over `loadArchiveUseCase.loadExecutableArchive` (`$usecase/loadArchive.ts`) —
-  the documented resource-over-use-case carve-out: the offline-first orchestration spans multiple sources and performs a write, so
-  it lives in the use case; the resource adds nothing but the cache. **Offline-first in Electron:** if the frozen archive is
+- **`chainResolveResource`** — `product/resource.ts`. A 60 s in-memory cache over `readProductFromChain`, keyed by
+  `chainResolveCacheKey` (environment id + `baseNameOf(identifier)`) — environment-scoped because a base name resolves
+  differently per dotNS chain. Holds **only uncommitted** resolutions — a committed product is served from `productsResource` (the
+  live DB) and never lands here, so the two caches cannot duplicate or diverge. The active environment arrives as a resource
+  **parameter**, supplied by `useActiveEnvironment` inside the internal `useChainResolvedProduct` (the fallback inside
+  `useDisplayedProduct`), which is why this resource reads a gateway and never a use case.
+- **`executableArchiveResource`** — `product/manifest/resource.ts`. Per-executable archive read, keyed by
+  `baseName#kind#contenthash` (`archiveCacheKey`), or `baseName#kind#missing` when the product has no executable of that kind.
+  The offline-first chain lives **inside the resource**: choosing where bytes come from is data access, and the `warm` call
+  populates main's `polkadot://` serving cache so the bytes just read can be served — part of delivering the read, not a domain
+  write. The active `ipfsGatewayUrl` arrives as a resource **parameter** (supplied by `useExecutableArchive` from
+  `useActiveEnvironment`) and is deliberately **not** part of the key: the key is content-addressed, so the contenthash already
+  names the bytes exactly and keying on the gateway would refetch byte-identical archives on every environment change (the
+  "parameter the key already subsumes" exception in `docs/code/project-structure.md`). **Offline-first in Electron:** if the frozen archive is
   already on the main-process [offline archive store](#offline-pin) (`archiveStoreGateway.has`), it serves from there — workers
   pull the bytes back via `archiveStoreGateway.get`, while app/widget are served directly by the main process over `polkadot://`
   (the renderer only needs the origin). Otherwise it IPFS-fetches + CAR-unpacks via `archiveGateway.fetchExecutable`
@@ -121,6 +137,18 @@ belongs in an aggregate, not in this domain.
   [Lifecycle & actions](#lifecycle--actions).) React bindings: `usePinProduct`, `useUnpinProduct`; read the flag via
   `useIsPinned`. Commit has no hook — it runs imperatively through `commitmentUseCase`, driven by install / add-to-dashboard /
   chat-reference / first-run-seed flows.
+- **Per-modality re-pin** (`pinExecutable`) — re-freezes a single executable kind
+  (app/widget/worker) to its current on-chain contenthash + version, leaving the
+  other kinds frozen. Produces a **mixed snapshot** (kinds may sit at different
+  versions) — valid because each executable is independently versioned on-chain
+  at `<kind>.<base>`. Distinct from `pinProduct`, which re-pins all kinds atomically.
+- **Declined update** (`declineUpdate` / `declinedUpdates` store) — a user's dismissal of a
+  specific modality version, keyed by `contenthash` (the stable per-version identity). A
+  later, different version is a new key, so it re-surfaces. Read by `checkModalityUpdate`
+  before nudging; never blocks the settings-page rows.
+- **On-open update check** (`onProductModalityOpenedSideEffect` + `checkModalityUpdate`) — a
+  neutral "a product modality was opened" event the presentation surfaces fire; the check
+  returns the drifted-and-undeclined fresh executable for one pinned modality, or null.
 - **Offline archive store** — the main-process, on-disk cache of pinned products' executable bytes
   (`<userData>/product-archives/<encodeURIComponent(domain)>/<contenthash>/…`, with a `current.json` pointer per domain). It is
   what makes a pinned product load with no network after a restart: the `polkadot://` protocol handler serves from it on an
@@ -162,9 +190,26 @@ belongs in an aggregate, not in this domain.
 
 ### Per-product capabilities
 
-- **Product account** — A public key derived from a root account via HDKD with junctions
-  `['product', productId, derivationIndex]`. Products act on-chain through this derived key, never the user's root.
+- **Product account** — An sr25519 public key on the path `//product//{productId}/{index}` (RFC-0022). Products act on-chain
+  through this derived key, never the user's root.
+  - `//product` and `//{productId}` are **hard** junctions, so the host cannot derive them: it fetches the product-root
+    ("subtree") public key from the paired device (`UserSession.getProductSubtree`, cached per session+product) and
+    soft-derives only the trailing `/{index}`.
+  - `{index}` on the wire is a **selector**, `Index(u32) | Raw([u8; 32])`. The chain code of the soft junction is the
+    expanded 32-byte value — `u32 LE ++ INDEX_MAGIC`, where `INDEX_MAGIC = blake2b256("product-account-index")[..28]` —
+    not the path segment. `Raw` passes through unchanged; the magic keeps the two spaces from colliding. Expansion is the
+    SDK's `derivationIndexBytes`.
+  - Consequence: the path is **not reproducible in `polkadot-js` or `subkey`**, which can only express string/number path
+    segments. `productAccountService.formatDerivationPath` renders it for display; treat that string as a label, not an
+    input.
+  - Naming: the fetched key is the **subtree key** (RFC-0022 calls it the product-root public key / `ApProductSubtreeResponse.product_public_key`) —
+    not "product root key", which reads like the user's root. The wire value is a **derivation index selector**; its expanded
+    form is the **derivation index**. Avoid "derivation path" for anything but the display string above.
 - **Product storage** — Per-product, IndexedDB-backed key/value store of `Uint8Array` values, scoped by `productId`.
+- **Allowance** — an on-chain grant letting a product's slot account store data (Bulletin `TransactionStorage.Authorizations`) or
+  statements (People `Resources.StatementStoreAllowances`, one slot per daily period). The slot account key is issued by mobile
+  over SSO and cached by host-papp; this domain only _reads_ allowance state (sufficiency pre-check) — granting stays on mobile.
+  Not to be confused with a _permission_ (host-side consent).
 
 ### Bootstrap
 
@@ -227,9 +272,9 @@ the persisted/displayed surfaces refresh with no manual cache poke.
   offline access" (first pin) and "Update Version" (re-pin to fresh chain state). Pinning is **optimistic**: the row is marked
   pinned immediately, then `offlineCacheUseCase.prefetchArchives` runs fire-and-forget — for each present executable it downloads
   the archive from IPFS and persists it to the [offline archive store](#offline-pin) (`archiveStoreGateway.persist`), tracking
-  per-kind status (`preparing` → `ready` / `failed`) in `productExecutableCache`. A failed/partial prefetch is **never** retried
-  against the stale contenthash; it is re-pinned in full on next launch (see **Reconcile pinned archives** below), so the row's
-  frozen contenthash and the persisted bytes always move together.
+  per-kind status (`preparing` → `ready` / `failed`) in `productExecutableCache`. A failed/partial prefetch is repaired on next
+  launch by re-persisting the **frozen** version (see **Reconcile pinned archives** below) — re-fetching the frozen contenthash,
+  never re-resolving chain — so the row's frozen contenthash and the persisted bytes always move together.
 - **Unpin** (`unpinProduct`, → Committed·Unpinned). Flips `pinned:false` on an already-committed row (no chain-cache entry to
   evict — the row stays committed), then `offlineCacheUseCase.evictArchives` deletes the persisted disk archives (per-kind subname
   plus the legacy bare-name app archive) and the `productExecutableCache` index rows.
@@ -246,12 +291,12 @@ the persisted/displayed surfaces refresh with no manual cache poke.
   bounded to "since last launch" — a deliberate trade to cap chain traffic.
 - **Reconcile pinned archives** (`offlineCacheUseCase.reconcilePinnedArchives`). The pinned counterpart, also run at launch. For
   each pinned product it asks the disk store (`archiveStoreGateway.has`) whether every present executable's frozen contenthash is
-  persisted; on any miss it runs a **full re-pin** — re-resolve from chain, `upsert · pinned:true`, then prefetch+persist — so a
-  pin whose background prefetch failed (e.g. the device was offline) becomes available next session. Best-effort per product; the
-  disk store is the source of truth and the `productExecutableCache` index is reconciled to it. Note the deliberate trade-off: the
-  re-pin re-resolves the **current** chain version, so if a pinned product's frozen bytes become unrecoverable (evicted
-  out-of-band), reconcile advances it to the latest version rather than failing — chosen so the executable manifest and the
-  archive bytes can never disagree.
+  persisted; on any miss it re-persists the **frozen** version — re-fetch each present executable by the row's frozen contenthash
+  and write it back (`prefetchArchives(row)`) — so a pin whose background prefetch failed (e.g. the device was offline) becomes
+  available next session. It **never re-resolves chain**, so a pin is never silently advanced. If a frozen archive is no longer
+  fetchable from IPFS, that kind is marked `failed` and the product stays pinned at its frozen version (offline bytes unavailable)
+  rather than jumping to latest — the row's frozen contenthash and the persisted bytes never disagree; the bytes are simply absent.
+  Best-effort per product; the disk store is the source of truth and the `productExecutableCache` index is reconciled to it.
 - **Sweep orphaned archives** (`offlineCacheUseCase.sweepOrphanedArchives`). Also at launch, after reconcile. Lists the on-disk
   archives (`archiveStoreGateway.list`) and deletes any domain not owned by a currently-pinned product (the keep-set is each
   pinned product's per-kind subnames plus its legacy bare base name — exactly the keys `persist` writes). Closes the gap where a
@@ -260,14 +305,14 @@ the persisted/displayed surfaces refresh with no manual cache poke.
 
 ### Caches & invalidation
 
-| Cache                            | Holds                                | Staleness              | Invalidated by                                                 |
-| -------------------------------- | ------------------------------------ | ---------------------- | -------------------------------------------------------------- |
-| `productsResource`               | all committed `PersistedProduct`s    | live (Dexie liveQuery) | **automatic** on any `products` write                          |
-| `chainResolveResource`           | uncommitted chain resolutions        | 60 s                   | `invalidateChainResolve` on commit / pin                       |
-| `executableArchiveResource`      | fetched archive bytes (in-memory)    | ∞ (content-addressed)  | `invalidateExecutableArchive` on purge / refresh               |
-| `liveContenthashResource`        | current chain contenthash (no fetch) | 30 s                   | time only (drives the "Update Version" check)                  |
-| `productExecutableCache` (Dexie) | per-(product,kind) offline status    | live (Dexie liveQuery) | written by `offlineCacheUseCase`; dropped on unpin / forget    |
-| offline archive store (disk)     | pinned products' executable bytes    | ∞ (content-addressed)  | `deleteArchive` on unpin / forget; `clearAllArchives` on reset |
+| Cache                            | Holds                                          | Staleness              | Invalidated by                                                 |
+| -------------------------------- | ---------------------------------------------- | ---------------------- | -------------------------------------------------------------- |
+| `productsResource`               | all committed `PersistedProduct`s              | live (Dexie liveQuery) | **automatic** on any `products` write                          |
+| `chainResolveResource`           | uncommitted chain resolutions                  | 60 s                   | `invalidateChainResolve` on commit / pin                       |
+| `executableArchiveResource`      | fetched archive bytes (in-memory)              | ∞ (content-addressed)  | `invalidateExecutableArchive` on purge / refresh               |
+| `liveExecutableResource`         | current chain contenthash + version (no fetch) | 30 s                   | time only (drives the per-modality "update available" check)   |
+| `productExecutableCache` (Dexie) | per-(product,kind) offline status              | live (Dexie liveQuery) | written by `offlineCacheUseCase`; dropped on unpin / forget    |
+| offline archive store (disk)     | pinned products' executable bytes              | ∞ (content-addressed)  | `deleteArchive` on unpin / forget; `clearAllArchives` on reset |
 
 The archive cache is content-addressed, so a new deployment (new contenthash) misses old bytes naturally; a pinned product keeps
 its **frozen** contenthash → stable offline bytes. The last two rows are the durable offline layer (only pinned products): the
@@ -285,8 +330,9 @@ two areas: **offline-access** (`PinIndicator`, `OfflineAccessMenuItem`, `Offline
 the offline-status read `useOfflineCacheStatus`) and one tab glyph. Concretely, `pinned = true` vs `false`: reconcile skips it
 (frozen) instead of re-resolving on launch; the executable version is frozen at pin time instead of following the last resolve;
 the executables are proactively downloaded and persisted to the on-disk offline archive store on pin (durable across restarts,
-repaired by reconcile) instead of best-effort-on-load; `useNewerVersionAvailable` compares the live worker contenthash against the
-frozen one (returning `null` — no check — when unpinned); and the UI offers "Update Version" / "Remove" (and a
+repaired by reconcile) instead of best-effort-on-load; `useNewerVersionAvailable` compares each present executable's live
+contenthash (app / widget / worker) against the frozen one, flagging drift in any kind (returning `false` — no check — when
+unpinned); and the UI offers "Update Version" / "Remove" (and a
 preparing/ready/failed offline status) instead of "Enable offline access."
 
 ### Invariants
@@ -299,10 +345,12 @@ preparing/ready/failed offline status) instead of "Enable offline access."
 5. **`commit*` is idempotent** — an existing row always wins; commit never overwrites or re-pins.
 6. **Pin freezes; unpin thaws.** Pinned rows are excluded from reconcile and keep frozen contenthashes.
 7. **Every write re-emits via `liveQuery`** — no manual cache poke to refresh persisted/displayed.
-8. **Pin prefetches; row and disk move together.** A pin proactively persists every executable to the on-disk offline store; a
-   failed prefetch is repaired by a full re-pin on launch (never a contenthash-only retry), so `row.contenthash` always matches
-   the persisted bytes. `archiveStoreGateway.has` is the source of truth; `productExecutableCache` is reconciled to it. Only
-   pinned products have on-disk archives; unpin / forget / reset delete them.
+8. **Pin prefetches the frozen version; row and disk move together, and a pin is never silently advanced.** A pin proactively
+   persists every executable to the on-disk offline store; a failed prefetch is repaired on launch by re-persisting the **frozen**
+   version (never a chain re-resolve), so `row.contenthash` always matches the persisted bytes — or, if the frozen bytes are
+   unfetchable from IPFS, the kind is marked `failed` and no bytes are served, rather than the pin jumping to latest.
+   `archiveStoreGateway.has` is the source of truth; `productExecutableCache` is reconciled to it. Only pinned products have
+   on-disk archives; unpin / forget / reset delete them.
 
 ## Scope
 
@@ -317,7 +365,8 @@ This domain owns:
 - **Sandbox construction and disposal** — `createProductWorker` factory, handler bindings, host-side event wiring. Lifecycle
   orchestration (which instance is alive, when it is built/torn down) is owned by `aggregates/product-workers`.
 - **Permissions broker** — device and remote-URL grants, pattern matching, dedup of in-flight prompts, persistence.
-- **Per-product cryptographic identity** via HDKD-derived product accounts.
+- **Per-product cryptographic identity** — product accounts on the RFC-0022 path `//product//{productId}/{index}`, with the
+  hard part fetched from the paired device and only the soft leaf derived here.
 - **Per-product persistent storage**.
 - **Alias-permission persistence** — decisions for cross-app alias access used by product-container account integrations.
 
@@ -349,9 +398,12 @@ This domain does **not** own:
 - **Environment / network configuration.** The active environment and its dotNS chain genesis come from `@/domains/application`;
   `browse/` only reads them. The browse protocol itself (network selection, genesis recognition, on-chain query surface) lives in
   `@parity/browse-sdk`.
+- The allowance slot-account key is read through `UserSession.readAllowance` from `@novasamatech/host-papp` — the SDK owns the
+  cached-key store; this domain never touches its persistence directly.
 
 ## References
 
+- [dotNS documentation](https://docs.polkadot.cloud/dotns/) — Polkadot on-chain naming, the addressing layer this domain resolves.
 - [Product Manifest Format](https://github.com/paritytech/triangle-js-sdks/blob/rfc/product-manifest/docs/rfcs/0001-product-manifest.md)
   — Schemas, subname convention, text-record keys, and host resolution flow implemented by `manifest/`.
 - [EIP-1577 (Content Hash)](https://eips.ethereum.org/EIPS/eip-1577) — Encoding of the `contenthash` field on per-kind subnames.
@@ -360,8 +412,13 @@ This domain does **not** own:
   `@ipld/car`, `@ipld/dag-pb`, `ipfs-unixfs`.
 - [Paseo Asset Hub](https://wiki.polkadot.network/docs/learn-paseo) — The chain the dotNS resolver contract lives on; reached
   through the Revive (EVM-on-Substrate) API.
+- [RFC-0022 — Account derivations](https://github.com/paritytech/truapi/blob/main/docs/rfcs/0022-account-derivations.md) —
+  **The** specification for product accounts: the `//product//{productId}/{index}` path, which junctions are hard, the
+  `Index(u32) | Raw([u8; 32])` wire selector, the `u32 LE ++ INDEX_MAGIC` chain code, and the consent-free product-subtree
+  fetch. Also covers the ring-VRF and ECDH key trees, neither of which this app implements.
 - [Substrate hierarchical key derivation (HDKD)](https://wiki.polkadot.network/docs/learn-account-advanced#derivation-paths) —
-  Derivation scheme behind product accounts.
+  The underlying primitive (`HDKD.publicSoft` from `@scure/sr25519`). Note the wiki's path notation cannot express a product
+  account: its segments are strings/numbers, while the soft junction here takes a raw 32-byte chain code.
 - [`@novasamatech/host-worker-sandbox`](https://www.npmjs.com/package/@novasamatech/host-worker-sandbox) — Sandbox primitive used
   here.
 - [`@parity/browse-sdk`](https://www.npmjs.com/package/@parity/browse-sdk) — `AppListing`, network selection (`selectNetwork`,

@@ -30,8 +30,6 @@ import { tabContentSlot, tabHoverSlot } from '../di';
 import { useTabs } from '../hooks/useTabs';
 import { PRODUCT } from '../tabs/helpers';
 
-const tabRefreshIconClassName = cnTw('h-[15px] w-[15px]', iconBase);
-
 const FADE_PX = 48;
 
 const HOVER_CARD_DELAY_MS = 1000;
@@ -136,9 +134,9 @@ export const Tabs = () => {
   if (isSingleActiveTab) return null;
 
   return (
-    <div className="px-2 pb-1">
+    <div className="px-2 pb-1" data-testid={TEST_IDS.browserTabStrip}>
       <div
-        className="group/tabs flex h-8 min-w-0 items-center gap-0.5 rounded-full bg-foreground/8 p-0.5"
+        className="group/tabs flex h-8 min-w-0 items-center gap-0.5 rounded-full bg-fg-primary/8 p-0.5"
         style={{ appRegion: 'no-drag' }}
       >
         <div ref={setScrollContainerEl} className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden">
@@ -173,7 +171,7 @@ export const Tabs = () => {
                       key={`sep-${tab.id}`}
                       className={cnTw(
                         'h-5 w-px shrink-0 transition-colors duration-150',
-                        separatorHidden ? 'bg-transparent' : 'bg-text-tertiary/40',
+                        separatorHidden ? 'bg-transparent' : 'bg-fg-tertiary/40',
                       )}
                     />,
                   );
@@ -202,6 +200,27 @@ const SortableTab = ({ tab, isActive, onSelect, onClose, onHoverChange }: Sortab
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: tab.id });
   const [isHovering, setIsHovering] = useState(false);
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tabElementRef = useRef<HTMLDivElement | null>(null);
+
+  // Combine dnd-kit's node ref with our own so we can hit-test the tab against the
+  // pointer (see the global pointermove safety net below).
+  const setTabRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      tabElementRef.current = el;
+      setNodeRef(el);
+    },
+    [setNodeRef],
+  );
+
+  const closeHoverCard = useCallback(() => {
+    onHoverChange(null);
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+    setIsHovering(false);
+    if (hoverCardWarm) scheduleWarmCooldown();
+  }, [onHoverChange]);
 
   // Use Translate (not Transform) so dnd-kit's scaleX/scaleY adjustments — which
   // arise because active and inactive tabs have different widths — don't reach
@@ -226,13 +245,7 @@ const SortableTab = ({ tab, isActive, onSelect, onClose, onHoverChange }: Sortab
   };
 
   const handleMouseLeave = () => {
-    onHoverChange(null);
-    if (hoverTimeoutRef.current) {
-      clearTimeout(hoverTimeoutRef.current);
-      hoverTimeoutRef.current = null;
-    }
-    setIsHovering(false);
-    if (hoverCardWarm) scheduleWarmCooldown();
+    closeHoverCard();
   };
 
   useEffect(() => {
@@ -242,20 +255,42 @@ const SortableTab = ({ tab, isActive, onSelect, onClose, onHoverChange }: Sortab
   }, []);
 
   const showHoverCard = isHovering && !isDragging;
+
+  // Safety net for a swallowed mouseleave: the notification toast renders fixed at
+  // top-center (z-index 999999999), directly over the tab strip. When it appears,
+  // dismisses, or intercepts pointer events, the tab's own onMouseLeave can fail to
+  // fire, leaving the hover card stuck open. While the card is open, track the
+  // pointer globally and close as soon as it leaves the tab bounds.
+  useEffect(() => {
+    if (!showHoverCard) return;
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const el = tabElementRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const isOutside =
+        event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom;
+      if (isOutside) closeHoverCard();
+    };
+
+    window.addEventListener('pointermove', handlePointerMove, { passive: true });
+    return () => window.removeEventListener('pointermove', handlePointerMove);
+  }, [showHoverCard, closeHoverCard]);
+
   const setDeeplink = (deeplink: string) => browserTabs.updateTabDeeplink(tab.id, deeplink);
 
   return (
     <Popover open={showHoverCard}>
       <Popover.Anchor asChild>
         <div
-          ref={setNodeRef}
+          ref={setTabRef}
           data-tab-id={tab.id}
           style={style}
           className={cnTw(
             'group @container relative flex h-7 cursor-pointer items-center justify-center gap-2 rounded-full transition-colors duration-150 select-none',
             isActive
-              ? 'min-w-[148px] flex-1 bg-elevated px-4 py-1'
-              : 'min-w-[65px] flex-1 bg-transparent px-4 py-1 hover:bg-foreground/10',
+              ? 'min-w-37 flex-1 bg-bg-surface-container px-4 py-1'
+              : 'min-w-16.25 flex-1 bg-transparent px-4 py-1 hover:bg-fg-primary/10',
             isDragging && 'z-10 opacity-90 shadow-lg',
           )}
           onClick={() => onSelect(tab)}
@@ -267,11 +302,11 @@ const SortableTab = ({ tab, isActive, onSelect, onClose, onHoverChange }: Sortab
           {...attributes}
           {...listeners}
         >
-          <span className="flex min-w-0 flex-1 items-center justify-center gap-2 overflow-hidden pl-3.5">
+          <span className="flex min-w-0 flex-1 items-center justify-center gap-2 overflow-hidden ps-3.5">
             <Slot id={tabContentSlot} props={{ tab, setDeeplink, isActive }} />
           </span>
           <button
-            className="absolute top-1/2 left-0.5 flex size-6 origin-center -translate-y-1/2 scale-75 items-center justify-center rounded-full p-1 opacity-0 transition-[opacity,background-color,transform] duration-150 ease-out group-hover:scale-100 group-hover:opacity-100 hover:bg-foreground/15"
+            className="absolute start-0.5 top-1/2 flex size-6 origin-center -translate-y-1/2 scale-75 items-center justify-center rounded-full p-1 opacity-0 transition-[opacity,background-color,transform] duration-150 ease-out group-hover:scale-100 group-hover:opacity-100 hover:bg-fg-primary/15"
             aria-label={t('feature.browser.closeTab')}
             onClick={e => {
               e.stopPropagation();
@@ -289,7 +324,7 @@ const SortableTab = ({ tab, isActive, onSelect, onClose, onHoverChange }: Sortab
         variant="flush"
         onOpenAutoFocus={e => e.preventDefault()}
       >
-        <div className="pointer-events-none flex w-max max-w-72 min-w-44 flex-col gap-2 p-3">
+        <div className="pointer-events-none flex w-max max-w-72 min-w-44 flex-col gap-2 p-3" data-testid={TEST_IDS.tabHoverCard}>
           <Slot id={tabHoverSlot} props={{ tab }} />
           {!isSystemTabType(tab.type) && (
             <div className="flex items-center gap-1.5">
@@ -306,14 +341,14 @@ const SortableTab = ({ tab, isActive, onSelect, onClose, onHoverChange }: Sortab
 const ProductPinGlyph = ({ productId }: { productId: string }) => {
   const pinned = useIsPinned(productId);
   if (!pinned) return null;
-  return <Pin data-testid={TEST_IDS.tabHoverVersionPin} className="size-3 shrink-0 text-text-secondary" aria-hidden />;
+  return <Pin data-testid={TEST_IDS.tabHoverVersionPin} className="size-3 shrink-0 text-fg-secondary" aria-hidden />;
 };
 
 const TabRamUsageRow = ({ tabId }: { tabId: string }) => {
   const { t } = useTranslation();
   const memory = useTabMemory(tabId);
   return (
-    <span className="text-sm leading-[18px] text-text-secondary">
+    <span className="text-sm leading-4.5 text-fg-secondary" data-testid={TEST_IDS.tabHoverRam}>
       {memory === null
         ? t('feature.browser.ramUsageUnavailable')
         : t('feature.browser.ramUsage', { value: formatMemory(memory) })}
@@ -357,6 +392,7 @@ const formatMemory = (bytes: number): string => {
 };
 
 export const BrowserRefreshButton = () => {
+  const { t } = useTranslation();
   const { tabs, selectedTabId } = useTabs();
   const [spinning, setSpinning] = useState(false);
 
@@ -370,9 +406,9 @@ export const BrowserRefreshButton = () => {
   };
 
   return (
-    <HeaderButton variant="icon" onClick={handleRefresh}>
+    <HeaderButton variant="icon" ariaLabel={t('common.aria.reload')} onClick={handleRefresh}>
       <RotateCwIcon
-        className={cnTw(tabRefreshIconClassName, spinning && 'animate-[spin_0.5s_ease-in-out]')}
+        className={cnTw('h-3.75 w-3.75', iconBase, spinning && 'animate-[spin_0.5s_ease-in-out]')}
         aria-hidden
         onAnimationEnd={() => setSpinning(false)}
       />

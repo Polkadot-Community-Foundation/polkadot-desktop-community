@@ -1,23 +1,23 @@
-import { environmentUseCase } from '@/domains/application';
-
 const DEFAULT_TIMEOUT_MS = 30_000;
 
-type FetchOptions = {
+export type IpfsFetchOptions = {
   // Request the resource as a CAR archive instead of whatever the gateway serves natively.
   asCar?: boolean;
   timeoutMs?: number;
 };
 
 // The single IPFS gateway fetch — uncached, returns `null` on any failure.
-// `ipfsRawResource` layers caching on top of this for immutable blobs (icons,
+// Pure wire I/O: the caller resolves the active `gatewayUrl` and passes it in.
+// `ipfsRawResource` is the cached entry point for immutable blobs (icons,
 // archives); callers that must NOT cache — e.g. polling for a preimage that
-// hasn't propagated to the gateway yet — call this directly, since a cached
-// miss would pin `null` forever.
+// hasn't propagated to the gateway yet — go through `ipfsUseCase.fetchRaw`,
+// since a cached miss would pin `null` forever.
 async function fetchRaw(
+  gatewayUrl: string,
   cid: string,
-  { asCar = false, timeoutMs = DEFAULT_TIMEOUT_MS }: FetchOptions = {},
+  { asCar = false, timeoutMs = DEFAULT_TIMEOUT_MS }: IpfsFetchOptions = {},
 ): Promise<Uint8Array | null> {
-  const baseUrl = `${(await environmentUseCase.getActive()).ipfsGatewayUrl}/${cid}`;
+  const baseUrl = `${gatewayUrl}/${cid}`;
   const url = asCar ? `${baseUrl}?format=car` : baseUrl;
   const headers = asCar ? { Accept: 'application/vnd.ipld.car' } : undefined;
 

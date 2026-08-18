@@ -130,6 +130,33 @@ export function markP2PMessagesAsRead({ sessionId }: { sessionId: string }): Obs
   );
 }
 
+/**
+ * Advance outgoing messages older than `before` from `sent` to `delivered`.
+ *
+ * The peer acknowledges an outgoing BATCH, which carries every message they haven't acked
+ * yet — so one ack covers all of them. Messages sent in the current session run resolve
+ * individually through their own delivery waiter; `before` is the session start, which keeps
+ * this from marking a live message delivered on the strength of an ack for an older batch.
+ */
+export function markP2PMessagesAsDelivered({ sessionId, before }: { sessionId: string; before: number }): Observable<null> {
+  return from(p2pChatDatabase.messages.where('sessionId').equals(sessionId).toArray()).pipe(
+    map(messages =>
+      messages
+        .filter(m => m.status.direction === 'outgoing' && m.status.state === 'sent' && m.timestamp < before)
+        .map(m => ({
+          ...m,
+          status: m.status.direction === 'outgoing' ? { ...m.status, state: 'delivered' as const } : m.status,
+        })),
+    ),
+    switchMap(messages =>
+      messages.length ? from(p2pChatDatabase.messages.bulkPut(messages.map(p2pService.stampMessage))) : of(null),
+    ),
+    tap(() => signalLocalChange()),
+    map(() => null),
+    take(1),
+  );
+}
+
 // ── Rooms ───────────────────────────────────────────────────────────────
 
 export const p2pRoomsResource = createStreamResource<{ userId: string }>({

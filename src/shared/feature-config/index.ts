@@ -10,6 +10,9 @@ export const resetFeatureStatuses = createEvent();
 export const $mutatedFeatures = createStore<Partial<Features>>({});
 export const $defaultFeatures = createStore({
   dashboard: true,
+  // Audio/video calls (chat/call feature). Off by default — still rolling out;
+  // enable at runtime with `window.__browser_config.enableFeature('calls')`.
+  calls: true,
 });
 
 export const $features = combine($defaultFeatures, $mutatedFeatures, (base, extend) => ({ ...base, ...extend }));

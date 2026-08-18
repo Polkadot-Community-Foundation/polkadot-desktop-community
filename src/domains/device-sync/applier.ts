@@ -13,18 +13,19 @@ import { type CodecType } from 'scale-ts';
 /* eslint-disable boundaries/dependencies -- direct sub-path imports avoid pulling
    wasm-loading transitive deps (rosterSubscriber → attestationService → verifiablejs)
    into the vitest sandbox; same workaround as collector.ts */
-import { p2pChatDatabase } from '@/domains/chat/p2p/repository';
+import { listBlockedPeerIds, p2pChatDatabase } from '@/domains/chat/p2p/repository';
 import { p2pService } from '@/domains/chat/p2p/service';
 import { chatContentService } from '@/domains/chat/p2p/session-transport/service';
 import { chatMessageService } from '@/domains/chat/session/service';
 import { type ChatMessage, type ChatMessageStatus } from '@/domains/chat/session/types';
+import { contactWriteUseCase } from '@/domains/contact';
 import { contactRepository } from '@/domains/contact/identity/repository';
 import { type Device } from '@/domains/contact/identity/types';
-import { isValidEncryptionPublicKey } from '@/domains/device';
+import { deviceIdentityService } from '@/domains/device';
 /* eslint-enable boundaries/dependencies */
 
-import { type ChatIdCodec, type ChatMessageStatementCodec, type LocalStatusCodec, type SyncEntityCodec } from './codec';
 import { deviceSyncRepository } from './repository';
+import { type ChatIdCodec, type ChatMessageStatementCodec, type LocalStatusCodec, type SyncEntityCodec } from './schemas';
 
 type SyncEntity = CodecType<typeof SyncEntityCodec>;
 type ChatId = CodecType<typeof ChatIdCodec>;
@@ -97,7 +98,7 @@ export async function applySyncEntities(entities: SyncEntity[], ctx: ApplierCont
           continue;
         }
         const chatKeyHex = toHex(info.chatKey);
-        await contactRepository.upsert({
+        await contactWriteUseCase.upsertContact({
           accountId: ss58,
           identityChatPublicKey: chatKeyHex,
           devices: [],
@@ -113,7 +114,6 @@ export async function applySyncEntities(entities: SyncEntity[], ctx: ApplierCont
               sessionId: ss58,
               peerId: ss58,
               peerUsername: info.username,
-              peerP256PublicKey: chatKeyHex,
               userId: ctx.ownUserId,
               createdAt: now,
               lastUpdate: now,
@@ -162,7 +162,7 @@ export async function applySyncEntities(entities: SyncEntity[], ctx: ApplierCont
                   d.statementAccountId !== incomingDevice.statementAccountId &&
                   d.encryptionPublicKey !== incomingDevice.encryptionPublicKey,
               );
-              await contactRepository.upsert({ ...contact, devices: [...without, incomingDevice] });
+              await contactWriteUseCase.upsertContact({ ...contact, devices: [...without, incomingDevice] });
             }
           }
           // Mirror manual acceptRequest: materialise the request's welcomeMessage
@@ -207,7 +207,7 @@ export async function applySyncEntities(entities: SyncEntity[], ctx: ApplierCont
       for (const chatId of entity.value) {
         const ss58 = decodeChatIdToSs58(chatId);
         if (!ss58) continue;
-        await contactRepository.applyRemoteDelete(ss58);
+        await contactWriteUseCase.applyRemoteContactDelete(ss58);
         // Drop the room too so the chat list reflects the removal. Messages
         // under the (now-orphaned) sessionId stay until a future cleanup pass.
         await p2pChatDatabase.rooms.delete(ss58);
@@ -223,6 +223,9 @@ export async function applySyncEntities(entities: SyncEntity[], ctx: ApplierCont
         if (a.order > b.order) return 1;
         return 0;
       });
+
+      const blockedPeerIds = new Set(await listBlockedPeerIds(ctx.ownUserId));
+
       for (const m of ordered) {
         const messageId = m.remote.messageId;
         const wireContent = unwrapMessageContent(m.remote);
@@ -230,6 +233,10 @@ export async function applySyncEntities(entities: SyncEntity[], ctx: ApplierCont
           continue;
         }
         const peerSs58 = accountIdCodec.dec(m.peerId);
+
+        // Outgoing copies still apply: a sibling may legitimately still be chatting
+        // with someone blocked only on this device.
+        if (m.status.tag === 'Incoming' && blockedPeerIds.has(peerSs58)) continue;
 
         // `chatAccepted` is Android's legacy alias for `deviceChatAccepted` and
         // is consumed by the accept-signal listener directly; if sync replays
@@ -275,7 +282,6 @@ export async function applySyncEntities(entities: SyncEntity[], ctx: ApplierCont
           if (wireContent.tag === 'deviceAdded') {
             const existing = await contactRepository.get(peerSs58);
             if (!existing) {
-              console.debug('[DEVICE-TRACE] applier RECV deviceAdded but contact unknown peer=%s — skipping', peerSs58);
               continue;
             }
             const incoming: Device = {
@@ -283,16 +289,7 @@ export async function applySyncEntities(entities: SyncEntity[], ctx: ApplierCont
               encryptionPublicKey: toHex(wireContent.value.encryptionPublicKey),
             };
             const without = existing.devices.filter(d => d.statementAccountId !== incoming.statementAccountId);
-            console.debug(
-              '[DEVICE-TRACE] applier RECV deviceAdded via sibling-MDS:\n  peerSs58(contact)=%s\n  incoming.stmtAcct=%s\n  incoming.encPub=%s\n  existing.devices BEFORE=%o\n  existing.devices AFTER=[…, incoming] (replace-by-stmtAcct, %d → %d devices)',
-              peerSs58,
-              incoming.statementAccountId,
-              incoming.encryptionPublicKey,
-              existing.devices.map(d => d.statementAccountId),
-              existing.devices.length,
-              without.length + 1,
-            );
-            await contactRepository.upsert({ ...existing, devices: [...without, incoming] });
+            await contactWriteUseCase.upsertContact({ ...existing, devices: [...without, incoming] });
             continue;
           }
 
@@ -300,7 +297,6 @@ export async function applySyncEntities(entities: SyncEntity[], ctx: ApplierCont
             const { requestId, device } = wireContent.value;
             const existing = await contactRepository.get(peerSs58);
             if (!existing) {
-              console.debug('[DEVICE-TRACE] applier RECV deviceChatAccepted but contact unknown peer=%s — skipping', peerSs58);
               continue;
             }
             const incoming: Device = {
@@ -308,17 +304,7 @@ export async function applySyncEntities(entities: SyncEntity[], ctx: ApplierCont
               encryptionPublicKey: toHex(device.encryptionPublicKey),
             };
             const without = existing.devices.filter(d => d.statementAccountId !== incoming.statementAccountId);
-            console.debug(
-              '[DEVICE-TRACE] applier RECV deviceChatAccepted via sibling-MDS:\n  peerSs58(contact)=%s\n  requestId=%s\n  incoming.stmtAcct=%s\n  incoming.encPub=%s\n  existing.devices BEFORE=%o\n  AFTER=[…, incoming] (%d → %d devices)',
-              peerSs58,
-              requestId,
-              incoming.statementAccountId,
-              incoming.encryptionPublicKey,
-              existing.devices.map(d => d.statementAccountId),
-              existing.devices.length,
-              without.length + 1,
-            );
-            await contactRepository.upsert({ ...existing, devices: [...without, incoming] });
+            await contactWriteUseCase.upsertContact({ ...existing, devices: [...without, incoming] });
             // Mirror local accept-signal handler: flip the matching outgoing
             // request row to `accepted` so the chat list and request UI converge
             // with the sibling device that originally received the signal.
@@ -358,7 +344,7 @@ export async function applySyncEntities(entities: SyncEntity[], ctx: ApplierCont
             continue;
           }
           const removedHex = toHex(wireContent.value.statementAccountId);
-          await contactRepository.upsert({
+          await contactWriteUseCase.upsertContact({
             ...existing,
             devices: existing.devices.filter(d => d.statementAccountId !== removedHex),
           });
@@ -408,9 +394,9 @@ export async function applySyncEntities(entities: SyncEntity[], ctx: ApplierCont
         // Wire data — never persist a device whose enc key can't serve ECDH;
         // a poisoned row crashes orchestrator spawns and fans out to chat
         // peers via `deviceAdded` (breaking THEIR sends to us wholesale).
-        if (!isValidEncryptionPublicKey(d.encryptionPublicKey)) {
+        if (!deviceIdentityService.isValidEncryptionPublicKey(d.encryptionPublicKey)) {
           console.warn(
-            '[applier] Devices: skipping device=%s — encryptionPublicKey is not a valid P-256 key (len=%d)',
+            '[applier] Devices: skipping device=%s — encryptionPublicKey is not a valid X25519 key (len=%d)',
             stmtHex,
             d.encryptionPublicKey.length,
           );

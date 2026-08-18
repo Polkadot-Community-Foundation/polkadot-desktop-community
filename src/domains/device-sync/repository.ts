@@ -1,15 +1,22 @@
 import { createDexieDatabase } from '@/shared/dexie';
 import { createAsyncTaskPool } from '@/shared/utils';
 
-import { type KnownUserDevice } from './types';
+import { type DeviceSyncConnectionMeta, type KnownUserDevice } from './types';
+
+const SYNC_CONNECTION_META_ID = 'default' as const;
 
 export const deviceSyncDatabase = createDexieDatabase<{
   knownUserDevices: KnownUserDevice;
+  syncConnectionMeta: DeviceSyncConnectionMeta;
 }>({
   name: 'device-sync',
-  version: 1,
+  // v3: renamed the `syncConnectionMeta` store to `syncConnectionMeta` (introduced in this
+  // unreleased branch). Dexie drops the old store on upgrade; the only persisted value
+  // is a disposable staleness timestamp, so the loss is benign.
+  version: 3,
   schema: {
     knownUserDevices: 'statementAccountId, status',
+    syncConnectionMeta: 'id',
   },
 });
 
@@ -48,6 +55,7 @@ const clearAllRows = (): Promise<void> => {
   const clear = clearBarrier.then(async () => {
     await Promise.allSettled(drained);
     await deviceSyncDatabase.knownUserDevices.clear();
+    await deviceSyncDatabase.syncConnectionMeta.clear();
   });
   clearBarrier = clear.catch(() => {});
 
@@ -122,4 +130,25 @@ export const deviceSyncRepository = {
 
   /** Called on handshake re-pair — PApp's device keys rotate so cached siblings become zombies. */
   clearAll: clearAllRows,
+
+  getConnectionMeta: async (): Promise<DeviceSyncConnectionMeta> => {
+    const existing = await deviceSyncDatabase.syncConnectionMeta.get(SYNC_CONNECTION_META_ID);
+    return existing ?? { id: SYNC_CONNECTION_META_ID, lastConnectionClosedAt: null };
+  },
+
+  setLastConnectionClosedAt: (closedAt: number): Promise<void> =>
+    withRowLock(SYNC_CONNECTION_META_ID, async () => {
+      await deviceSyncDatabase.syncConnectionMeta.put({
+        id: SYNC_CONNECTION_META_ID,
+        lastConnectionClosedAt: closedAt,
+      });
+    }),
+
+  clearLastConnectionClosedAt: (): Promise<void> =>
+    withRowLock(SYNC_CONNECTION_META_ID, async () => {
+      await deviceSyncDatabase.syncConnectionMeta.put({
+        id: SYNC_CONNECTION_META_ID,
+        lastConnectionClosedAt: null,
+      });
+    }),
 };

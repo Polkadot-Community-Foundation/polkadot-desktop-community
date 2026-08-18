@@ -22,6 +22,7 @@ vi.mock('@/domains/product', () => ({
   useDisplayedProduct: useDisplayedProductMock,
   isLocalhostUrl: (url: string) => url.startsWith('http://localhost') || url.startsWith('localhost'),
   productService: { matchesQuery: () => true },
+  useDotNsTld: () => ({ data: '.dot', pending: false, error: null, refresh: vi.fn() }),
 }));
 
 vi.mock('@/widgets/ProductIcon', () => ({

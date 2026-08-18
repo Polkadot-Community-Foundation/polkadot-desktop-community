@@ -7,3 +7,5 @@ coverage
 release
 .github
 .husky
+.claude/**/*.md
+docs/RFC

@@ -1,7 +1,7 @@
 import { userIdentity$ } from '@/domains/sso';
+import { sessionUseCase } from '../$usecase/session';
 
 import { ensurePappProvider } from './provider';
-import { performUserLogout } from './service';
 
 /**
  * Single local-teardown path, mirroring dotli's auth module.
@@ -32,7 +32,7 @@ export const watchHostPappSessionTeardown = async (): Promise<void> => {
     if (hadSession && !hasSession && !tearingDown && userIdentity$.get() !== null) {
       tearingDown = true;
       console.info('[sso] host-papp session removed while authenticated — running full user logout');
-      void performUserLogout();
+      void sessionUseCase.performUserLogout();
     }
     hadSession = hasSession;
   });

@@ -5,19 +5,25 @@ vi.mock('../product/repository', () => ({
   productDb: {
     getByBaseName: vi.fn(),
     update: vi.fn(),
+    updateExecutable: vi.fn(),
     upsert: vi.fn(),
   },
 }));
 
 vi.mock('../dotns/service', () => ({
   dotNsService: {
-    baseNameOf: vi.fn((id: string) => (id.endsWith('.dot') ? id : `${id}.dot`)),
+    baseNameOf: vi.fn((id: string, tld: string) => (id.endsWith(tld) ? id : `${id}${tld}`)),
   },
+}));
+
+vi.mock('./dotns', () => ({
+  dotNsUseCase: { getActiveTld: vi.fn().mockResolvedValue('.dot') },
 }));
 
 vi.mock('./resolve', () => ({
   resolveProductUseCase: {
     fetchProductFromChain: vi.fn(),
+    resolveFreshExecutable: vi.fn(),
   },
 }));
 
@@ -33,6 +39,7 @@ vi.mock('./offlineCache', () => ({
   },
 }));
 
+import { type WidgetExecutable } from '../product/manifest/types';
 import { productDb } from '../product/repository';
 import { invalidateChainResolve } from '../product/resource';
 
@@ -41,6 +48,7 @@ import { offlineCacheUseCase } from './offlineCache';
 import { resolveProductUseCase } from './resolve';
 
 const fetchProductFromChain = resolveProductUseCase.fetchProductFromChain;
+const resolveFreshExecutable = resolveProductUseCase.resolveFreshExecutable;
 
 function makeProduct(overrides: Partial<{ displayName: string }> = {}) {
   return {
@@ -100,7 +108,7 @@ describe('commitProductByIdentifier', () => {
 
     expect(fetchProductFromChain).toHaveBeenCalledWith('app.dot');
     expect(productDb.upsert).toHaveBeenCalledWith(fresh, { pinned: false });
-    expect(invalidateChainResolve).toHaveBeenCalledWith('app.dot');
+    expect(invalidateChainResolve).toHaveBeenCalledWith(expect.objectContaining({ id: expect.any(String) }), 'app.dot', '.dot');
     expect(result).toBe(saved);
   });
 
@@ -209,7 +217,7 @@ describe('pinProduct', () => {
 
     await commitmentUseCase.pinProduct('app.dot');
 
-    expect(invalidateChainResolve).toHaveBeenCalledWith('app.dot');
+    expect(invalidateChainResolve).toHaveBeenCalledWith(expect.objectContaining({ id: expect.any(String) }), 'app.dot', '.dot');
   });
 
   it('returns null when chain returns nothing', async () => {
@@ -236,6 +244,65 @@ describe('pinProduct', () => {
 
     expect(prefetch).toHaveBeenCalledTimes(1);
     expect(prefetch).toHaveBeenCalledWith(saved);
+  });
+});
+
+describe('pinExecutable', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const widgetOld: WidgetExecutable = {
+    kind: 'widget',
+    identifier: 'widget.app.dot',
+    contenthash: '0xold',
+    appVersion: [1, 0, 0],
+    dimensions: { height: [400] },
+  };
+
+  it('returns null when the row is not pinned', async () => {
+    vi.mocked(productDb.getByBaseName).mockResolvedValue(
+      ok({ ...makeRecord({ pinned: false }), executables: { widget: widgetOld } }),
+    );
+    const result = await commitmentUseCase.pinExecutable({ identifier: 'app.dot', kind: 'widget' });
+    expect(result).toBeNull();
+    expect(resolveFreshExecutable).not.toHaveBeenCalled();
+  });
+
+  it('returns null when the pinned row has no such frozen kind', async () => {
+    vi.mocked(productDb.getByBaseName).mockResolvedValue(ok({ ...makeRecord({ pinned: true }), executables: {} }));
+    const result = await commitmentUseCase.pinExecutable({ identifier: 'app.dot', kind: 'widget' });
+    expect(result).toBeNull();
+    expect(resolveFreshExecutable).not.toHaveBeenCalled();
+    expect(productDb.updateExecutable).not.toHaveBeenCalled();
+  });
+
+  it('returns null (no write) when no fresh executable can be built', async () => {
+    vi.mocked(productDb.getByBaseName).mockResolvedValue(
+      ok({ ...makeRecord({ pinned: true }), executables: { widget: widgetOld } }),
+    );
+    vi.mocked(resolveFreshExecutable).mockResolvedValue(null);
+    const result = await commitmentUseCase.pinExecutable({ identifier: 'app.dot', kind: 'widget' });
+    expect(result).toBeNull();
+    expect(productDb.updateExecutable).not.toHaveBeenCalled();
+  });
+
+  it('re-freezes exactly the target kind against the frozen executable and prefetches', async () => {
+    const frozen = { ...makeRecord({ pinned: true }), executables: { app: undefined, widget: widgetOld } };
+    const freshWidget: WidgetExecutable = { ...widgetOld, contenthash: '0xwidgetNew', appVersion: [1, 1, 1] };
+    const updatedRow = { ...frozen, executables: { widget: freshWidget }, updatedAt: 2000 };
+    vi.mocked(productDb.getByBaseName).mockResolvedValue(ok(frozen));
+    vi.mocked(resolveFreshExecutable).mockResolvedValue(freshWidget);
+    vi.mocked(productDb.updateExecutable).mockResolvedValue(ok(updatedRow));
+
+    const result = await commitmentUseCase.pinExecutable({ identifier: 'app.dot', kind: 'widget' });
+
+    // Detection & application share the primitive: it is called with the FROZEN executable.
+    expect(resolveFreshExecutable).toHaveBeenCalledWith('app.dot', widgetOld);
+    // The transactional per-kind write is the one that persists (no whole-map read-modify-write).
+    expect(productDb.updateExecutable).toHaveBeenCalledWith('app.dot', 'widget', freshWidget);
+    expect(result).toBe(updatedRow);
+    expect(offlineCacheUseCase.prefetchArchives).toHaveBeenCalledWith(updatedRow);
   });
 });
 

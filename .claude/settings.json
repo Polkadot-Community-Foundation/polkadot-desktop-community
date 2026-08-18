@@ -9,15 +9,12 @@
     }
   },
   "enabledPlugins": {
-    "superpowers@claude-plugins-official": true
+    "superpowers@claude-plugins-official": true,
+    "typescript-lsp-native@polkadot-desktop-local": true,
+    "typescript-lsp@claude-plugins-official": false
   },
   "permissions": {
-    "deny": [
-      "Read(./release/**)",
-      "Read(./eslint/**)",
-      "Read(./.idea/**)",
-      "Read(./.papi/**)"
-    ]
+    "deny": ["Read(./release/**)", "Read(./.idea/**)", "Read(./.papi/**)"]
   },
   "hooks": {
     "PreToolUse": [
@@ -29,15 +26,33 @@
             "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/guard-protected-paths.sh"
           }
         ]
-      }
-    ],
-    "PostToolUse": [
+      },
       {
-        "matcher": "Edit|Write|MultiEdit",
+        "matcher": "Grep|Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/format-edited-file.sh"
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/prefer-lsp-for-symbols.sh"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/preload-lsp-tool.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/format-dirty-files.sh"
           }
         ]
       }

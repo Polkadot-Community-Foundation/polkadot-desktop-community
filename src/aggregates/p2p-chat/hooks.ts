@@ -77,6 +77,15 @@ export const useDeclineRequest = () => {
 };
 
 /**
+ * Returns a stable function to reveal an incoming request's hidden message
+ * (persists the per-request `revealed` flag).
+ */
+export const useRevealRequest = () => {
+  const manager = useP2PChatManager();
+  return useCallback(async (requestId: string) => requireManager(manager).revealRequest(requestId), [manager]);
+};
+
+/**
  * Returns a stable function to send a P2P chat request to a peer.
  */
 export const useSendChatRequest = () => {

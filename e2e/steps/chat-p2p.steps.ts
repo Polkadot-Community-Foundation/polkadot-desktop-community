@@ -99,6 +99,11 @@ When('the user opens the new requests list', async ({ authenticatedApp }) => {
 });
 
 When('the user accepts the request from the peer bot', async ({ authenticatedApp }) => {
+  // Accept now lives in the opened request conversation (banner), so open the
+  // request item first, then accept from the banner.
+  const requestItem = authenticatedApp.window.getByTestId(TEST_IDS.chatRequestItem).first();
+  await expect(requestItem).toBeVisible({ timeout: DEFAULT_TIMEOUT });
+  await requestItem.click();
   const acceptButton = authenticatedApp.window.getByTestId(TEST_IDS.chatRequestAcceptButton);
   await expect(acceptButton).toBeVisible({ timeout: DEFAULT_TIMEOUT });
   await acceptButton.locator('button').click();
@@ -112,6 +117,15 @@ When("the user types the peer bot's lite username into the contact search", asyn
 Then('the contact search shows the peer bot as a result', async ({ authenticatedApp }) => {
   const search = new ContactSearchPage(authenticatedApp.window);
   await search.waitForResult(expectLiteUsername());
+});
+
+When('the user finds the peer bot in the contact search', async ({ authenticatedApp }) => {
+  // Re-types the query until the peer surfaces — the contact search never
+  // refetches on its own, so a single query that runs before the peer's
+  // on-chain username attestation has propagated to the indexer would stick
+  // empty forever.
+  const search = new ContactSearchPage(authenticatedApp.window);
+  await search.findResultByRetyping(expectLiteUsername());
 });
 
 When('the user selects the peer bot from the results', async ({ authenticatedApp }) => {

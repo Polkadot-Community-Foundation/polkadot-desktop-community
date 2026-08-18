@@ -15,7 +15,9 @@ export const AppShell = memo(({ children }: PropsWithChildren) => {
       <div className="flex h-full w-full flex-col animate-in fade-in" style={{ appRegion: 'no-drag' }}>
         <Favicon />
         <Header />
-        <main className="relative h-full min-h-0 w-full grow overflow-hidden bg-general-muted">{children}</main>
+        <div className="flex min-h-0 w-full grow overflow-hidden">
+          <main className="relative h-full min-h-0 min-w-0 grow overflow-hidden bg-bg-surface-nested">{children}</main>
+        </div>
         {persistent}
       </div>
     </FaviconProvider>

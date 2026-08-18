@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
+import { type CallWindowLaunch } from '@/shared/call-bridge';
 import {
   type DevicePermissionType,
   type ExecutableKind,
@@ -16,13 +17,16 @@ import {
   WEBVIEW_RENDER_PROCESS_UNRESPONSIVE,
 } from './shared/constants/webview-events';
 import { createPreloadRequestHandler } from './shared/lib/events';
-import { checkAutoUpdateSupported } from './shared/lib/utils';
 import { type ProxyFetchRequest, type ProxyFetchResponse } from './shared/proxyFetch';
 
 const readUpdateChannel = (): UpdateChannel => {
   const value = ipcRenderer.sendSync('sync:getUpdateChannel');
   return value === 'experimental' ? 'experimental' : 'stable';
 };
+
+// The real auto-update gate, computed once in the main process. Read synchronously at preload
+// time so every renderer surface (settings button, manual check) agrees with the app menu.
+const readAutoUpdateSupported = (): boolean => ipcRenderer.sendSync('sync:isAutoUpdateSupported') === true;
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/consistent-type-definitions -- declaration merging requires interface
@@ -47,7 +51,7 @@ const API = {
 
   // autoupdate
 
-  isAutoUpdateSupported: checkAutoUpdateSupported(),
+  isAutoUpdateSupported: readAutoUpdateSupported(),
 
   // Sync'd at preload time so the renderer can tag Sentry before any errors fire.
   updateChannel: readUpdateChannel(),
@@ -61,6 +65,7 @@ const API = {
   getHostMetadata: (): Promise<{
     hostName?: string;
     hostVersion?: string;
+    hostIcon?: string;
     platformType?: string;
     platformVersion?: string;
   }> => ipcRenderer.invoke('getHostMetadata'),
@@ -108,6 +113,13 @@ const API = {
   reload: () => {
     ipcRenderer.send('reload');
     return true as const;
+  },
+  // Push the app theme preference to main so it can set the app-global
+  // nativeTheme.themeSource — this is what makes guest webviews inherit the
+  // native color-scheme (scrollbars, form controls). Send the PREFERENCE,
+  // not the resolved value, so 'system' stays dynamic in Electron.
+  setNativeTheme: (source: 'light' | 'dark' | 'system') => {
+    ipcRenderer.send('app:set-native-theme', source);
   },
   onResetAppData: (callback: () => void) => {
     return ipcRenderer.on('reset-app-data', () => callback());
@@ -440,7 +452,26 @@ const API = {
   clearProductSandboxData: (productId: string): Promise<void> => {
     return ipcRenderer.invoke('sandbox:clear-data', productId);
   },
+
+  openCallWindow: (params: CallWindowLaunch, iceConfig: { turnHost?: string; turnSecret?: string }): Promise<void> =>
+    ipcRenderer.invoke('call:open', { launch: params, iceConfig }),
+  focusCallWindow: (): void => ipcRenderer.send('call:focus'),
+  onCallEnded: (callback: () => void): (() => void) => {
+    const handler = () => callback();
+    ipcRenderer.on('call:ended', handler);
+    return () => ipcRenderer.off('call:ended', handler);
+  },
 };
+
+// A MessagePort cannot be handed to the renderer through contextBridge (context
+// isolation strips its transferable methods). Instead, forward the transferred
+// port into the main world via window.postMessage — the renderer's call bridge
+// endpoint listens for `__callBridgePort` on the window `message` event.
+ipcRenderer.on('call:bridge-port', (event, data: { launch: CallWindowLaunch }) => {
+  // Target our own origin (not '*') so the transferred port is never delivered
+  // to an unexpected origin; the endpoint additionally checks event.source.
+  window.postMessage({ __callBridgePort: data }, window.location.origin, event.ports);
+});
 
 // Respond to main-process health checks (e.g. after macOS wake)
 ipcRenderer.on('app:health-check', () => {

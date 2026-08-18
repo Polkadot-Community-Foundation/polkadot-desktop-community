@@ -13,7 +13,8 @@
 
 This domain owns:
 
-- the `Environment` shape (`types.ts`) and its assembly from Remote Config (`service.ts` `getActive()`/`getById()`);
+- the `Environment` shape (`types.ts`) and its assembly from Remote Config (`resource.ts`, cached per environment id + chain
+  catalog digest), composed with the chain catalog by `$usecase/environment.ts` (`getActive()` / `getById()`);
 - the small set of config Remote Config does NOT serve, kept in code (`constants.ts`): `botNetwork`, `hostChatNetwork`,
   `iosBundleId`, `digitalDollarAsset`, plus `CHANNEL_CHAIN_ROLES` — the Android-style role map naming which `chains_v2` entry is
   the people / bulletin / assetHub chain per channel;
@@ -29,8 +30,11 @@ call.
 
 - No in-memory state, no observables: state belongs to the `network-settings` aggregate.
 - **Config is sourced from Firebase Remote Config — no bundled fallback.** Chains (`chains_v2`), `dot_ns_config`,
-  `ipfs_gateway_url`, and `identity_backend_url` are read through `@/domains/remote-config`; `getActive()` assembles them (chains
-  via the `@/domains/network` transform + the role map) and throws if Remote Config has not delivered a usable set. The app's
+  `ipfs_gateway_url`, and `identity_backend_url` are read through `@/domains/remote-config`; `environmentResource` assembles them
+  and throws if Remote Config has not delivered a usable set. The chain catalog is **not** fetched by the resource — it arrives
+  as a parameter, resolved from `@/domains/network`'s `chainResource` by `$usecase/environment.ts`, because a resource reads
+  leaves and parameters only. The catalog is part of the cache key, so a refreshed catalog re-assembles rather than serving a
+  stale environment. The app's
   async bootstrap awaits the first fetch before any config read, so the assembly only runs once values are available. There is no
   static registry and no offline path — a build without Firebase credentials (e.g. CI/e2e) has no config.
 - The `Chain` objects exposed here are produced by `chainService.fromRemoteChains` (genesis-hash–keyed, like the rest of

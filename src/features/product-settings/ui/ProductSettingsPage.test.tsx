@@ -5,9 +5,10 @@ import userEvent from '@testing-library/user-event';
 import { type PropsWithChildren, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { forgetProductMock, useDisplayedProductMock } = vi.hoisted(() => ({
+const { forgetProductMock, useDisplayedProductMock, useAllAliasPermissionsMock } = vi.hoisted(() => ({
   forgetProductMock: vi.fn(),
-  useDisplayedProductMock: vi.fn(() => ({ data: null, pending: false, error: null })),
+  useDisplayedProductMock: vi.fn(() => ({ data: null as unknown, pending: false, error: null })),
+  useAllAliasPermissionsMock: vi.fn(() => ({ data: [] as unknown[] })),
 }));
 
 vi.mock('@novasamatech/tr-ui', () => {
@@ -35,10 +36,15 @@ vi.mock('@tanstack/react-router', () => ({
 
 vi.mock('@/domains/product', () => ({
   useDisplayedProduct: useDisplayedProductMock,
+  useOfflineCacheSize: () => 0,
   useProductPermissions: () => ({ data: null }),
-  useAllAliasPermissions: () => ({ data: [] }),
+  useAllAliasPermissions: useAllAliasPermissionsMock,
   lifecycleUseCase: { clearProductCache: vi.fn() },
-  permissionsService: {},
+  permissionsService: {
+    // grant-wins roll-up, matching the real service contract.
+    rollupPermissionStatus: (statuses: string[]) =>
+      statuses.includes('granted') ? 'granted' : statuses.includes('denied') ? 'denied' : 'ask',
+  },
   productService: { refreshTargetIdentifiers: () => new Set() },
 }));
 
@@ -51,7 +57,11 @@ vi.mock('@/aggregates/product-management', () => ({
 }));
 
 vi.mock('@/widgets/Permission', () => ({
-  STATUS_LABEL_KEYS: {},
+  STATUS_LABEL_KEYS: {
+    ask: 'feature.permissionSettings.status.ask',
+    granted: 'feature.permissionSettings.status.granted',
+    denied: 'feature.permissionSettings.status.denied',
+  },
   getPermissionMeta: () => undefined,
 }));
 
@@ -74,6 +84,7 @@ describe('ProductSettingsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useDisplayedProductMock.mockReturnValue({ data: null, pending: false, error: null });
+    useAllAliasPermissionsMock.mockReturnValue({ data: [] });
   });
 
   it('forgets a permission-only product even when it cannot be resolved', async () => {
@@ -86,5 +97,35 @@ describe('ProductSettingsPage', () => {
     await user.click(confirm);
 
     expect(forgetProductMock).toHaveBeenCalledWith('localhost:5173');
+  });
+
+  it('renders the product description', () => {
+    useDisplayedProductMock.mockReturnValue({
+      data: { baseName: 'editor.dot', displayName: 'Editor', description: 'Lightweight editor' },
+      pending: false,
+      error: null,
+    });
+    renderPage('editor.dot');
+
+    expect(screen.getByText('Lightweight editor')).toBeInTheDocument();
+  });
+
+  it('lists an alias permission stored as "ask" (allow-once) with the "Ask (Default)" status', () => {
+    useAllAliasPermissionsMock.mockReturnValue({
+      data: [
+        {
+          key: 'localhost:5173::dot',
+          requesterProductId: 'localhost:5173',
+          requestedContextId: 'dot',
+          status: 'ask',
+        },
+      ],
+    });
+
+    renderPage('localhost:5173');
+
+    expect(screen.getByText('Alias')).toBeInTheDocument();
+    expect(screen.getByText('Ask (Default)')).toBeInTheDocument();
+    expect(screen.queryByText('Denied')).not.toBeInTheDocument();
   });
 });

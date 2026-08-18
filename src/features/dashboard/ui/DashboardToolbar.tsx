@@ -4,8 +4,6 @@ import AddToDashboardIcon from '@/shared/assets/images/add-to-dashboard.svg?jsx'
 import { TEST_IDS } from '@/shared/test-ids';
 import { useTranslation } from '@/shared/translation';
 
-const addWidgetMenuIconClassName = 'h-[11px] w-[10.7px] shrink-0 -scale-y-100 text-fg-primary';
-
 type DashboardToolbarProps = {
   pageCount: number;
   activePageIndex: number;
@@ -43,7 +41,7 @@ export const DashboardToolbar = ({ pageCount, activePageIndex, onSelectPage, onA
                   className={
                     isActive
                       ? 'h-2 w-4 shrink-0 rounded-full bg-bg-action-primary transition-[width,background-color] duration-200'
-                      : 'size-2 shrink-0 rounded-full bg-bg-action-tertiary transition-[width,background-color] duration-200 hover:bg-text-tertiary'
+                      : 'size-2 shrink-0 rounded-full bg-bg-action-tertiary transition-[width,background-color] duration-200 hover:bg-fg-tertiary'
                   }
                   onClick={() => onSelectPage(index)}
                 />
@@ -55,7 +53,7 @@ export const DashboardToolbar = ({ pageCount, activePageIndex, onSelectPage, onA
 
       <div className="flex shrink-0 items-center" data-testid={TEST_IDS.dashboardAddWidgetButton}>
         <Button type="button" variant="outline" size="mini" aria-label={addWidgetLabel} onClick={onAddWidget}>
-          <AddToDashboardIcon className={addWidgetMenuIconClassName} aria-hidden />
+          <AddToDashboardIcon className="h-2.75 w-[10.7px] shrink-0 -scale-y-100 text-fg-primary" aria-hidden />
           <span>{addWidgetLabel}</span>
         </Button>
       </div>

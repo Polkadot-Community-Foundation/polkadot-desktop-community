@@ -1,9 +1,7 @@
-import { type CodecType, type CustomRendererNode } from '@novasamatech/host-api';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback } from 'react';
 
-import { useIntersectionObserver } from '@/shared/hooks';
-import { type ActionHandler, chatCustomRendererService } from '@/domains/chat';
 import { useProductWorkerInstance } from '@/aggregates/product-workers';
+import { type ActionHandler, type SubscribeToNode, CustomRenderer } from '@/widgets/CustomRenderer';
 
 type Props = {
   productId: string;
@@ -13,35 +11,40 @@ type Props = {
   roomId: string;
 };
 
-export const CustomMessage = ({ productId, messageId, messageType, payload, roomId }: Props) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const onActionRef = useRef<ActionHandler | null>(null);
-  const [node, setNode] = useState<CodecType<typeof CustomRendererNode> | null>(null);
-  const [isVisible, setIsVisible] = useState(false);
+const NO_SUBSCRIPTION = () => {};
 
+/**
+ * A message the product draws itself.
+ *
+ * Everything about *drawing* — the render tree and the visibility gate — belongs
+ * to `CustomRenderer`, which the input surface uses for the same purpose. What is
+ * chat's alone lives here: the tree comes from the room's product worker, and an
+ * action goes back as a chat event naming this message.
+ */
+export const CustomMessage = ({ productId, messageId, messageType, payload, roomId }: Props) => {
   const instance = useProductWorkerInstance(productId);
 
-  useIntersectionObserver(containerRef, entry => {
-    setIsVisible(entry.isIntersecting);
-  });
+  const subscribe = useCallback<SubscribeToNode>(
+    onNode => {
+      if (!instance) return NO_SUBSCRIPTION;
 
-  useEffect(() => {
-    if (!isVisible || !instance) return;
+      const subscription = instance.container.renderChatCustomMessage({ messageId, messageType, payload }, onNode);
 
-    onActionRef.current = (actionId, value) => {
+      return () => subscription.unsubscribe();
+    },
+    [instance, messageId, messageType, payload],
+  );
+
+  const onAction = useCallback<ActionHandler>(
+    (actionId, value) => {
       // events.emit is a no-op after dispose (events.events is cleared first).
-      instance.events.emit('sendChatAction', roomId, productId, {
+      instance?.events.emit('sendChatAction', roomId, productId, {
         tag: 'ActionTriggered',
         value: { messageId, actionId, payload: value },
       });
-    };
+    },
+    [instance, roomId, productId, messageId],
+  );
 
-    const subscription = instance.container.renderChatCustomMessage({ messageId, messageType, payload }, setNode);
-
-    return () => subscription.unsubscribe();
-  }, [isVisible, instance, productId, roomId, messageId, messageType, payload]);
-
-  const onAction = useCallback<ActionHandler>((actionId, value) => onActionRef.current?.(actionId, value), []);
-
-  return <div ref={containerRef}>{node && chatCustomRendererService.renderNode(node, onAction)}</div>;
+  return <CustomRenderer subscribe={subscribe} onAction={onAction} />;
 };

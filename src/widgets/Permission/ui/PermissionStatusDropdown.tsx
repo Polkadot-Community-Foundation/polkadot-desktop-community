@@ -18,7 +18,7 @@ export const PermissionStatusDropdown = ({ value, onChange }: Props) => {
   return (
     <DropdownMenu>
       <DropdownMenu.Trigger asChild>
-        <button className="flex h-6 shrink-0 items-center gap-1 rounded border border-general-border bg-bg-action-primary-inverted px-2 py-1">
+        <button className="flex h-6 shrink-0 items-center gap-1 rounded border border-stroke-primary bg-bg-action-primary-inverted px-2 py-1">
           <span className="text-xs leading-4 font-medium text-fg-primary">{t(STATUS_LABEL_KEYS[value])}</span>
           <ChevronDown size={16} className="text-fg-tertiary" />
         </button>

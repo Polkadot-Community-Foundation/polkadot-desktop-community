@@ -2,21 +2,43 @@ import { encodeAddress } from '@polkadot/util-crypto';
 
 import { extractDomain, truncateDomain } from '@/shared/utils';
 
-import { isLocalhostUrl, parseLocalhostUrl } from './localhost';
 import { type DotNsUrl } from './types';
 
-// Accept bare label (`hackm3`) or full base name (`hackm3.dot`); always return
-// `<id>.dot` lowercase.
-function baseNameOf(input: string): string {
+export function isLocalhostUrl(url: string) {
+  return url.startsWith('http://localhost') || url.startsWith('localhost');
+}
+
+export function normalizeLocalhostUrl(url: string) {
+  return url.startsWith('localhost') ? `http://${url}` : url;
+}
+
+export function parseLocalhostUrl(url: string): DotNsUrl | null {
+  try {
+    const parsed = new URL(normalizeLocalhostUrl(url));
+
+    if (parsed.hostname !== 'localhost') return null;
+
+    return {
+      identifier: parsed.host,
+      pathname: parsed.pathname.replace(/^\//, '') + parsed.search + parsed.hash,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// Accept bare label (`hackm3`) or full base name (`hackm3.paseo`); always return
+// `<id><tld>` lowercase.
+function baseNameOf(input: string, tld: string): string {
   const trimmed = input.trim().toLowerCase();
-  return trimmed.endsWith('.dot') ? trimmed : `${trimmed}.dot`;
+  return trimmed.endsWith(tld) ? trimmed : `${trimmed}${tld}`;
 }
 
 // Product-identity equality: stored ids may be raw webview identifiers (any
-// casing, `.dot` optional) while committed rows hold the normalized base name —
+// casing, TLD optional) while committed rows hold the normalized base name —
 // two ids denote the same product iff they normalize to the same base name.
-function isSameBaseName(a: string, b: string): boolean {
-  return baseNameOf(a) === baseNameOf(b);
+function isSameBaseName(a: string, b: string, tld: string): boolean {
+  return baseNameOf(a, tld) === baseNameOf(b, tld);
 }
 
 // dotNS subname grammar: a `<sub>.<base>` name. The sub is opaque here
@@ -35,11 +57,17 @@ function generateProductBase(name: string): string {
   return `polkadot://${normalizeName(name)}`;
 }
 
-function isSafeDotNsIdentifier(id: string): boolean {
+// A localhost identifier is decided without the suffix — it names no dotNS
+// registry — which is why `tld` is nullable here: with no settled suffix nothing
+// is a dotNS name, but a localhost product still is itself.
+function isSafeDotNsIdentifier(id: string, tld: Nullable<string>): boolean {
   const lower = id.toLowerCase();
   if (lower === 'localhost' || /^localhost:\d{1,5}$/.test(lower)) return true;
+  if (!tld) return false;
 
-  return /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+dot$/.test(lower);
+  // `tld` is validated as a single DNS label at the chain boundary
+  // (`networkTldSchema`), so interpolating it here needs no escaping.
+  return new RegExp(`^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+${tld.slice(1)}$`).test(lower);
 }
 
 function hasAsciiControlChar(s: string): boolean {
@@ -60,38 +88,42 @@ function isSafeDotNsPathname(pathname: string): boolean {
   return true;
 }
 
-function asSafeNavigationTarget(url: DotNsUrl | null): DotNsUrl | null {
+function asSafeNavigationTarget(url: DotNsUrl | null, tld: Nullable<string>): DotNsUrl | null {
   if (!url) return null;
-  if (!isSafeDotNsIdentifier(url.identifier)) return null;
+  if (!isSafeDotNsIdentifier(url.identifier, tld)) return null;
   if (!isSafeDotNsPathname(url.pathname)) return null;
 
   return url;
 }
 
-function stripLiSuffix(domain: string) {
-  return domain.replace(/\.dot\.li$/, '.dot');
+// The HTTP gateway serves a name at `<label><tld>.li` (`hackm3.dot.li`,
+// `hackm3.paseo.li`); collapse it back onto the on-chain name.
+function stripLiSuffix(domain: string, tld: string) {
+  return domain.endsWith(`${tld}.li`) ? domain.slice(0, -3) : domain;
 }
 
-function isDotDomain(domain: string) {
-  return domain.endsWith('.dot') || domain.endsWith('.dot.li');
+function isDotDomain(domain: string, tld: Nullable<string>) {
+  if (!tld) return false;
+
+  return domain.endsWith(tld) || domain.endsWith(`${tld}.li`);
 }
 
-// Human-facing display name: strip the trailing `.dot` so launchers show
-// `hackm3` rather than `hackm3.dot`. Pure transform on a dotNS name string.
-function toDisplayName(name: string): string {
-  return name.replace(/\.dot$/, '');
+// Human-facing display name: strip the trailing TLD so launchers show `hackm3`
+// rather than `hackm3.paseo`. Pure transform on a dotNS name string.
+function toDisplayName(name: string, tld: string): string {
+  return name.endsWith(tld) ? name.slice(0, -tld.length) : name;
 }
 
 // Truncated label for compact surfaces (dashboard tiles, shortcuts). A full
-// `.dot` name is kept as-is; otherwise the domain is extracted first, then
+// dotNS name is kept as-is; otherwise the domain is extracted first, then
 // truncated. The length cap is the caller's presentation choice.
-function toShortLabel(name: string, maxLen = 10): string {
-  const domain = isDotDomain(name) ? name : extractDomain(name);
+function toShortLabel(name: string, tld: string, maxLen = 10): string {
+  const domain = isDotDomain(name, tld) ? name : extractDomain(name);
   return truncateDomain(domain, maxLen);
 }
 
-function isProductIdentifier(id: string) {
-  return isDotDomain(id) || isLocalhostUrl(id);
+function isProductIdentifier(id: string, tld: string) {
+  return isDotDomain(id, tld) || isLocalhostUrl(id);
 }
 
 function parseUrl(url: string): URL | null {
@@ -108,25 +140,25 @@ function parseUrlWithFallbackProtocol(url: string): URL | null {
   return parseUrl(`https://${url}`);
 }
 
-function getDotUrlFromParsed(parsed: URL): DotNsUrl | null {
-  if (!isDotDomain(parsed.hostname)) return null;
+function getDotUrlFromParsed(parsed: URL, tld: Nullable<string>): DotNsUrl | null {
+  if (!tld || !isDotDomain(parsed.hostname, tld)) return null;
 
   return {
-    identifier: stripLiSuffix(parsed.hostname),
+    identifier: stripLiSuffix(parsed.hostname, tld),
     pathname: parsed.pathname.replace(/^\//, '') + parsed.search + parsed.hash,
   };
 }
 
-function parseDotNsDomain(url: string): DotNsUrl | null {
+function parseDotNsDomain(url: string, tld: Nullable<string>): DotNsUrl | null {
   const normalized = url.trim();
   if (!normalized) return null;
 
   const parsed = normalized.startsWith('polkadot://') ? parseUrl(normalized) : parseUrlWithFallbackProtocol(normalized);
-  if (!parsed) return asSafeNavigationTarget(parseLocalhostUrl(normalized));
+  if (!parsed) return asSafeNavigationTarget(parseLocalhostUrl(normalized), tld);
 
-  const dotUrl = getDotUrlFromParsed(parsed);
-  if (dotUrl) return asSafeNavigationTarget(dotUrl);
-  return asSafeNavigationTarget(parseLocalhostUrl(normalized));
+  const dotUrl = getDotUrlFromParsed(parsed, tld);
+  if (dotUrl) return asSafeNavigationTarget(dotUrl, tld);
+  return asSafeNavigationTarget(parseLocalhostUrl(normalized), tld);
 }
 
 // Revive system account used as the dry-run origin for read-only `ReviveApi.call`

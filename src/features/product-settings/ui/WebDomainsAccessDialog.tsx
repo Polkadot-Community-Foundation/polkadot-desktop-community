@@ -1,5 +1,3 @@
-import { SquareDashed } from 'lucide-react';
-
 import { useTranslation } from '@/shared/translation';
 import {
   type PermissionModality,
@@ -44,7 +42,6 @@ export const WebDomainsAccessDialog = ({ productId, productName, modality, open,
         productName,
         modality: t(getModalityMeta(modality).labelKey),
       })}
-      icon={<SquareDashed size={20} />}
       entries={entries}
       onOpenChange={onOpenChange}
       onStatusChange={handleStatusChange}

@@ -1,11 +1,14 @@
 import { createBdd } from 'playwright-bdd';
 
+import { AUTH_TLD } from '../fixtures/authenticated';
 import { test } from '../fixtures/test-product-sdk';
+import { productName as toProductName } from '../helpers/dotns';
 
 const { Given, When, Then } = createBdd(test);
 
-Given('the test product {string} is opened', async ({ testProductPage }, productName: string) => {
-  await testProductPage.navigateTo(productName);
+// Scenarios name the product by its label; the environment decides the suffix.
+Given('the test product {string} is opened', async ({ testProductPage }, label: string) => {
+  await testProductPage.navigateTo(toProductName(label, AUTH_TLD));
   await testProductPage.waitForProductReady();
 });
 
@@ -23,6 +26,62 @@ When('the user reloads the product', async ({ testProductPage }) => {
 
 When('the user confirms signing', async ({ testProductPage }) => {
   await testProductPage.confirmSigning();
+});
+
+When('the user rejects signing', async ({ testProductPage }) => {
+  await testProductPage.rejectSigning();
+});
+
+When('the user opens the signing review screen', async ({ testProductPage }) => {
+  await testProductPage.waitForSignReviewScreen();
+});
+
+Then('the signing review shows account, network, fee and call title', async ({ testProductPage }) => {
+  await testProductPage.expectReviewSummaryFields();
+});
+
+Then('the signing review details show arguments and call data', async ({ testProductPage }) => {
+  await testProductPage.expandReviewDetails();
+});
+
+Then('the signing review shows the batch behaviour hint', async ({ testProductPage }) => {
+  await testProductPage.expectBatchBehaviorHint();
+});
+
+When('the user cancels the signing review', async ({ testProductPage }) => {
+  await testProductPage.cancelSignReview();
+});
+
+When('the user double-clicks Continue to Sign', async ({ testProductPage }) => {
+  await testProductPage.doubleClickContinueToSign();
+});
+
+When('the user allows the permission always', async ({ testProductPage }) => {
+  await testProductPage.allowPermissionAlways();
+});
+
+When('the user allows the permission once', async ({ testProductPage }) => {
+  await testProductPage.allowPermissionOnce();
+});
+
+When('the user denies the permission', async ({ testProductPage }) => {
+  await testProductPage.denyPermission();
+});
+
+When('the user dismisses the permission dialog', async ({ testProductPage }) => {
+  await testProductPage.dismissPermission();
+});
+
+When('the user fires a burst of push notifications', async ({ testProductPage }) => {
+  await testProductPage.fireBurstOfPushNotifications();
+});
+
+Then('a rate-limit toast names the product {string}', async ({ testProductPage }, label: string) => {
+  await testProductPage.expectRateLimitToastNamesProduct(toProductName(label, AUTH_TLD));
+});
+
+When('the user schedules push notifications past the limit', async ({ testProductPage }) => {
+  await testProductPage.scheduleNotificationsPastLimit();
 });
 
 Then('the result contains {string}', async ({ testProductPage, $testInfo }, expectedText: string) => {

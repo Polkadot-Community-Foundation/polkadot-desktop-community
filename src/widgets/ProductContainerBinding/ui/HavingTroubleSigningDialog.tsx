@@ -27,7 +27,7 @@ export const HavingTroubleSigningDialog = memo(({ open, onCancel, onReload }: Pr
         <button
           type="button"
           aria-label={t('common.aria.close')}
-          className="absolute top-[11px] right-[11px] flex size-10 items-center justify-center rounded-xl p-2 text-fg-primary transition-colors hover:bg-bg-action-secondary-hover focus-visible:ring-[2px] focus-visible:ring-border-tertiary/35 focus-visible:ring-offset-0 focus-visible:outline-none"
+          className="absolute end-2.75 top-2.75 flex size-10 items-center justify-center rounded-xl p-2 text-fg-primary transition-colors hover:bg-bg-action-secondary-hover focus-visible:ring-[2px] focus-visible:ring-stroke-tertiary/35 focus-visible:ring-offset-0 focus-visible:outline-none"
           onClick={onCancel}
         >
           <X className="size-5" aria-hidden />
@@ -36,12 +36,12 @@ export const HavingTroubleSigningDialog = memo(({ open, onCancel, onReload }: Pr
         <div className="flex flex-col gap-2">
           <AlertDialog.Header>
             <AlertDialog.Title>
-              <span className="text-[length:var(--text-heading-m-size)] leading-[length:var(--text-heading-m-line-height)] font-semibold text-text-primary">
+              <span className="text-headline-small font-semibold text-fg-primary">
                 {t('feature.browser.havingTroubleSigningDialog.title')}
               </span>
             </AlertDialog.Title>
             <AlertDialog.Description>
-              <span className="text-base leading-6 font-normal text-text-primary">
+              <span className="text-base leading-6 font-normal text-fg-primary">
                 {t('feature.browser.havingTroubleSigningDialog.description')}
               </span>
             </AlertDialog.Description>

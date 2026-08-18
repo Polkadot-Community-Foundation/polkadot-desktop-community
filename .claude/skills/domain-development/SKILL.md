@@ -12,6 +12,7 @@ Then read `docs/code/domain-development.md` before touching domain code. It is t
 The skill body intentionally carries no rules — they live in the doc only, to keep one source of truth. Open the doc.
 
 Cross-references:
+
 - `docs/code/project-structure.md` (Domain section) — folder/file rules.
 - `docs/code/code-placement.md` — which layer/file + cut rules, when placement is uncertain.
 - `docs/code/architecture.md` — how domain artifacts flow at runtime (read/write traces).

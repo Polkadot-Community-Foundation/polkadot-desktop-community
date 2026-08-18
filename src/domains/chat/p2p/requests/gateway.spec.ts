@@ -1,4 +1,4 @@
-import { p256 } from '@noble/curves/nist.js';
+import { x25519 } from '@noble/curves/ed25519.js';
 import { type SignedStatement } from '@novasamatech/sdk-statement';
 import { type StatementStoreAdapter, createSr25519Secret, deriveSr25519PublicKey } from '@novasamatech/statement-store';
 import { okAsync } from 'neverthrow';
@@ -12,14 +12,14 @@ const bobUserAccountId = new Uint8Array(32).fill(0xb2);
 const makeDevice = (entropyFill: number) => {
   const seed = createSr25519Secret(new Uint8Array(32).fill(entropyFill));
   const publicKey = deriveSr25519PublicKey(seed);
-  const encPriv = p256.utils.randomSecretKey();
-  const encPub = p256.getPublicKey(encPriv, false);
+  const encPriv = x25519.utils.randomSecretKey();
+  const encPub = x25519.getPublicKey(encPriv);
   return { seed, publicKey, encPriv, encPub };
 };
 
 const makeUserChatKey = () => {
-  const priv = p256.utils.randomSecretKey();
-  const pub = p256.getPublicKey(priv, false);
+  const priv = x25519.utils.randomSecretKey();
+  const pub = x25519.getPublicKey(priv);
   return { priv, pub };
 };
 

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   type ElectronSandboxPermissions,
   buildSandboxPartition,
+  canServeCachedEntry,
   evaluateNetworkRequest,
   isAllowedHostNavigation,
   isExternalUrlAllowed,
@@ -28,6 +29,22 @@ type SandboxPrefsFixture = {
   contextIsolation?: boolean;
   sandbox?: boolean;
 };
+
+describe('canServeCachedEntry', () => {
+  it('a disk-backed entry (non-null contenthash) is authoritative — always serves', () => {
+    expect(canServeCachedEntry('0xaa', '0xaa')).toBe(true);
+    expect(canServeCachedEntry('0xaa', null)).toBe(true);
+    // Kept in sync with the pointer by persist/delete, so it serves even if the caller
+    // passed a differing pointer hash (the caller skips the pointer read for these).
+    expect(canServeCachedEntry('0xaa', '0xdifferent')).toBe(true);
+  });
+  it('a warm (null contenthash) never shadows a pinned domain', () => {
+    expect(canServeCachedEntry(null, '0xaa')).toBe(false);
+  });
+  it('a warm serves when the domain is not persisted', () => {
+    expect(canServeCachedEntry(null, null)).toBe(true);
+  });
+});
 
 describe('validateContenthash', () => {
   it.each([
@@ -202,7 +219,7 @@ describe('parseHostAllowlist', () => {
 });
 
 describe('evaluateNetworkRequest', () => {
-  const IPFS = ['ipfs.dotspark.app', 'paseo-ipfs.polkadot.io', 'paseo-bulletin-next-ipfs.polkadot.io'];
+  const IPFS = ['ipfs.example.com', 'gateway.example.org'];
   const RELAY = ['relay.example.com', 'stun.example.com'];
 
   function req(
@@ -223,11 +240,10 @@ describe('evaluateNetworkRequest', () => {
 
   it.each([
     // IPFS allowlist — GET only
-    [req('https', 'GET', 'https://ipfs.dotspark.app/file'), 'fetch-direct'],
-    [req('https', 'POST', 'https://ipfs.dotspark.app/file'), 'check-permission'],
-    [req('https', 'GET', 'https://paseo-ipfs.polkadot.io/file'), 'fetch-direct'],
-    [req('https', 'GET', 'https://paseo-bulletin-next-ipfs.polkadot.io'), 'fetch-direct'],
-    [req('https', 'GET', 'https://sub.ipfs.dotspark.app/file'), 'fetch-direct'],
+    [req('https', 'GET', 'https://ipfs.example.com/file'), 'fetch-direct'],
+    [req('https', 'POST', 'https://ipfs.example.com/file'), 'check-permission'],
+    [req('https', 'GET', 'https://gateway.example.org/file'), 'fetch-direct'],
+    [req('https', 'GET', 'https://sub.ipfs.example.com/file'), 'fetch-direct'],
     // Relay allowlist — method-agnostic
     [req('https', 'GET', 'https://relay.example.com/'), 'fetch-direct'],
     [req('https', 'POST', 'https://relay.example.com/'), 'fetch-direct'],

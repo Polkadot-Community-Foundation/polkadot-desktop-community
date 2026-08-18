@@ -11,7 +11,7 @@
  *
  *   RequestContentV2 {
  *     identityProof:    { identityAccountId(32), proof(32) },
- *     deviceEncPubKey:  Bytes(65),                // sender device P-256 pub
+ *     deviceEncPubKey:  Bytes(32),                // sender device X25519 pub
  *     pushToken:        Option<TokenContent>,
  *     welcomeMessage:   Option<RichTextContent>,
  *   }
@@ -37,15 +37,7 @@ import { Bytes, Enum, Option, Struct, Vector, str, u64, u8 } from 'scale-ts';
 // ── Primitives ──────────────────────────────────────────────────────────
 
 const AccountIdCodec = Bytes(32);
-const PublicKeyCodec = Bytes(65); // uncompressed P-256
-
-// Per-device descriptor — used inside MultiDeviceRequest envelopes for the
-// per-device symmetric-key wrap. Not part of `RequestContentV2` itself
-// anymore (see top-of-file comment).
-export const DeviceInfo = Struct({
-  statementAccountId: AccountIdCodec,
-  encryptionPublicKey: PublicKeyCodec,
-});
+const PublicKeyCodec = Bytes(32); // X25519 public key (CHAT-RFC-0004)
 
 // ── Request content (versioned) ─────────────────────────────────────────
 
@@ -152,16 +144,6 @@ export const MultiDeviceResponse = Struct({
   devicesInfo: Vector(RequestDeviceInfo),
 });
 
-// ── Multi-chat accepted (V2 response) ───────────────────────────────────
-
-// Sent by the acceptor over the identity-level session as the V2 replacement
-// for `ChatAccepted`. Carries the acceptor's full device list so the original
-// sender can populate its peer-device topology on receipt.
-export const MultiChatAccepted = Struct({
-  requestId: str,
-  acceptorDevices: Vector(DeviceInfo),
-});
-
 // ── Top-level statement-data dispatcher ─────────────────────────────────
 // Mirrors Android's `StructuredStatementData` sealed class:
 //   @EnumIndex(0) Request          — V1 single-device
@@ -169,12 +151,14 @@ export const MultiChatAccepted = Struct({
 //   @EnumIndex(2) MultiRequest     — V2 multi-device
 //   @EnumIndex(3) MultiResponse    — V2 multi-device
 
-export const SingleRequest = Struct({
+// Composed into `StructuredStatementData` below; not exported — the enum is the
+// only surface callers need.
+const SingleRequest = Struct({
   requestId: str,
   messages: Vector(Bytes()),
 });
 
-export const SingleResponse = Struct({
+const SingleResponse = Struct({
   requestId: str,
   responseCode: u8,
 });

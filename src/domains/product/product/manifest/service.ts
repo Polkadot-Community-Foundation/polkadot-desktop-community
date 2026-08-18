@@ -9,11 +9,12 @@ import {
   type ExecutableManifest,
   type RenderableIconFormat,
   type RootManifest,
+  type SemVer,
   RENDERABLE_ICON_FORMATS,
   executableManifestSchema,
   rootManifestSchema,
 } from './schemas';
-import { type Executable, type ProductExecutables } from './types';
+import { type AppExecutable, type Executable, type ProductExecutables } from './types';
 
 const rootManifestJsonSchema = v.pipe(v.string(), v.parseJson(), rootManifestSchema);
 const executableManifestJsonSchema = v.pipe(v.string(), v.parseJson(), executableManifestSchema);
@@ -61,6 +62,14 @@ function assembleProduct(params: {
   };
 }
 
+// An app executable built from just a contenthash — the shape used when no
+// parseable manifest exists (a legacy pre-manifest product, or an app whose
+// manifest won't parse). Only `app` degrades this way: widget/worker need
+// manifest-only fields.
+function legacyApp(identifier: string, contenthash: HexString): AppExecutable {
+  return { kind: 'app', identifier, appVersion: [0, 0, 0], contenthash };
+}
+
 function executableFromManifest(baseName: string, manifest: ExecutableManifest, contenthash: HexString): Executable {
   const { $v: _v, ...rest } = manifest;
   // Spread loses the variant link after destructuring; shapes are identical by
@@ -92,11 +101,20 @@ function executablesFromManifests(
   return result;
 }
 
+// Canonical dotted string form of a version value (e.g. [2,1,1] -> "2.1.1",
+// [2,1,1,"abc"] -> "2.1.1.abc"). Pure value formatting only — the decision to
+// hide a legacy/all-zero version is a presentation concern owned by the feature.
+function formatVersion(version: SemVer): string {
+  return version.join('.');
+}
+
 export const manifestService = {
   parseRootManifest,
   parseExecutableManifest,
   isRenderableIconFormat,
+  legacyApp,
   executableFromManifest,
   executablesFromManifests,
   assembleProduct,
+  formatVersion,
 };

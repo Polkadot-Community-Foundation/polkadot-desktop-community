@@ -43,16 +43,22 @@ When('Alice opens the contact search', async ({ alice }) => {
   await searchPage(alice.app.window).openFromFullscreen();
 });
 
+// Search and select by the FULL registered lite username ("testbot….15"), not
+// the bare bot username: the backend can hold more than one registration of
+// the same base name (each attest submission that lands appends a new numeric
+// index), and a bare-name substring match then resolves to several results.
 When("Alice types Bob's username into the contact search", async ({ alice, bob }) => {
-  await searchPage(alice.app.window).typeQuery(bob.botUsername);
+  await searchPage(alice.app.window).typeQuery(bob.liteUsername);
 });
 
 When('Alice selects Bob from the search results', async ({ alice, bob }) => {
   const search = searchPage(alice.app.window);
   // On-chain username attestation may take longer than DEFAULT_TIMEOUT to
-  // propagate to the indexer right after sign-in, so wait extra long here.
-  await expect(search.resultByName(bob.botUsername)).toBeVisible({ timeout: VERY_LONG_TIMEOUT });
-  await search.selectResult(bob.botUsername);
+  // propagate to the indexer right after sign-in. The search never refetches on
+  // its own, so re-issue the query until Bob appears instead of waiting on a
+  // single stale lookup.
+  await search.findResultByRetyping(bob.liteUsername);
+  await search.selectResult(bob.liteUsername);
 });
 
 When('Alice types {string} into the welcome message field', async ({ alice }, text: string) => {
@@ -104,6 +110,11 @@ When('Bob accepts the incoming request', async ({ bob }) => {
   // posting a duplicate statement on slow UI confirmation — cross-scenario
   // pollution is already prevented by handing each test a fresh identity pair
   // from the pool (see `chatPair.ts:pairAssignment`).
+  // Accept now lives in the opened request conversation (banner), so open the
+  // request item first, then accept from the banner.
+  const requestItem = bob.app.window.getByTestId(TEST_IDS.chatRequestItem).first();
+  await expect(requestItem).toBeVisible({ timeout: DEFAULT_TIMEOUT });
+  await requestItem.click();
   const acceptButton = bob.app.window.getByTestId(TEST_IDS.chatRequestAcceptButton).first();
   await expect(acceptButton).toBeVisible({ timeout: DEFAULT_TIMEOUT });
   await acceptButton.locator('button').click();
@@ -125,4 +136,48 @@ When('Bob sends the message {string}', async ({ bob }, text: string) => {
 
 Then("the message {string} is visible in Bob's chat", async ({ bob }, text: string) => {
   await expect(bob.app.window.getByText(text).last()).toBeVisible({ timeout: LONG_TIMEOUT });
+});
+
+// ─── Requests: incoming (Bob) ────────────────────────────────────────────────
+
+Then("Bob's chat sidebar shows {int} new request", async ({ bob }, count: number) => {
+  await chatPage(bob.app.window).expectNewRequestsCount(count);
+});
+
+Then("an incoming request is shown in Bob's requests list", async ({ bob }) => {
+  await expect(chatPage(bob.app.window).requestAcceptButtons.first()).toBeVisible({ timeout: DEFAULT_TIMEOUT });
+});
+
+When('Bob declines the incoming request', async ({ bob }) => {
+  await chatPage(bob.app.window).declineFirstRequest();
+});
+
+Then('Bob confirms the decline', async ({ bob }) => {
+  await chatPage(bob.app.window).confirmDecline();
+});
+
+Then("no incoming requests remain in Bob's chat sidebar", async ({ bob }) => {
+  await expect(chatPage(bob.app.window).requestDeclineButtons).toHaveCount(0, { timeout: DEFAULT_TIMEOUT });
+});
+
+// ─── Requests: outgoing (Alice) ──────────────────────────────────────────────
+
+Then("Alice's outgoing request to Bob is listed in her chat sidebar", async ({ alice }) => {
+  await expect(chatPage(alice.app.window).outgoingRequestItems).toHaveCount(1, { timeout: VERY_LONG_TIMEOUT });
+});
+
+When('Alice opens her outgoing request to Bob', async ({ alice }) => {
+  await chatPage(alice.app.window).openFirstOutgoingRequest();
+});
+
+Then('Alice sees the outgoing pending request room', async ({ alice }) => {
+  await expect(chatPage(alice.app.window).outgoingPendingRoom).toBeVisible({ timeout: DEFAULT_TIMEOUT });
+});
+
+When('Alice removes her outgoing request', async ({ alice }) => {
+  await chatPage(alice.app.window).removeOutgoingRequest();
+});
+
+Then('Alice has no outgoing requests in her chat sidebar', async ({ alice }) => {
+  await expect(chatPage(alice.app.window).outgoingRequestItems).toHaveCount(0, { timeout: DEFAULT_TIMEOUT });
 });

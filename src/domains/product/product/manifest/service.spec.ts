@@ -172,6 +172,17 @@ describe('isRenderableIconFormat', () => {
   });
 });
 
+describe('legacyApp', () => {
+  test('builds a zero-version app executable from just an identifier + contenthash', () => {
+    expect(manifestService.legacyApp('app.dot', '0xabc')).toEqual({
+      kind: 'app',
+      identifier: 'app.dot',
+      appVersion: [0, 0, 0],
+      contenthash: '0xabc',
+    });
+  });
+});
+
 describe('assembleProduct', () => {
   test('combines root + executables + owner into a Product struct', () => {
     const root: RootManifest = {
@@ -197,5 +208,19 @@ describe('assembleProduct', () => {
       executables: { app },
       owner: '0xabc',
     });
+  });
+});
+
+describe('formatVersion', () => {
+  it('formats a 3-tuple semver', () => {
+    expect(manifestService.formatVersion([2, 1, 1])).toBe('2.1.1');
+  });
+
+  it('formats a 4-tuple semver (build id appended)', () => {
+    expect(manifestService.formatVersion([2, 1, 1, 'abc123'])).toBe('2.1.1.abc123');
+  });
+
+  it('formats an all-zero legacy semver verbatim (omit rule lives in the feature, not here)', () => {
+    expect(manifestService.formatVersion([0, 0, 0])).toBe('0.0.0');
   });
 });

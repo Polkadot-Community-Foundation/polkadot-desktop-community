@@ -1,26 +1,20 @@
 import { useCallback } from 'react';
 
 import { useAction } from '@/shared/hooks';
-import { type FolderItemPositions } from '../dashboard-layout/types';
 
 import { cardsUseCase } from './cards';
 import { foldersUseCase } from './folders';
 
-export const useRemoveIconFromFolder = () => {
-  const { run, pending, status } = useAction(({ iconId }: { iconId: string }) => foldersUseCase.removeIconFromFolder(iconId));
-  const removeIconFromFolder = useCallback((iconId: string) => run({ iconId }), [run]);
-  return { removeIconFromFolder, pending, status };
+export const useAddToFavorites = () => {
+  const { run, pending, status } = useAction(({ itemId }: { itemId: string }) => foldersUseCase.addToFavorites(itemId));
+  const addToFavorites = useCallback((itemId: string) => run({ itemId }), [run]);
+  return { addToFavorites, pending, status };
 };
 
-export const useSetFolderItemPositions = () => {
-  const { run, pending, status } = useAction(({ folderId, positions }: { folderId: string; positions: FolderItemPositions }) =>
-    foldersUseCase.setFolderItemPositions(folderId, positions),
-  );
-  const setFolderItemPositions = useCallback(
-    (folderId: string, positions: FolderItemPositions) => run({ folderId, positions }),
-    [run],
-  );
-  return { setFolderItemPositions, pending, status };
+export const useRemoveItemFromFolder = () => {
+  const { run, pending, status } = useAction(({ itemId }: { itemId: string }) => foldersUseCase.removeItemFromFolder(itemId));
+  const removeItemFromFolder = useCallback((itemId: string) => run({ itemId }), [run]);
+  return { removeItemFromFolder, pending, status };
 };
 
 export const useRemoveFolder = () => {

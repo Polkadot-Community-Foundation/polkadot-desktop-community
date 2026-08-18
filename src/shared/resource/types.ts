@@ -13,6 +13,25 @@ export type DefaultCache<Response> = Record<ResourceKey, Response>;
 
 export type ResourceKey = string & Brand<'ResourceKey'>;
 
+/**
+ * Test seam: swap a resource's request implementation in place.
+ *
+ * Mixed into what a builder returns rather than declared on {@link Resource}, so
+ * each builder can state the exact function shape it accepts — a query takes a
+ * value or promise, a stream takes an Observable.
+ */
+export type Overridable<Fn> = {
+  /**
+   * Replaces the request implementation and **invalidates the cache**, so the
+   * next read actually reaches the replacement instead of being served a value
+   * the real implementation produced earlier.
+   *
+   * Cleared by `resetResourceOverrides()`, which `vitest.setup.js` calls after
+   * every test — a spec never has to undo this itself.
+   */
+  instead(fn: Fn): void;
+};
+
 export type Resource<Params, Response, Cache> = {
   /**
    * Generate unique key for resource read operation.

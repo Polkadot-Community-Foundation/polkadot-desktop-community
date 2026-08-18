@@ -5,10 +5,9 @@ import { useMemo } from 'react';
 import { useRxState } from '@/shared/rxstate';
 import { usePersistedProducts } from '@/domains/product';
 import { browserTabs } from '@/aggregates/browser-tabs';
-import { ProductWorker } from '@/widgets/ProductWorker';
 import { resolveTabProductIdTransformer } from '../di';
 
-import { OpenTabProductWorker } from './OpenTabProductWorker';
+import { ResolvedProductWorker } from './ResolvedProductWorker';
 
 export const WorkersManager = () => {
   const { session } = useSession();
@@ -16,26 +15,29 @@ export const WorkersManager = () => {
   const [tabs] = useRxState(browserTabs.tabs$);
   const accountId = session ? toHex(session?.localAccount.accountId) : '';
 
-  // Invariant: a product tab's `id` is the product `baseName`, so it lines up with
-  // `persistedIds` — letting us run a worker for browsed-but-not-persisted products
-  // without double-mounting one already covered by `products` above.
-  const persistedIds = useMemo(() => new Set(products.map(product => product.baseName)), [products]);
-  const openBrowsedProductIds = useMemo(() => {
-    const ids: string[] = [];
+  // Invariant: a product tab's `id` is the product `baseName`, so tab-derived ids line
+  // up with committed ones and the Set dedupes a product that is both.
+  //
+  // One list, not two: committing a browsed product used to move it between a
+  // `browsed-*` list and a committed one, and the differing React keys remounted —
+  // and disposed — the very worker awaiting that commit to answer its room
+  // declaration. Here a commit changes the product's data, not its position, and
+  // `useProductWorker` keys on `contenthash`, so the instance survives.
+  const productIds = useMemo(() => {
+    const ids = new Set(products.map(product => product.baseName));
+
     for (const tab of tabs) {
       const productId = resolveTabProductIdTransformer(tab);
-      if (productId && !persistedIds.has(productId)) ids.push(productId);
+      if (productId) ids.add(productId);
     }
-    return ids;
-  }, [tabs, persistedIds]);
+
+    return [...ids];
+  }, [tabs, products]);
 
   return (
     <>
-      {products.map(product => (
-        <ProductWorker key={`${product.baseName}-${accountId}`} product={product} />
-      ))}
-      {openBrowsedProductIds.map(productId => (
-        <OpenTabProductWorker key={`browsed-${productId}-${accountId}`} productId={productId} />
+      {productIds.map(productId => (
+        <ResolvedProductWorker key={`${productId}-${accountId}`} productId={productId} />
       ))}
     </>
   );

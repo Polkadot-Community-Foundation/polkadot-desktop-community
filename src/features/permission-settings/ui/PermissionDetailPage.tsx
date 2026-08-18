@@ -85,14 +85,14 @@ export const PermissionDetailPage = ({ permissionId, backLabel, onBack }: Props)
 const RulesCard = ({ ruleKeys }: { ruleKeys: string[] }) => {
   const { t } = useTranslation();
   return (
-    <div className="rounded-lg border border-general-border bg-bg-surface-container p-3">
+    <div className="rounded-lg border border-stroke-primary bg-bg-surface-container p-3">
       <div className="mb-2 flex items-center gap-1">
         <Shield size={16} className="text-fg-secondary" />
         <span className="text-sm leading-5 font-medium text-fg-secondary">
           {t('feature.permissionSettings.detail.rulesTitle')}
         </span>
       </div>
-      <ol className="flex list-decimal flex-col pl-5">
+      <ol className="flex list-decimal flex-col ps-5">
         {ruleKeys.map(key => (
           <li key={key} className="text-sm leading-5 text-fg-primary">
             {t(key)}
@@ -140,7 +140,7 @@ const AppIdentity = ({ productId, allowedModalities }: { productId: string; allo
 
 const AppPermissionRow = ({ app, onNavigate }: { app: AppPermissionEntry; onNavigate: VoidFunction }) => (
   <button
-    className="flex w-full items-center gap-4 rounded-xl p-3 text-left transition-colors hover:bg-bg-selection-container-hover"
+    className="flex w-full items-center gap-4 rounded-xl p-3 text-start transition-colors hover:bg-bg-selection-container-hover"
     onClick={onNavigate}
   >
     <div className="flex min-w-0 flex-1 items-center gap-3">

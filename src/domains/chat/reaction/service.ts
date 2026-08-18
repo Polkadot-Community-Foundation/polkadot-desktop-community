@@ -1,4 +1,4 @@
-import { type ChatMessage } from '../session/types';
+import { type ChatMessage, type MessageContent } from '../session/types';
 
 import { type ReactionAggregate, type ReactorInfo } from './types';
 
@@ -96,6 +96,29 @@ const aggregateReactions = (messages: ChatMessage[]): Map<string, ReactionAggreg
   return result;
 };
 
+// Given my current reactions on a message, resolve the message(s) to send when
+// I toggle `emoji`. If I already reacted with the same emoji, remove it;
+// otherwise send the new reaction and, if I had a different one, remove that
+// afterwards (order matters — matches iOS: react first, then remove old).
+const resolveToggle = (
+  reactionsForMessage: ReactionAggregate[] | undefined,
+  messageId: string,
+  emoji: string,
+): MessageContent[] => {
+  const myReaction = reactionsForMessage?.find(r => r.reactedByMe);
+
+  if (myReaction?.emoji === emoji) {
+    return [{ type: 'reactionRemoved', messageId, emoji }];
+  }
+
+  const actions: MessageContent[] = [{ type: 'reacted', messageId, emoji }];
+  if (myReaction) {
+    actions.push({ type: 'reactionRemoved', messageId, emoji: myReaction.emoji });
+  }
+  return actions;
+};
+
 export const reactionService = {
   aggregateReactions,
+  resolveToggle,
 };

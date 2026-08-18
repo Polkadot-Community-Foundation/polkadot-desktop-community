@@ -36,7 +36,7 @@ function bytesToIpv4(bytes: Uint8Array): string {
 function ipv6ToBytes(addr: string): Uint8Array | null {
   // Strip a zone id if present (e.g. "fe80::1%eth0") — not part of the wire.
   const cleaned = addr.split('%')[0] ?? addr;
-  let head: string[] = [];
+  let head: string[];
   let tail: string[] = [];
   if (cleaned.includes('::')) {
     const [h, t] = cleaned.split('::');

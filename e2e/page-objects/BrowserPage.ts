@@ -1,8 +1,11 @@
 import { type ElectronApplication, type Page, expect } from '@playwright/test';
 
 import { TEST_IDS } from '@/shared/test-ids';
+import { CHAT, DASHBOARD_TAB_ID } from '@/aggregates/browser-tabs/constants';
 import { escapeRegex } from '../helpers/regex';
-import { DEFAULT_TIMEOUT } from '../helpers/timeouts';
+import { DEFAULT_TIMEOUT, SHORT_TIMEOUT } from '../helpers/timeouts';
+
+import { AddressBarPage } from './AddressBarPage';
 
 /**
  * Page Object for browser tab interactions.
@@ -15,10 +18,13 @@ export class BrowserPage {
     _app: ElectronApplication,
   ) {}
 
+  /**
+   * The header address bar — a button showing where you are, not an editable
+   * field. Typing goes through the input surface it opens; `AddressBarPage` owns
+   * both halves.
+   */
   get addressBar() {
-    // Scoped to the header: the new-tab page renders its own inline AddressBar,
-    // so an unscoped locator matches two inputs and trips strict-mode.
-    return this.page.getByRole('banner').locator('[data-address-bar-input]');
+    return new AddressBarPage(this.page);
   }
 
   /** All visible tab elements */
@@ -47,9 +53,7 @@ export class BrowserPage {
       await this.newTabButton.click({ force: true });
     }
 
-    await this.addressBar.click();
-    await this.addressBar.fill(domain);
-    await this.addressBar.press('Enter');
+    await this.addressBar.submit(domain);
 
     // <Tabs> hides the [data-tab-id] chip when there's exactly one selected
     // tab, so wait on the host route instead.
@@ -65,19 +69,35 @@ export class BrowserPage {
     await this.page.waitForTimeout(2_000);
   }
 
-  /** Close every open product tab so the test starts from a known tab count. */
-  async closeAllTabs() {
-    // Each close click removes one tab and re-renders the list, so re-query
-    // until no tabs remain.
-    while (true) {
-      const identifiers = await this.getTabIdentifiers();
-      if (identifiers.length === 0) return;
+  /**
+   * Close open tabs until at most `baseline` chips remain (default: none).
+   *
+   * Every close re-renders the strip — and `<Tabs>` unmounts it entirely once a
+   * single selected tab is left, which also cascades into
+   * `cleanupOrphanDashboardTab` — so the button we resolved can detach before
+   * the click dispatches. A plain `click()` then waits out its full timeout on a
+   * locator that will never resolve again. Poll the tab count instead and treat
+   * a lost click target as progress.
+   */
+  async closeAllTabs(baseline = 0) {
+    const closeButtons = this.page.getByRole('button', { name: 'Close tab' });
 
-      const first = identifiers[0]!;
-      const closeButton = this.tab(first).getByRole('button', { name: 'Close tab' });
-      await closeButton.click();
-      await expect(this.tab(first)).toHaveCount(0, { timeout: DEFAULT_TIMEOUT });
-    }
+    await expect
+      .poll(
+        async () => {
+          if ((await this.tabs.count()) <= baseline) return true;
+
+          // force: Electron's appRegion drag layer on the header swallows pointer events.
+          await closeButtons
+            .last()
+            .click({ force: true, timeout: SHORT_TIMEOUT })
+            .catch(() => {});
+
+          return (await this.tabs.count()) <= baseline;
+        },
+        { timeout: DEFAULT_TIMEOUT, message: `tabs did not close down to ${baseline}` },
+      )
+      .toBe(true);
   }
 
   /** Get all tab identifiers in order */
@@ -109,7 +129,7 @@ export class BrowserPage {
    * Also asserts no permission/alias dialog is left covering the product —
    * the autotest auto-approver feature should have dismissed it immediately.
    */
-  async expectActiveTabHasContent() {
+  async expectActiveTabHasContent(tabId?: string) {
     await expect(
       this.page.getByTestId(TEST_IDS.aliasPermissionAllow),
       'alias permission dialog should be auto-approved, not overlapping product content',
@@ -119,20 +139,66 @@ export class BrowserPage {
       'device/remote permission dialog should be auto-approved, not overlapping product content',
     ).toBeHidden({ timeout: DEFAULT_TIMEOUT });
 
+    // The native system tabs (chat, dashboard) render React views, not a product
+    // `<webview>`, so the `div[aria-hidden="false"] webview` assertion is
+    // structurally invalid for them — it only ever "passed" when a product pane
+    // was transiently still un-hidden mid tab-switch (the TC-4.3.1 flake). Assert
+    // their own content instead.
+    if (tabId === CHAT) {
+      await expect(this.page.getByTestId(TEST_IDS.chatRoomList)).toBeVisible({ timeout: DEFAULT_TIMEOUT });
+      return;
+    }
+    if (tabId === DASHBOARD_TAB_ID) {
+      await expect(
+        this.page.getByTestId(TEST_IDS.dashboardGrid).or(this.page.getByTestId(TEST_IDS.dashboardEmptyState)),
+      ).toBeVisible({ timeout: DEFAULT_TIMEOUT });
+      return;
+    }
+
     const visibleWebview = this.page.locator('div[aria-hidden="false"] webview');
 
     await expect(visibleWebview).toBeAttached({ timeout: DEFAULT_TIMEOUT });
 
-    // Verify the webview has loaded a real URL (not empty string)
-    const hasUrl = await this.page.evaluate(() => {
+    // Verify the webview has loaded a real URL (not empty string). Poll: the
+    // guest's getURL can be transiently empty during an internal SPA navigation.
+    await expect.poll(() => this.activeWebviewHasUrl(), { timeout: DEFAULT_TIMEOUT }).toBe(true);
+  }
+
+  /** True when the active (visible) tab's webview reports a non-empty URL. */
+  private activeWebviewHasUrl(): Promise<boolean> {
+    return this.page.evaluate(() => {
       const wv = document.querySelector('div[aria-hidden="false"] webview');
       if (!wv || !('getURL' in wv)) return false;
       const getURL = wv.getURL;
       if (typeof getURL !== 'function') return false;
       return Boolean(getURL.call(wv));
     });
+  }
 
-    expect(hasUrl).toBe(true);
+  /**
+   * Reload the active product via the address-bar refresh control
+   * (`AddressBarRefreshButton`). The input surface is dismissed first — while it
+   * is open its backdrop covers the whole header. This is the address-bar
+   * "control" reload path — distinct from the View → Reload accelerator covered
+   * by TC-4.3.4.
+   */
+  async reloadActiveProductViaControl() {
+    await this.addressBar.close();
+    const refresh = this.page.getByTestId(TEST_IDS.browserRefreshButton);
+    await expect(refresh).toBeVisible({ timeout: DEFAULT_TIMEOUT });
+    await refresh.click({ timeout: DEFAULT_TIMEOUT });
+  }
+
+  /**
+   * Assert the active product SPA keeps its content rendered across a short
+   * settle window — catches a product that mounts then blanks to a gray page.
+   * Re-asserts `expectActiveTabHasContent` before and after the settle.
+   */
+  async expectActiveTabKeepsContent() {
+    await this.expectActiveTabHasContent();
+    // Brief settle so a delayed blank-out would surface; not a `timeout:` option.
+    await this.page.waitForTimeout(3_000);
+    await this.expectActiveTabHasContent();
   }
 
   /** Switch to each tab and verify it renders content */
@@ -141,7 +207,7 @@ export class BrowserPage {
 
     for (const id of identifiers) {
       await this.switchToTab(id);
-      await this.expectActiveTabHasContent();
+      await this.expectActiveTabHasContent(id);
     }
   }
 }

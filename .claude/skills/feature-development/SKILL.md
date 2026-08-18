@@ -12,6 +12,7 @@ Then read `docs/code/feature-development.md` before touching feature code. It is
 The skill body intentionally carries no rules — they live in the doc only, to keep one source of truth. Open the doc.
 
 Cross-references:
+
 - `docs/code/project-structure.md` (Feature section) — folder/file rules.
 - `docs/code/code-placement.md` — which layer/file + cut rules, when placement is uncertain.
 - `docs/code/architecture.md` — how features consume domain/aggregate surfaces at runtime.

@@ -78,11 +78,11 @@ export const SigningBotPanel = ({ qrPayload, environmentId }: SigningBotPanelPro
   }, [botUrl, botToken, username, environmentId, qrPayload]);
 
   const statusIcon = {
-    idle: <Bot className="h-5 w-5 text-text-tertiary" />,
-    connecting: <Loader className="h-5 w-5 animate-spin text-primary" />,
-    pairing: <Loader className="h-5 w-5 animate-spin text-primary" />,
-    paired: <CheckCircle className="text-positive h-5 w-5" />,
-    error: <AlertCircle className="text-negative h-5 w-5" />,
+    idle: <Bot className="h-5 w-5 text-fg-tertiary" />,
+    connecting: <Loader className="h-5 w-5 animate-spin text-fg-primary" />,
+    pairing: <Loader className="h-5 w-5 animate-spin text-fg-primary" />,
+    paired: <CheckCircle className="h-5 w-5 text-fg-success" />,
+    error: <AlertCircle className="h-5 w-5 text-fg-error" />,
   };
 
   const statusLabel: Record<BotStatus, string> = {
@@ -96,21 +96,21 @@ export const SigningBotPanel = ({ qrPayload, environmentId }: SigningBotPanelPro
   return (
     <div
       data-testid={TEST_IDS.signingBotPanel}
-      className="bg-general-card flex w-full flex-col gap-2 rounded-2xl border border-general-border p-3"
+      className="flex w-full flex-col gap-2 rounded-2xl border border-stroke-primary bg-bg-surface-container p-3"
     >
       {/* Header row */}
       <div className="flex items-center gap-2">
-        <Bot className="h-4 w-4 text-primary" />
-        <span className="text-xs font-semibold tracking-wide text-text-primary uppercase">
+        <Bot className="h-4 w-4 text-fg-primary" />
+        <span className="text-xs font-semibold tracking-wide text-fg-primary uppercase">
           {t('feature.signingBotAutopair.title')}
         </span>
         {/* Status */}
         <div
           data-testid={TEST_IDS.signingBotStatus}
-          className="ml-auto flex items-center gap-2 rounded-lg bg-general-muted px-2.5 py-1"
+          className="ms-auto flex items-center gap-2 rounded-lg bg-bg-surface-nested px-2.5 py-1"
         >
           {statusIcon[status]}
-          <span className="text-xs text-text-secondary">{statusLabel[status]}</span>
+          <span className="text-xs text-fg-secondary">{statusLabel[status]}</span>
         </div>
       </div>
 
@@ -118,14 +118,15 @@ export const SigningBotPanel = ({ qrPayload, environmentId }: SigningBotPanelPro
       <div className="flex items-end gap-2">
         {/* Bot URL */}
         <div className="min-w-0 flex-[2]">
-          <label className="mb-1 block text-[11px] text-text-tertiary">{t('feature.signingBotAutopair.botUrlLabel')}</label>
+          <label className="mb-1 block text-label-small text-fg-tertiary">{t('feature.signingBotAutopair.botUrlLabel')}</label>
           <div className="flex items-center gap-1.5">
             <input
               data-testid={TEST_IDS.signingBotUrlInput}
               type="text"
               value={botUrl}
               disabled={status === 'pairing' || status === 'paired'}
-              className="w-full rounded-lg border border-general-border bg-general-muted px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-primary disabled:opacity-50"
+              className="w-full rounded-lg border border-stroke-primary bg-bg-surface-nested px-2.5 py-1.5 text-xs text-fg-primary outline-none focus:border-stroke-primary disabled:opacity-50"
+              // eslint-disable-next-line formatjs/no-literal-string-in-jsx
               placeholder="http://localhost:3737"
               onChange={e => setBotUrl(e.target.value)}
             />
@@ -138,23 +139,25 @@ export const SigningBotPanel = ({ qrPayload, environmentId }: SigningBotPanelPro
             )}
             {botReachable === false && (
               <span
+                data-testid={TEST_IDS.signingBotUnreachable}
                 className="bg-negative h-2 w-2 shrink-0 rounded-full"
                 title={t('feature.signingBotAutopair.botUnreachable')}
               />
             )}
-            {botReachable === null && <span className="h-2 w-2 shrink-0 rounded-full bg-text-tertiary opacity-30" />}
+            {botReachable === null && <span className="h-2 w-2 shrink-0 rounded-full bg-fg-tertiary opacity-30" />}
           </div>
         </div>
 
         {/* Token */}
         <div className="min-w-0 flex-1">
-          <label className="mb-1 block text-[11px] text-text-tertiary">{t('feature.signingBotAutopair.tokenLabel')}</label>
+          <label className="mb-1 block text-label-small text-fg-tertiary">{t('feature.signingBotAutopair.tokenLabel')}</label>
           <input
             data-testid={TEST_IDS.signingBotTokenInput}
             type="password"
             value={botToken}
             disabled={status === 'pairing' || status === 'paired'}
-            className="w-full rounded-lg border border-general-border bg-general-muted px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-primary disabled:opacity-50"
+            className="w-full rounded-lg border border-stroke-primary bg-bg-surface-nested px-2.5 py-1.5 text-xs text-fg-primary outline-none focus:border-stroke-primary disabled:opacity-50"
+            // eslint-disable-next-line formatjs/no-literal-string-in-jsx
             placeholder="Bearer token"
             onChange={e => setBotToken(e.target.value)}
           />
@@ -162,13 +165,14 @@ export const SigningBotPanel = ({ qrPayload, environmentId }: SigningBotPanelPro
 
         {/* Username */}
         <div className="min-w-0 flex-1">
-          <label className="mb-1 block text-[11px] text-text-tertiary">{t('feature.signingBotAutopair.usernameLabel')}</label>
+          <label className="mb-1 block text-label-small text-fg-tertiary">{t('feature.signingBotAutopair.usernameLabel')}</label>
           <input
             data-testid={TEST_IDS.signingBotUsernameInput}
             type="text"
             value={username}
             disabled={status === 'pairing' || status === 'paired'}
-            className="w-full rounded-lg border border-general-border bg-general-muted px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-primary disabled:opacity-50"
+            className="w-full rounded-lg border border-stroke-primary bg-bg-surface-nested px-2.5 py-1.5 text-xs text-fg-primary outline-none focus:border-stroke-primary disabled:opacity-50"
+            // eslint-disable-next-line formatjs/no-literal-string-in-jsx
             placeholder="alice"
             onChange={e => setUsername(e.target.value)}
           />
@@ -178,7 +182,7 @@ export const SigningBotPanel = ({ qrPayload, environmentId }: SigningBotPanelPro
         <div data-testid={TEST_IDS.signingBotConnect}>
           {status !== 'paired' ? (
             <button
-              className="rounded-lg bg-primary px-4 py-1.5 text-xs font-medium whitespace-nowrap text-primary-inverse transition-colors hover:opacity-90 disabled:opacity-40"
+              className="rounded-lg bg-bg-action-primary px-4 py-1.5 text-xs font-medium whitespace-nowrap text-fg-primary-inverted transition-colors hover:opacity-90 disabled:opacity-40"
               disabled={!qrPayload || status === 'pairing'}
               onClick={handlePair}
             >
@@ -188,8 +192,8 @@ export const SigningBotPanel = ({ qrPayload, environmentId }: SigningBotPanelPro
             </button>
           ) : (
             <div className="bg-positive/10 flex items-center gap-1.5 rounded-lg px-4 py-1.5">
-              <CheckCircle className="text-positive h-3.5 w-3.5" />
-              <span className="text-positive text-xs font-medium whitespace-nowrap">
+              <CheckCircle className="h-3.5 w-3.5 text-fg-success" />
+              <span className="text-xs font-medium whitespace-nowrap text-fg-success">
                 {t('feature.signingBotAutopair.connected')}
               </span>
             </div>
@@ -198,9 +202,9 @@ export const SigningBotPanel = ({ qrPayload, environmentId }: SigningBotPanelPro
       </div>
 
       {/* Error / waiting messages */}
-      {error && <p className="text-negative text-[11px] leading-tight">{error}</p>}
+      {error && <p className="text-label-small text-fg-error">{error}</p>}
       {!qrPayload && status === 'idle' && (
-        <p className="text-[11px] text-text-tertiary">{t('feature.signingBotAutopair.waitingQr')}</p>
+        <p className="text-label-small text-fg-tertiary">{t('feature.signingBotAutopair.waitingQr')}</p>
       )}
     </div>
   );

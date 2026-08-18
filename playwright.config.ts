@@ -8,20 +8,14 @@ const sharedSteps = ['./e2e/steps/**/*.ts', './e2e/fixtures/base.ts'];
 // Smoke tests — no auth, fresh Electron per test
 const bddSmokeDir = defineBddConfig({
   outputDir: '.features-gen/smoke',
-  features: [
-    './e2e/features/app-launch.feature',
-    './e2e/features/onboarding.feature',
-    './e2e/features/main-view.feature',
-    './e2e/features/address-bar.feature',
-    './e2e/features/sandbox-health.feature',
-  ],
+  features: ['./e2e/features/smoke/*.feature'],
   steps: sharedSteps,
 });
 
 // Link-navigation tests — no auth, fresh Electron per test, uses local HTTP fixture
 const bddLinkNavDir = defineBddConfig({
   outputDir: '.features-gen/link-nav',
-  features: ['./e2e/features/link-navigation.feature'],
+  features: ['./e2e/features/link-navigation/*.feature'],
   steps: [
     './e2e/steps/app.steps.ts',
     './e2e/steps/onboarding.steps.ts',
@@ -30,27 +24,54 @@ const bddLinkNavDir = defineBddConfig({
   ],
 });
 
+// Browser-chrome tests — no auth, fresh Electron per test. Reuses the link-tests
+// local HTTP product (served on an ephemeral port) as a real product webview so
+// find / zoom / history / tab features can be exercised without DotNS/IPFS/chain.
+const bddBrowserDir = defineBddConfig({
+  outputDir: '.features-gen/browser',
+  features: ['./e2e/features/browser/*.feature'],
+  steps: [
+    './e2e/steps/app.steps.ts',
+    './e2e/steps/onboarding.steps.ts',
+    './e2e/steps/link-navigation.steps.ts',
+    './e2e/steps/browser-zoom.steps.ts',
+    './e2e/steps/browser-find.steps.ts',
+    './e2e/steps/browser-history.steps.ts',
+    './e2e/steps/browser-tabs.steps.ts',
+    './e2e/steps/browser-navigation.steps.ts',
+    './e2e/steps/browser-address-bar.steps.ts',
+    './e2e/steps/browser-new-tab.steps.ts',
+    './e2e/steps/browser-seed.steps.ts',
+    './e2e/steps/browser-appearance.steps.ts',
+    './e2e/steps/browser-onboarding.steps.ts',
+    './e2e/fixtures/link-tests.ts',
+  ],
+});
+
 // Auth flow tests — sign-in & logout, fresh Electron per test
 const bddAuthDir = defineBddConfig({
   outputDir: '.features-gen/auth',
-  features: ['./e2e/features/sign-in.feature'],
+  features: ['./e2e/features/auth/*.feature'],
   steps: [...sharedSteps, './e2e/steps/auth.steps.ts'],
 });
 
 // Authenticated tests — worker-scoped session, sign-in once
 const bddAuthenticatedDir = defineBddConfig({
   outputDir: '.features-gen/authenticated',
-  features: [
-    './e2e/features/authenticated-session.feature',
-    './e2e/features/tab-switching.feature',
-    './e2e/features/appearance.feature',
-    './e2e/features/offline-access.feature',
-  ],
+  // Grouped by feature area under authenticated/{dashboard,settings,products,networks,session}/
+  features: ['./e2e/features/authenticated/**/*.feature'],
   steps: [
     './e2e/steps/authenticated.steps.ts',
     './e2e/steps/tab-switching.steps.ts',
     './e2e/steps/appearance.steps.ts',
     './e2e/steps/offline-access.steps.ts',
+    './e2e/steps/settings.steps.ts',
+    './e2e/steps/profile.steps.ts',
+    './e2e/steps/network.steps.ts',
+    './e2e/steps/product-actions.steps.ts',
+    './e2e/steps/dashboard-auth.steps.ts',
+    './e2e/steps/custom-chains.steps.ts',
+    './e2e/steps/product-settings.steps.ts',
     './e2e/fixtures/authenticated.ts',
   ],
 });
@@ -66,7 +87,10 @@ const bddChatDir = defineBddConfig({
     './e2e/steps/authenticated.steps.ts',
     './e2e/steps/chat-p2p.steps.ts',
     './e2e/steps/chat-p2p-pair.steps.ts',
+    './e2e/steps/chat-contact-search.steps.ts',
     './e2e/steps/coinflip-chat.steps.ts',
+    './e2e/steps/chat-seeded.steps.ts',
+    './e2e/steps/chat-add-to-dashboard.steps.ts',
     './e2e/fixtures/authenticated.ts',
     './e2e/fixtures/chatPair.ts',
   ],
@@ -76,7 +100,14 @@ const bddChatDir = defineBddConfig({
 const bddProductSdkDir = defineBddConfig({
   outputDir: '.features-gen/product-sdk',
   features: ['./e2e/features/product-sdk/*.feature'],
-  steps: ['./e2e/steps/authenticated.steps.ts', './e2e/steps/test-product-sdk.steps.ts', './e2e/fixtures/test-product-sdk.ts'],
+  steps: [
+    './e2e/steps/authenticated.steps.ts',
+    './e2e/steps/test-product-sdk.steps.ts',
+    './e2e/steps/settings.steps.ts',
+    './e2e/steps/permission-settings.steps.ts',
+    './e2e/steps/permission-dialogs.steps.ts',
+    './e2e/fixtures/test-product-sdk.ts',
+  ],
 });
 
 /**
@@ -84,13 +115,20 @@ const bddProductSdkDir = defineBddConfig({
  *
  * Projects:
  *   smoke — no auth
- *   auth, authenticated, product-sdk, chat — depend on `setup-bot-users`;
- *     `teardown-bot-users` runs after all dependents complete.
+ *   auth, authenticated, product-sdk — sign in with permanent deterministic
+ *     identities (see e2e/helpers/bot-user.ts permanentBotUsername); no setup
+ *     project dependency.
+ *   chat — depends on `setup-chat` (per-run singleton + pair pool);
+ *     `teardown-bot-users` runs after it completes.
  *   security — independent.
  *
- * `workers: 1` globally — Electron apps are heavy, parallel workers conflict.
- * Signing projects get fresh Electron + temp userDataDir per test; chat-pair
- * scenarios share Alice/Bob Electrons across tests in a worker via chatPair.ts.
+ * Runs `fullyParallel` (`workers` env-overridable). The `authenticated` project
+ * reuses one signed-in Electron per worker (soft-reset between tests via
+ * `reset-state.ts`); `auth`/`smoke` stay fresh-per-test. `authenticated`/`product-sdk`
+ * claim permanent deterministic identities by `parallelIndex` (no pool, no
+ * cross-worker collision); only `chat` draws from the per-run bot-user pool.
+ * chat-pair scenarios share Alice/Bob Electrons across tests in a worker via
+ * chatPair.ts.
  *
  * @see https://playwright.dev/docs/test-configuration
  */
@@ -109,9 +147,21 @@ export default defineConfig({
     timeout: 5_000,
   },
 
-  // Electron tests must run sequentially — each test launches its own app
-  fullyParallel: false,
-  workers: 1,
+  // Most projects run at this default worker count (their npm scripts pass no
+  // `--workers`): authenticated, chat, product-sdk, link-navigation, browser.
+  // - authenticated reuses one signed-in Electron per worker (soft-reset between
+  //   tests), each drawing a distinct identity per `parallelIndex` from a
+  //   pre-attested pool; product-sdk/chat build on the same worker-reuse (worker
+  //   0 takes the role singleton, worker >0 attest a fresh identity; chat's pair
+  //   tests also draw distinct pairs from the chat-pair pool).
+  // - link-navigation/browser are no-auth, fresh-Electron-per-test with isolated
+  //   per-worker userDataDirs — safe to parallelize (CI runs them on linux only).
+  // Only smoke/auth/security pin `--workers=1`: security because concurrent
+  // Electron teardown hangs on the macOS runner, auth to avoid concurrent
+  // signing-bot pairing, smoke as a quick serial gate. Override with
+  // `E2E_WORKERS` or the `--workers` CLI flag.
+  fullyParallel: true,
+  workers: process.env['E2E_WORKERS'] ? Number(process.env['E2E_WORKERS']) : process.env['CI'] ? 2 : '50%',
 
   // Fail the build on CI if you accidentally left test.only in the source code
   forbidOnly: !!process.env['CI'],
@@ -159,32 +209,10 @@ export default defineConfig({
   },
 
   projects: [
-    // 0. Per-project bot-user setups. Each provisions only the identities its
-    //    dependent needs, so `--project=auth` does NOT pay the cost of chat
-    //    pairs, `--project=chat` does NOT attest an `authenticated` user, etc.
-    //    All of them declare the shared `teardown-bot-users` so cleanup runs
-    //    once at the very end regardless of which setups actually executed.
-    {
-      name: 'setup-auth',
-      testMatch: '**/auth.setup.ts',
-      testDir: './e2e/setup',
-      timeout: 180_000,
-      teardown: 'teardown-bot-users',
-    },
-    {
-      name: 'setup-authenticated',
-      testMatch: '**/authenticated.setup.ts',
-      testDir: './e2e/setup',
-      timeout: 180_000,
-      teardown: 'teardown-bot-users',
-    },
-    {
-      name: 'setup-product-sdk',
-      testMatch: '**/product-sdk.setup.ts',
-      testDir: './e2e/setup',
-      timeout: 180_000,
-      teardown: 'teardown-bot-users',
-    },
+    // 0. Chat's bot-user setup. auth/authenticated/product-sdk sign in with
+    //    permanent deterministic identities (see e2e/helpers/bot-user.ts) and
+    //    need no per-run setup project; chat still provisions a per-run
+    //    singleton + pair pool, so it keeps its own setup + the shared teardown.
     {
       name: 'setup-chat',
       testMatch: '**/chat.setup.ts',
@@ -215,7 +243,6 @@ export default defineConfig({
       name: 'auth',
       testDir: bddAuthDir,
       timeout: 180_000,
-      dependencies: ['setup-auth'],
       use: {
         ...devices['Desktop Chrome'],
         // @ts-expect-error -- custom fixture option from e2e/fixtures/base.ts
@@ -223,15 +250,16 @@ export default defineConfig({
       },
     },
 
-    // 3. Authenticated tests — fresh Electron per test, sign in each time.
-    //    Higher timeout than auth/product-sdk because tab-switching opens 7
-    //    tabs, cycles through them twice (cycle + verify), and dismisses per-
-    //    tab permission dialogs — runs ~3 min end-to-end including sign-in.
+    // 3. Authenticated tests — one signed-in Electron reused per worker, with a
+    //    soft-reset to a clean /dashboard baseline before each test (see
+    //    e2e/fixtures/authenticated.ts + e2e/helpers/reset-state.ts). `@isolated`
+    //    scenarios opt out to a throwaway fresh app + own sign-in. Timeout stays
+    //    high because the per-worker first sign-in plus heavy scenarios (e.g.
+    //    tab-switching opens 7 tabs) still run a few minutes.
     {
       name: 'authenticated',
       testDir: bddAuthenticatedDir,
       timeout: 300_000,
-      dependencies: ['setup-authenticated'],
       use: {
         ...devices['Desktop Chrome'],
         // @ts-expect-error -- custom fixture option from e2e/fixtures/base.ts
@@ -244,7 +272,6 @@ export default defineConfig({
       name: 'product-sdk',
       testDir: bddProductSdkDir,
       timeout: 180_000,
-      dependencies: ['setup-product-sdk'],
       use: {
         ...devices['Desktop Chrome'],
         // @ts-expect-error -- custom fixture option from e2e/fixtures/base.ts
@@ -281,6 +308,15 @@ export default defineConfig({
     {
       name: 'link-navigation',
       testDir: bddLinkNavDir,
+      use: {
+        ...devices['Desktop Chrome'],
+      },
+    },
+
+    // 7. Browser-chrome tests — independent, no auth, link-tests local product
+    {
+      name: 'browser',
+      testDir: bddBrowserDir,
       use: {
         ...devices['Desktop Chrome'],
       },

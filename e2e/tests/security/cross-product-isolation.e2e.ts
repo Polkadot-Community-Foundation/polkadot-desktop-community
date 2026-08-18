@@ -35,7 +35,7 @@ test.describe('Cross-Product Storage Isolation', { tag: ['@security'] }, () => {
     await allure.feature('Security');
   });
 
-  test('browser-level localStorage is isolated between products', async ({ electronApp }) => {
+  test('browser-level localStorage is isolated between products', { tag: ['@allure.id:14938'] }, async ({ electronApp }) => {
     const { window } = electronApp;
     const productAPath = path.resolve(__dirname, '../../test-products/cross-product-a');
     const productBPath = path.resolve(__dirname, '../../test-products/cross-product-b');

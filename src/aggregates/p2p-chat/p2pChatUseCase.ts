@@ -1,6 +1,6 @@
 import { AccountId } from '@polkadot-api/substrate-bindings';
 
-import { lazyClient, loadDeviceIdentity, loadUserIdentity, statementStoreAdapter } from '@/domains/application';
+import { ensurePappProvider, loadDeviceIdentity, loadUserIdentity, statementStoreAdapter } from '@/domains/application';
 import { createP2PChatManagerV2 } from '@/domains/chat';
 
 import { p2pChatManager$ } from './state/manager';
@@ -37,7 +37,7 @@ async function initialize(): Promise<void> {
 
     const manager = await createP2PChatManagerV2({
       statementStore: statementStoreAdapter,
-      lazyClient,
+      identity: (await ensurePappProvider()).identity,
       userId,
       device,
       userIdentity,

@@ -1,12 +1,19 @@
 import { BehaviorSubject, Subject } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 
-import { MinimalCandidatesVecCodec, encodeMinimalSetup, rtcCandidateToMinimal } from '@/shared/peer-channel';
+import { MinimalCandidatesVecCodec, decodeMinimalSetup, encodeMinimalSetup, rtcCandidateToMinimal } from '@/shared/peer-channel';
 import { type SyncSignalingEnvelope } from '@/domains/device-session';
 
 import { startSignaler } from './signaler';
 
 const tick = () => new Promise(r => setTimeout(r, 10));
+
+// An Offer/Answer is only sent once the first ICE batch window closes, and a
+// trickled candidate only ships when its own window closes — so any assertion
+// on a sent setup or Candidates frame has to wait past ICE_BATCH_WINDOW_MS.
+const AFTER_BATCH_WINDOW_MS = 600;
+const settle = (ms: number) => new Promise(r => setTimeout(r, ms));
+const settleBatch = () => settle(AFTER_BATCH_WINDOW_MS);
 
 /** A SCALE(MinimalSetup) blob the signaler can decode without throwing. */
 const setupBytes = () => encodeMinimalSetup('fake-sdp');
@@ -59,6 +66,40 @@ const makeAcceptorPeerConn = () => {
   return { peerConn, localCandidates$ };
 };
 
+const makeInitiatorPeerConn = () => {
+  const localCandidates$ = new Subject<RTCIceCandidate>();
+  const peerConn = {
+    role: 'initiator' as const,
+    createOffer: vi.fn(() => Promise.resolve({ type: 'offer' as const, sdp: 'fake-sdp' })),
+    createAnswer: vi.fn(),
+    applyRemoteOffer: vi.fn(),
+    applyRemoteAnswer: vi.fn(async () => {}),
+    applyRemoteRollback: vi.fn(async () => {}),
+    addRemoteCandidate: vi.fn(),
+    localCandidates$: localCandidates$.asObservable(),
+    dataChannel: null,
+    dataChannelOpen$: new Subject<RTCDataChannel>().asObservable(),
+    connectionState: vi.fn<() => RTCPeerConnectionState>().mockReturnValue('new'),
+    signalingState: vi.fn<() => RTCSignalingState>().mockReturnValue('stable'),
+    connectionState$: new BehaviorSubject<RTCPeerConnectionState>('new').asObservable(),
+    close: vi.fn(),
+  };
+  return { peerConn, localCandidates$ };
+};
+
+const makeSession = (sent: SyncSignalingEnvelope[], sessionMessages$: Subject<SyncSignalingEnvelope>) => ({
+  send: (e: SyncSignalingEnvelope) => {
+    sent.push(e);
+    return Promise.resolve();
+  },
+  sendAll: (es: SyncSignalingEnvelope[]) => {
+    sent.push(...es);
+    return Promise.resolve();
+  },
+  messages$: sessionMessages$.asObservable(),
+  close: vi.fn(),
+});
+
 describe('startSignaler — initiator', () => {
   it('mints an offerId and sends an Offer envelope after createOffer', async () => {
     const sent: SyncSignalingEnvelope[] = [];
@@ -69,6 +110,10 @@ describe('startSignaler — initiator', () => {
     const session = {
       send: (e: SyncSignalingEnvelope) => {
         sent.push(e);
+        return Promise.resolve();
+      },
+      sendAll: (es: SyncSignalingEnvelope[]) => {
+        sent.push(...es);
         return Promise.resolve();
       },
       messages$: sessionMessages$.asObservable(),
@@ -94,7 +139,7 @@ describe('startSignaler — initiator', () => {
 
     const handle = startSignaler({ session, peerConnection: peerConn, role: 'initiator' });
 
-    await new Promise(r => setTimeout(r, 10));
+    await settleBatch();
     expect(peerConn.createOffer).toHaveBeenCalled();
     expect(sent.length).toBeGreaterThan(0);
     expect(sent[0]!.message.tag).toBe('Offer');
@@ -113,6 +158,10 @@ describe('startSignaler — initiator', () => {
     const session = {
       send: (e: SyncSignalingEnvelope) => {
         sent.push(e);
+        return Promise.resolve();
+      },
+      sendAll: (es: SyncSignalingEnvelope[]) => {
+        sent.push(...es);
         return Promise.resolve();
       },
       messages$: sessionMessages$.asObservable(),
@@ -162,6 +211,10 @@ describe('startSignaler — initiator', () => {
         sent.push(e);
         return Promise.resolve();
       },
+      sendAll: (es: SyncSignalingEnvelope[]) => {
+        sent.push(...es);
+        return Promise.resolve();
+      },
       messages$: sessionMessages$.asObservable(),
       close: vi.fn(),
     };
@@ -185,7 +238,7 @@ describe('startSignaler — initiator', () => {
 
     const onResetRequest = vi.fn();
     const handle = startSignaler({ session, peerConnection: peerConn, role: 'initiator', onResetRequest });
-    await new Promise(r => setTimeout(r, 10));
+    await settleBatch();
 
     const myOfferId = sent[0]!.offerId;
 
@@ -210,6 +263,10 @@ describe('startSignaler — initiator', () => {
         sent.push(e);
         return Promise.resolve();
       },
+      sendAll: (es: SyncSignalingEnvelope[]) => {
+        sent.push(...es);
+        return Promise.resolve();
+      },
       messages$: sessionMessages$.asObservable(),
       close: vi.fn(),
     };
@@ -223,7 +280,7 @@ describe('startSignaler — initiator', () => {
 
     const onResetRequest = vi.fn();
     const handle = startSignaler({ session, peerConnection: initiatorConn, role: 'initiator', onResetRequest });
-    await tick();
+    await settleBatch();
     const myOfferId = sent[0]!.offerId;
 
     // The persistent statement-store can re-deliver the same Reconnected; only
@@ -238,15 +295,6 @@ describe('startSignaler — initiator', () => {
 });
 
 describe('startSignaler — acceptor', () => {
-  const makeSession = (sent: SyncSignalingEnvelope[], sessionMessages$: Subject<SyncSignalingEnvelope>) => ({
-    send: (e: SyncSignalingEnvelope) => {
-      sent.push(e);
-      return Promise.resolve();
-    },
-    messages$: sessionMessages$.asObservable(),
-    close: vi.fn(),
-  });
-
   it('adopts the first Offer, drops a same-id duplicate, and resets on a different-id Offer (restarted initiator)', async () => {
     const sent: SyncSignalingEnvelope[] = [];
     const sessionMessages$ = new Subject<SyncSignalingEnvelope>();
@@ -262,9 +310,10 @@ describe('startSignaler — acceptor', () => {
       onResetRequest,
     });
 
-    // First Offer is adopted: applied + answered + persisted.
+    // First Offer is adopted: applied + answered + persisted. The Answer waits
+    // out the first ICE batch window, so this settle has to outlast it.
     sessionMessages$.next(offerEnvelope('A'));
-    await tick();
+    await settleBatch();
     expect(peerConn.applyRemoteOffer).toHaveBeenCalledTimes(1);
     expect(onAcceptedOfferId).toHaveBeenCalledWith('A');
     expect(sent.some(e => e.message.tag === 'Answer' && e.offerId === 'A')).toBe(true);
@@ -302,17 +351,17 @@ describe('startSignaler — acceptor', () => {
     });
 
     sessionMessages$.next(offerEnvelope('A'));
-    await tick();
+    await settleBatch();
 
     localCandidates$.next(fakeIceCandidate);
-    await tick();
+    await settleBatch();
 
     // A different-id Offer arrives (would re-adopt under the old code); since we
     // never re-adopt, currentOfferId stays 'A'.
     sessionMessages$.next(offerEnvelope('B'));
     await tick();
     localCandidates$.next(fakeIceCandidate);
-    await tick();
+    await settleBatch();
 
     const candidateSends = sent.filter(e => e.message.tag === 'Candidates');
     expect(candidateSends.length).toBeGreaterThan(0);
@@ -387,5 +436,111 @@ describe('startSignaler — acceptor', () => {
     // Answer (createAnswer) against the torn-down PC.
     expect(peerConn.createAnswer).not.toHaveBeenCalled();
     expect(sent.some(e => e.message.tag === 'Answer')).toBe(false);
+  });
+});
+
+describe('startSignaler — local candidate batching', () => {
+  it('carries the first gathered batch inside the Offer instead of a candidate-free setup', async () => {
+    const { peerConn, localCandidates$ } = makeInitiatorPeerConn();
+    const sent: SyncSignalingEnvelope[] = [];
+    const session = makeSession(sent, new Subject<SyncSignalingEnvelope>());
+
+    startSignaler({ session, peerConnection: peerConn, role: 'initiator' });
+    localCandidates$.next(fakeIceCandidate);
+    await settleBatch();
+
+    const offer = sent.find(e => e.message.tag === 'Offer');
+    expect(offer).toBeDefined();
+    // Narrow the envelope union — `value.sdp` only exists on Offer/Answer.
+    if (offer?.message.tag !== 'Offer') throw new Error('unreachable');
+    expect(decodeMinimalSetup(offer.message.value.sdp).candidates).toHaveLength(1);
+  });
+
+  it('trickles later candidates in one batched frame rather than one frame per candidate', async () => {
+    const { peerConn, localCandidates$ } = makeInitiatorPeerConn();
+    const sent: SyncSignalingEnvelope[] = [];
+    const session = makeSession(sent, new Subject<SyncSignalingEnvelope>());
+
+    startSignaler({ session, peerConnection: peerConn, role: 'initiator' });
+    await settleBatch(); // first (empty) batch releases the Offer
+
+    localCandidates$.next(fakeIceCandidate);
+    localCandidates$.next(fakeIceCandidate);
+    await settleBatch();
+
+    const frames = sent.filter(e => e.message.tag === 'Candidates');
+    expect(frames).toHaveLength(1);
+    if (frames[0]?.message.tag !== 'Candidates') throw new Error('unreachable');
+    expect(MinimalCandidatesVecCodec.dec(frames[0].message.value.candidates)).toHaveLength(2);
+  });
+
+  it('still sends the Offer when no candidate ever gathers', async () => {
+    const { peerConn } = makeInitiatorPeerConn();
+    const sent: SyncSignalingEnvelope[] = [];
+    const session = makeSession(sent, new Subject<SyncSignalingEnvelope>());
+
+    startSignaler({ session, peerConnection: peerConn, role: 'initiator' });
+    await settleBatch();
+
+    expect(sent.filter(e => e.message.tag === 'Offer')).toHaveLength(1);
+  });
+});
+
+describe('startSignaler — restart recovery', () => {
+  // The peer consumes a Reconnected together with whatever follows it in the
+  // SAME request (iOS `reconnection(in:)` → `(offerId, following)`). Splitting
+  // them across two posts makes it reset against an empty `following` and then
+  // meet the Offer with a connection it has just torn down — which is what
+  // stopped the desktop re-syncing after a hard reload.
+  it('initiator posts Reconnected and the fresh Offer in one statement, Reconnected first', async () => {
+    const { peerConn } = makeInitiatorPeerConn();
+    const batches: SyncSignalingEnvelope[][] = [];
+    const session = {
+      send: (e: SyncSignalingEnvelope) => {
+        batches.push([e]);
+        return Promise.resolve();
+      },
+      sendAll: (es: SyncSignalingEnvelope[]) => {
+        batches.push(es);
+        return Promise.resolve();
+      },
+      messages$: new Subject<SyncSignalingEnvelope>().asObservable(),
+      close: vi.fn(),
+    };
+
+    startSignaler({ session, peerConnection: peerConn, role: 'initiator', reconnectOfferId: 'stale-attempt' });
+    await settleBatch();
+
+    expect(batches).toHaveLength(1);
+    expect(batches[0]!.map(e => e.message.tag)).toEqual(['Reconnected', 'Offer']);
+    expect(batches[0]![0]!.offerId).toBe('stale-attempt');
+    // The fresh Offer must carry a NEW id, not the one being disposed.
+    expect(batches[0]![1]!.offerId).not.toBe('stale-attempt');
+  });
+
+  it('initiator with nothing to dispose posts the Offer alone', async () => {
+    const { peerConn } = makeInitiatorPeerConn();
+    const sent: SyncSignalingEnvelope[] = [];
+    const session = makeSession(sent, new Subject<SyncSignalingEnvelope>());
+
+    startSignaler({ session, peerConnection: peerConn, role: 'initiator' });
+    await settleBatch();
+
+    expect(sent.map(e => e.message.tag)).toEqual(['Offer']);
+  });
+
+  // The acceptor has no Offer to pair with — this is the one legitimate case of
+  // a Reconnected travelling alone.
+  it('acceptor sends the Reconnected on its own, immediately', async () => {
+    const { peerConn } = makeAcceptorPeerConn();
+    const sent: SyncSignalingEnvelope[] = [];
+    const session = makeSession(sent, new Subject<SyncSignalingEnvelope>());
+
+    startSignaler({ session, peerConnection: peerConn, role: 'acceptor', reconnectOfferId: 'stale-attempt' });
+    await tick();
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.message.tag).toBe('Reconnected');
+    expect(sent[0]!.offerId).toBe('stale-attempt');
   });
 });

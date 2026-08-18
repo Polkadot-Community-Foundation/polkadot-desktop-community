@@ -19,7 +19,7 @@ export const ChatSearchBar = ({ query, inputRef, resultCount, resultIndex, onQue
   const canNavigate = hasQuery && hasResults;
 
   return (
-    <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border-primary bg-bg-surface-container px-2">
+    <div className="flex h-12 shrink-0 items-center gap-2 border-b border-stroke-primary bg-bg-surface-container px-2">
       <div className="flex min-h-8 min-w-0 flex-1 items-center gap-2 rounded-full bg-bg-action-secondary px-3">
         <Search strokeWidth={1.75} className="size-4 shrink-0 text-fg-tertiary" />
         <input

@@ -10,13 +10,15 @@ import { fromHex, toHex } from 'polkadot-api/utils';
 import { type Observable, auditTime } from 'rxjs';
 
 import { type IceConfigParams, createPeerConnection } from '@/shared/peer-channel';
-import { isValidEncryptionPublicKey } from '@/domains/device';
-import { createDeviceSessionChannel } from '@/domains/device-session';
+import { deviceIdentityService } from '@/domains/device';
+import { deviceSessionUseCase } from '@/domains/device-session';
 
 import { type ConsumerInfoLookup, applySyncEntities } from './applier';
 import { collectChangesSince } from './collector';
+import { DEVICE_SYNC_HANDSHAKE_TIMEOUT_MS, DEVICE_SYNC_MAX_FAILED_HANDSHAKES, DEVICE_SYNC_RESPAWN_BACKOFF_MS } from './constants';
 import { localSyncSignal$ } from './localChangeSignal';
 import { deviceSyncRepository } from './repository';
+import { reportPeerSyncPhase } from './resource';
 import { startSignaler } from './signaler';
 import { type SyncStateMachineHandle, startSyncStateMachine } from './syncStateMachine';
 import { type KnownUserDevice } from './types';
@@ -37,19 +39,15 @@ export type DeviceSyncOrchestratorParams = {
   ownUserId: string;
   iceConfig: IceConfigParams;
   /** Handshake budget before a stalled connection is torn down and rebuilt.
-   * Defaults to {@link HANDSHAKE_TIMEOUT_MS}; overridable for tests. */
+   * Defaults to {@link DEVICE_SYNC_HANDSHAKE_TIMEOUT_MS}; overridable for tests. */
   handshakeTimeoutMs?: number;
+  /** Pause before a torn-down attempt is rebuilt.
+   * Defaults to {@link DEVICE_SYNC_RESPAWN_BACKOFF_MS}; overridable for tests. */
+  respawnBackoffMs?: number;
   /** Aborts a superseded start: stops spawning and tears down everything spawned so
    * far, so an orchestrator the caller has already discarded never keeps submitting. */
   signal?: AbortSignal;
 };
-
-// Android parity (`DeviceSyncEngine.CONNECT_TIMEOUT`): bound how long a single
-// connection attempt may sit before the DC opens. WebRTC does not reliably
-// drive a never-progressed PC to `failed`, so an initiator that sent an Offer
-// and never got a usable Answer would otherwise wait forever — the
-// `disconnected`/`failed` watch below never fires for it.
-const HANDSHAKE_TIMEOUT_MS = 45_000;
 
 export type DeviceSyncOrchestratorHandle = {
   stop: () => void;
@@ -69,17 +67,41 @@ function isLessThan(a: Uint8Array, b: Uint8Array): boolean {
 
 export async function startDeviceSyncOrchestrator(params: DeviceSyncOrchestratorParams): Promise<DeviceSyncOrchestratorHandle> {
   const ownStmtHex = toHex(params.ownDevice.statementAccountId);
-  const handshakeTimeoutMs = params.handshakeTimeoutMs ?? HANDSHAKE_TIMEOUT_MS;
+  const handshakeTimeoutMs = params.handshakeTimeoutMs ?? DEVICE_SYNC_HANDSHAKE_TIMEOUT_MS;
+  const respawnBackoffMs = params.respawnBackoffMs ?? DEVICE_SYNC_RESPAWN_BACKOFF_MS;
   const closers: (() => void)[] = [];
+
+  // Consecutive failed handshakes per peer. Reset on a successful data channel;
+  // once a peer reaches DEVICE_SYNC_MAX_FAILED_HANDSHAKES its reported phase holds
+  // at `error` (not terminal — a later DC open recovers it). The respawn loop
+  // keeps running underneath; this only governs the phase the engine reports.
+  const consecutiveHandshakeFailures = new Map<string, number>();
+  const reportAttemptPhase = (peerId: string): void => {
+    const failures = consecutiveHandshakeFailures.get(peerId) ?? 0;
+    reportPeerSyncPhase(peerId, failures >= DEVICE_SYNC_MAX_FAILED_HANDSHAKES ? 'error' : 'connecting');
+  };
 
   // At most one signaler per peer for the orchestrator's lifetime.
   const activePeerSignalers = new Set<string>();
 
-  // Peers for which we've already sent the restart-recovery `reconnected`
-  // signal. Per spec §5.4 `reconnected` is RESTART-ONLY (one per process
-  // start), not per attempt — so a handshake-timeout respawn must NOT re-send
-  // it. First spawn after process start consults the persisted offerId; every
-  // later respawn skips it.
+  // Respawns waiting out their backoff. Cleared on stop() so a torn-down
+  // orchestrator cannot resurrect itself after the delay.
+  const pendingRespawns = new Set<ReturnType<typeof setTimeout>>();
+  closers.push(() => {
+    for (const timer of pendingRespawns) clearTimeout(timer);
+    pendingRespawns.clear();
+  });
+
+  // Peers already told to dispose a prior attempt. Per the chat spec
+  // (`connectionLoop`), `reconnected` is sent ONCE per process start — the send
+  // sits above the reconnect loop, not inside it — so a handshake-timeout
+  // respawn must NOT re-send it.
+  //
+  // This was briefly changed to per-attempt to match Android
+  // (`connectOnce -> sendReconnectIfResuming`) and iOS (`startConnection`), both
+  // of which send it every attempt. Live testing showed sync then failing to
+  // start at all, so the spec's placement is authoritative and the mobile
+  // clients' extra sends are what a peer tolerates, not what it expects.
   const reconnectSignalSent = new Set<string>();
 
   // Active state machines keyed by peer; poked on local writes so changes ship
@@ -94,15 +116,15 @@ export async function startDeviceSyncOrchestrator(params: DeviceSyncOrchestrator
     if (activePeerSignalers.has(peer.statementAccountId)) return;
     activePeerSignalers.add(peer.statementAccountId);
 
+    reportAttemptPhase(peer.statementAccountId);
+
     const peerStmtBytes = fromHex(peer.statementAccountId);
     const peerEncBytes = fromHex(peer.encryptionPublicKey);
     const role: 'initiator' | 'acceptor' = isLessThan(params.ownDevice.statementAccountId, peerStmtBytes)
       ? 'initiator'
       : 'acceptor';
 
-    console.debug('WEBRTC [orchestrator] spawn peer=%s role=%s', peer.statementAccountId, role);
-
-    const session = createDeviceSessionChannel({
+    const session = deviceSessionUseCase.createChannel({
       ourDeviceEncPriv: params.ownDevice.encryptionPrivateKey,
       ourStatementAccountId: params.ownDevice.statementAccountId,
       peerDeviceEncPub: peerEncBytes,
@@ -117,50 +139,40 @@ export async function startDeviceSyncOrchestrator(params: DeviceSyncOrchestrator
       iceConfig: params.iceConfig,
     });
 
-    // Restart recovery (spec §5.3-5.4): on the FIRST spawn after process start,
-    // if a previous attempt's offerId is persisted, tell the peer to dispose it
-    // so both ends start clean instead of waiting out a 45s stale-handshake
-    // timeout. The offerId is already loaded on `peer` (from listActivePeers),
-    // so we send SYNCHRONOUSLY here — before startSignaler mints/sends its own
-    // Offer — guaranteeing the Reconnected is enqueued ahead of the fresh Offer
-    // in the session batch (no race between a DB read and createOffer). The
-    // send promise is not awaited so `spawn` stays synchronous; the fresh
-    // attempt (below) mints its own offerId regardless.
-    if (!reconnectSignalSent.has(peer.statementAccountId)) {
-      reconnectSignalSent.add(peer.statementAccountId);
-      const persistedOfferId = peer.lastOfferId;
-      if (persistedOfferId !== undefined) {
-        console.debug(
-          'WEBRTC [orchestrator] restart recovery peer=%s — sending reconnected(offerId=%s)',
-          peer.statementAccountId,
-          persistedOfferId,
-        );
-        void session
-          .send({ offerId: persistedOfferId, message: { tag: 'Reconnected', value: undefined } })
-          .catch(err =>
-            console.warn(
-              'WEBRTC [orchestrator] reconnected send failed peer=%s: %s',
-              peer.statementAccountId,
-              err instanceof Error ? err.message : String(err),
-            ),
-          );
-      }
-    }
+    // Restart recovery: on the FIRST spawn after process start, if a previous
+    // attempt's offerId is persisted, the peer is told to dispose it so both
+    // ends start clean instead of waiting out a stale-handshake timeout. Once
+    // per process, per the spec's `connectionLoop` — see `reconnectSignalSent`.
+    //
+    // The signaler does the sending, not us: an initiator must put the
+    // Reconnected in the SAME statement as its fresh Offer, and only the
+    // signaler knows when that Offer is ready.
+    const reconnectOfferId = reconnectSignalSent.has(peer.statementAccountId) ? undefined : peer.lastOfferId;
+    reconnectSignalSent.add(peer.statementAccountId);
 
     let respawning = false;
+    // Whether THIS spawn's data channel ever opened. Distinguishes a handshake
+    // that never connected (counts toward the error threshold) from a working
+    // session that later dropped (restarts the count from zero).
+    let dcOpened = false;
     const signaler = startSignaler({
       session,
       peerConnection: peerConn,
       role,
+      reconnectOfferId,
       onAcceptedOfferId: offerId => {
         void deviceSyncRepository.setLastOfferId(peer.statementAccountId, offerId);
       },
       onResetRequest: () => {
         // Peer asked us (via a matching Reconnected) to dispose this attempt.
         // Clear the persisted offerId (it's dead) and respawn a fresh attempt.
+        //
+        // Immediately, with no backoff: the spec's connection loop disposes and
+        // calls `createAndStartPeer` right there, and the peer has explicitly
+        // asked us to rebuild now. The backoff exists to stop us hammering a peer
+        // that is simply unreachable — a reset is the opposite situation.
         void deviceSyncRepository.setLastOfferId(peer.statementAccountId, null);
-        console.debug('WEBRTC [orchestrator] reset requested by peer=%s — respawning', peer.statementAccountId);
-        respawnPeer('failed');
+        respawnPeer('failed', { immediate: true });
       },
     });
 
@@ -184,7 +196,9 @@ export async function startDeviceSyncOrchestrator(params: DeviceSyncOrchestrator
     const dataChannelSub = signaler.dataChannel$.subscribe({
       next: channel => {
         clearTimeout(handshakeTimer);
-        console.debug('WEBRTC [orchestrator] data channel ready peer=%s — starting sync state machine', peer.statementAccountId);
+        dcOpened = true;
+        consecutiveHandshakeFailures.set(peer.statementAccountId, 0);
+        reportPeerSyncPhase(peer.statementAccountId, 'syncing');
         const sm = startSyncStateMachine({
           peerStatementAccountId: peer.statementAccountId,
           dataChannel: channel,
@@ -206,12 +220,27 @@ export async function startDeviceSyncOrchestrator(params: DeviceSyncOrchestrator
             return row?.outgoingUpdateTime ?? 0;
           },
           advanceOutgoingUpdateTime: deviceSyncRepository.advanceOutgoingUpdateTime,
+          onActivityChange: activity => {
+            if (activity === 'active') reportPeerSyncPhase(peer.statementAccountId, 'syncing');
+            else if (activity === 'idle') reportPeerSyncPhase(peer.statementAccountId, 'synced');
+            else reportPeerSyncPhase(peer.statementAccountId, 'error');
+          },
         });
         activeStateMachines.set(peer.statementAccountId, sm);
         spawnClosers.push(() => {
           activeStateMachines.delete(peer.statementAccountId);
           sm.close();
         });
+
+        // NOTE: a closing data channel deliberately does NOT respawn here. The
+        // spec's reconnect path (connectionLoop step 5) is the peer sending
+        // `reconnected(offerId)` on ITS restart, and it only fires when we still
+        // hold that offerId: "if signaling.activeOfferId == offerIdToDispose".
+        // Minting a fresh attempt the moment the channel drops throws away the
+        // very id the returning peer will name, so its `reconnected` no longer
+        // matches and the mechanism is defeated. Transport death is covered by
+        // the `connectionState` watch below; peer restart is covered by
+        // `onResetRequest`.
       },
     });
     spawnClosers.push(() => dataChannelSub.unsubscribe());
@@ -229,6 +258,7 @@ export async function startDeviceSyncOrchestrator(params: DeviceSyncOrchestrator
             clearTimeout(deathTimer);
             deathTimer = null;
           }
+          reportPeerSyncPhase(peer.statementAccountId, 'disconnected');
           console.warn('WEBRTC [orchestrator] connection FAILED peer=%s — respawning', peer.statementAccountId);
           respawnPeer('failed');
         } else if (state === 'disconnected') {
@@ -241,15 +271,13 @@ export async function startDeviceSyncOrchestrator(params: DeviceSyncOrchestrator
             deathTimer = null;
             const cur = peerConn.connectionState();
             if (cur === 'disconnected' || cur === 'failed') {
+              reportPeerSyncPhase(peer.statementAccountId, 'disconnected');
               console.warn('WEBRTC [orchestrator] still %s after grace peer=%s — respawning', cur, peer.statementAccountId);
               respawnPeer(cur);
-            } else {
-              console.debug('WEBRTC [orchestrator] recovered to %s within grace peer=%s', cur, peer.statementAccountId);
             }
           }, 2000);
         } else if (state === 'connected') {
           if (deathTimer !== null) {
-            console.debug('WEBRTC [orchestrator] reconnected within grace peer=%s — cancelling respawn', peer.statementAccountId);
             clearTimeout(deathTimer);
             deathTimer = null;
           }
@@ -264,10 +292,9 @@ export async function startDeviceSyncOrchestrator(params: DeviceSyncOrchestrator
       }
     });
 
-    function respawnPeer(cause: RTCPeerConnectionState): void {
+    function respawnPeer(_cause: RTCPeerConnectionState, options?: { immediate?: boolean }): void {
       if (respawning) return;
       respawning = true;
-      console.debug('WEBRTC [orchestrator] tearing down peer=%s (cause=%s) and respawning', peer.statementAccountId, cause);
       for (const c of spawnClosers) {
         try {
           c();
@@ -275,8 +302,27 @@ export async function startDeviceSyncOrchestrator(params: DeviceSyncOrchestrator
           console.warn('WEBRTC [orchestrator] spawn closer threw: %s', e instanceof Error ? e.message : String(e));
         }
       }
-      activePeerSignalers.delete(peer.statementAccountId);
-      spawn(peer);
+      // A working session that dropped restarts the count; a handshake that
+      // never opened its DC counts as a failure. The re-spawn's start then
+      // reports `error` once the count crosses the threshold.
+      const priorFailures = consecutiveHandshakeFailures.get(peer.statementAccountId) ?? 0;
+      consecutiveHandshakeFailures.set(peer.statementAccountId, dcOpened ? 0 : priorFailures + 1);
+      // Android parity (`DeviceSyncEngine.RECONNECT_BACKOFF`): pause before
+      // rebuilding rather than immediately re-offering, so a peer that is simply
+      // unreachable is not hammered with a fresh attempt per failure.
+      //
+      // The peer stays in `activePeerSignalers` for the whole backoff and is only
+      // released as the respawn runs: a stop() landing mid-backoff must still
+      // report the peer `inactive`, and that loop reads this set.
+      const timer = setTimeout(
+        () => {
+          pendingRespawns.delete(timer);
+          activePeerSignalers.delete(peer.statementAccountId);
+          spawn(peer);
+        },
+        options?.immediate ? 0 : respawnBackoffMs,
+      );
+      pendingRespawns.add(timer);
     }
 
     closers.push(() => {
@@ -287,9 +333,9 @@ export async function startDeviceSyncOrchestrator(params: DeviceSyncOrchestrator
   const initial = await params.fetchInitialPeers();
   const now = Date.now();
   for (const peer of initial) {
-    if (!isValidEncryptionPublicKey(peer.encryptionPublicKey)) {
+    if (!deviceIdentityService.isValidEncryptionPublicKey(peer.encryptionPublicKey)) {
       console.warn(
-        'WEBRTC [orchestrator] skipping seed peer=%s — encryptionPublicKey is not a valid P-256 key (len=%d)',
+        'WEBRTC [orchestrator] skipping seed peer=%s — encryptionPublicKey is not a valid X25519 key (len=%d)',
         toHex(peer.statementAccountId),
         peer.encryptionPublicKey.length,
       );
@@ -314,12 +360,12 @@ export async function startDeviceSyncOrchestrator(params: DeviceSyncOrchestrator
   // fans these rows out to peers as `deviceAdded` (poisoning THEIR sends too).
   const peers: KnownUserDevice[] = [];
   for (const peer of allPeers) {
-    if (isValidEncryptionPublicKey(fromHex(peer.encryptionPublicKey))) {
+    if (deviceIdentityService.isValidEncryptionPublicKey(fromHex(peer.encryptionPublicKey))) {
       peers.push(peer);
       continue;
     }
     console.warn(
-      'WEBRTC [orchestrator] purging persisted peer=%s — encryptionPublicKey is not a valid P-256 key',
+      'WEBRTC [orchestrator] purging persisted peer=%s — encryptionPublicKey is not a valid X25519 key',
       peer.statementAccountId,
     );
     await deviceSyncRepository.remove(peer.statementAccountId);
@@ -334,6 +380,7 @@ export async function startDeviceSyncOrchestrator(params: DeviceSyncOrchestrator
     if (stopped) return;
     stopped = true;
     for (const c of closers) c();
+    for (const peerId of activePeerSignalers) reportPeerSyncPhase(peerId, 'inactive');
   };
   // A start superseded by a newer identity is aborted mid-flight: stop spawning
   // and tear down whatever already spawned, so a discarded orchestrator never

@@ -18,7 +18,9 @@ const config: UserConfigFn = async ({ mode, command }) => {
   const { default: tailwindcss } = await import('@tailwindcss/vite');
   const { sentryVitePlugin } = await import('@sentry/vite-plugin');
   const svgrOxcOptions = {
-    jsx: 'react-jsx',
+    // Oxc/Rolldown (Vite 8) types this as `'preserve' | { runtime }`; the old
+    // string `'react-jsx'` (a TS compilerOptions value) is rejected at build init.
+    jsx: { runtime: 'automatic' },
   };
 
   const isDev = mode === 'development';
@@ -40,13 +42,16 @@ const config: UserConfigFn = async ({ mode, command }) => {
       'process.env.PRODUCT_NAME': JSON.stringify(title),
       'process.env.VERSION': JSON.stringify(version),
       'process.env.BUILD_TIME': JSON.stringify(new Date().toISOString()),
-      'process.env.BUILD_SOURCE': JSON.stringify(process.env['BUILD_SOURCE']),
       'process.env.LOGGER': JSON.stringify(process.env['LOGGER']),
       'process.env.SENTRY_DSN': JSON.stringify(process.env['SENTRY_DSN'] ?? ''),
       // AUTOTEST, BOT_URL, BOT_TOKEN are runtime values injected via preload bridge (window.App)
       // Not compile-time — allows reusing the same build for normal and e2e runs
     },
     optimizeDeps: {
+      // Injected by babel (react-compiler / automatic JSX runtime) during transform, so vite's
+      // esbuild scanner never sees them. Without this the first optimize pass misses them, vite
+      // re-runs the optimizer over every dep, and the renderer reloads its whole module graph.
+      include: ['react/compiler-runtime', 'react/jsx-runtime'],
       exclude: [
         '@jitl/quickjs-wasmfile-release-asyncify',
         'emscripten-module',
@@ -110,22 +115,11 @@ const config: UserConfigFn = async ({ mode, command }) => {
       tailwindcss(),
 
       react({
-        babel: {
-          compact: false,
-          plugins: [
-            'react-compiler',
-            command === 'serve'
-              ? [
-                  'effector/babel-plugin',
-                  {
-                    hmr: false,
-                    addNames: true,
-                    addLoc: true,
-                  },
-                ]
-              : null,
-          ].filter(x => x !== null),
-        },
+        // Babel is for builds only. With no babel plugins/presets configured, plugin-react's
+        // `canSkipBabel` holds and rolldown-vite deletes its transform hook outright, so dev serve
+        // never runs babel at all (~433ms per module over 250 modules — a ~13s cold start).
+        // The trade: dev has no react-compiler memoization, so compiler behaviour shows up in builds.
+        babel: command === 'serve' ? {} : { compact: false, plugins: ['react-compiler'] },
         exclude: /useTranslation\.ts$/,
       }),
       svgr({

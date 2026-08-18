@@ -1,6 +1,6 @@
 import PlaceholderIcon from '@/shared/assets/images/header/placeholder.svg?jsx';
 import { TabChip, tabIconClassName } from '@/shared/components';
-import { dotNsService, useDisplayedProduct, useProductIcon } from '@/domains/product';
+import { useDisplayedProduct, useDotNsLabels, useProductIcon } from '@/domains/product';
 
 type Props = { id: string; setDeeplink: (deeplink: string) => void; isActive: boolean };
 
@@ -13,7 +13,8 @@ export const ProductTabContent = ({ id, isActive }: Props) => {
   // without an icon/name even though it resolves fine elsewhere.
   const { data: product } = useDisplayedProduct(id);
   const { data: iconUrl } = useProductIcon(product?.icon ?? null);
-  const label = dotNsService.toDisplayName(product?.displayName ?? id);
+  const labels = useDotNsLabels();
+  const label = labels.displayName(product?.displayName ?? id);
 
   // A resolved icon shows always; products without one render the label alone
   // (centered) and only fall back to the placeholder in the collapsed icon-only state.

@@ -20,21 +20,21 @@ function hasDangerousScheme(url: string): boolean {
   }
 }
 
-type WillNavigateArgs = { url: string; identifier: string; localhost: boolean };
+type WillNavigateArgs = { url: string; identifier: string; localhost: boolean; tld: Nullable<string> };
 
-export function decideWillNavigate({ url, identifier, localhost }: WillNavigateArgs): NavigationDecision {
+export function decideWillNavigate({ url, identifier, localhost, tld }: WillNavigateArgs): NavigationDecision {
   if (hasDangerousScheme(url)) return { type: 'deny' };
 
-  const dotNsUrl = dotNsService.parseDotNsDomain(url);
+  const dotNsUrl = dotNsService.parseDotNsDomain(url, tld);
   if (!dotNsUrl) return { type: 'allow' };
 
-  const isDotDomainUrl = dotNsService.isDotDomain(dotNsUrl.identifier);
+  const isDotDomainUrl = dotNsService.isDotDomain(dotNsUrl.identifier, tld);
   const isSameLocalhost = localhost && dotNsUrl.identifier === identifier;
   if (!isDotDomainUrl && !isSameLocalhost) return { type: 'allow' };
 
   if (url.startsWith('polkadot://')) {
-    const nestedLink = dotNsService.parseDotNsDomain(dotNsUrl.pathname);
-    if (nestedLink && dotNsService.isDotDomain(nestedLink.identifier)) {
+    const nestedLink = dotNsService.parseDotNsDomain(dotNsUrl.pathname, tld);
+    if (nestedLink && dotNsService.isDotDomain(nestedLink.identifier, tld)) {
       return { type: 'cross-product', target: nestedLink, stop: false };
     }
 
@@ -48,33 +48,39 @@ export function decideWillNavigate({ url, identifier, localhost }: WillNavigateA
   return { type: 'sync-pathname', pathname: dotNsUrl.pathname, track: false };
 }
 
-type DidNavigateArgs = { url: string; identifier: string };
+type DidNavigateArgs = { url: string; identifier: string; tld: Nullable<string> };
 
-export function decideDidNavigate({ url, identifier }: DidNavigateArgs): NavigationDecision {
+export function decideDidNavigate({ url, identifier, tld }: DidNavigateArgs): NavigationDecision {
   if (!url.startsWith('polkadot://')) return { type: 'allow' };
 
-  const dotNsUrl = dotNsService.parseDotNsDomain(url);
+  const dotNsUrl = dotNsService.parseDotNsDomain(url, tld);
   if (!dotNsUrl) return { type: 'allow' };
 
   if (dotNsUrl.identifier !== identifier) return { type: 'revert-to-desired' };
 
-  const nestedLink = dotNsService.parseDotNsDomain(dotNsUrl.pathname);
-  if (nestedLink && dotNsService.isDotDomain(nestedLink.identifier)) {
+  const nestedLink = dotNsService.parseDotNsDomain(dotNsUrl.pathname, tld);
+  if (nestedLink && dotNsService.isDotDomain(nestedLink.identifier, tld)) {
     return { type: 'revert-to-desired' };
   }
 
   return { type: 'allow' };
 }
 
-type DidNavigateInPageArgs = { url: string; identifier: string; localhost: boolean; isMainFrame: boolean };
+type DidNavigateInPageArgs = { url: string; identifier: string; localhost: boolean; isMainFrame: boolean; tld: Nullable<string> };
 
-export function decideDidNavigateInPage({ url, identifier, localhost, isMainFrame }: DidNavigateInPageArgs): NavigationDecision {
+export function decideDidNavigateInPage({
+  url,
+  identifier,
+  localhost,
+  isMainFrame,
+  tld,
+}: DidNavigateInPageArgs): NavigationDecision {
   if (!isMainFrame) return { type: 'allow' };
 
-  const dotNsUrl = dotNsService.parseDotNsDomain(url);
+  const dotNsUrl = dotNsService.parseDotNsDomain(url, tld);
   if (!dotNsUrl) return { type: 'allow' };
 
-  const isDotDomainUrl = dotNsService.isDotDomain(dotNsUrl.identifier);
+  const isDotDomainUrl = dotNsService.isDotDomain(dotNsUrl.identifier, tld);
   const isSameLocalhost = localhost && dotNsUrl.identifier === identifier;
   if (!isDotDomainUrl && !isSameLocalhost) return { type: 'allow' };
   if (dotNsUrl.identifier !== identifier) return { type: 'allow' };

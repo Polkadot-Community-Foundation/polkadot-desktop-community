@@ -23,7 +23,7 @@ export const NetworkChangeLogoutDialog = memo(({ open, onConfirm, onCancel }: Pr
       <AlertDialog.Content>
         <AlertDialog.Header>
           <AlertDialog.Title>{t('feature.statementStoreNetwork.changeNetworkDialog.title')}</AlertDialog.Title>
-          <div className="text-sm text-text-secondary">
+          <div className="text-sm text-fg-secondary">
             <AlertDialog.Description>
               {t('feature.statementStoreNetwork.changeNetworkDialog.description')}
             </AlertDialog.Description>

@@ -4,7 +4,7 @@ import { type Observable } from 'rxjs';
 type Options = {
   successTitle: string;
   errorTitle: string;
-  onSuccess: VoidFunction;
+  onSuccess?: VoidFunction;
 };
 
 // Toasts the outcome of a `useAction(...).run(...)` observable: success + an
@@ -18,7 +18,7 @@ export function runConfirmAction<T>(action$: Observable<T | null>, options: Opti
         return;
       }
       toastSuccess({ title: options.successTitle });
-      options.onSuccess();
+      options.onSuccess?.();
     },
     error: () => toastError({ title: options.errorTitle }),
   });

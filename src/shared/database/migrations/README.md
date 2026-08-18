@@ -10,9 +10,12 @@ One unified migration flow for `polkadot-desktop-app-v1`.
    import { type Transaction } from 'dexie';
 
    export async function migrateThing(tx: Transaction): Promise<void> {
-     await tx.table('things').toCollection().modify(row => {
-       // mutate row in place; keep idempotent
-     });
+     await tx
+       .table('things')
+       .toCollection()
+       .modify(row => {
+         // mutate row in place; keep idempotent
+       });
    }
    ```
 

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import type * as hostPappReactUi from '@novasamatech/host-papp-react-ui';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { type PropsWithChildren } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -28,7 +28,7 @@ vi.mock('@/domains/application', async () => {
   const actual = await vi.importActual<typeof applicationModule>('@/domains/application');
   return {
     ...actual,
-    performUserLogout: performUserLogoutMock,
+    sessionUseCase: { ...actual.sessionUseCase, performUserLogout: performUserLogoutMock },
   };
 });
 
@@ -141,14 +141,27 @@ describe('UserInfoPopover', () => {
     expect(navigateMock).not.toHaveBeenCalled();
   });
 
-  it('falls back to a full local logout when the disconnect send fails', async () => {
+  it('leaves teardown to the watcher even when disconnect rejects', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     disconnectMock.mockRejectedValueOnce(new Error('offline'));
     const user = userEvent.setup();
     renderOpen('connected');
     await user.click(screen.getByTestId(TEST_IDS.userLogoutButton));
-    // A failed disconnect never removes the SDK session, so the watcher can't
-    // fire — the component must tear down locally so logout always completes.
-    await vi.waitFor(() => expect(performUserLogoutMock).toHaveBeenCalledTimes(1));
+    // host-papp purges the session whether or not the peer could be notified, so
+    // a rejection here means the purge itself failed — reported, not worked
+    // around. The component owns no teardown path of its own.
+    await vi.waitFor(() => expect(consoleError).toHaveBeenCalled());
+    expect(performUserLogoutMock).not.toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
+  it('dismisses when the toolbar overlay is pressed', () => {
+    renderOpen('connected');
+    expect(screen.getByTestId(TEST_IDS.userPopoverBanner)).toBeInTheDocument();
+    // The overlay covers the toolbar's -webkit-app-region: drag area, which
+    // otherwise swallows the press Radix needs to close the popover.
+    fireEvent.pointerDown(screen.getByTestId(TEST_IDS.dismissOverlay));
+    expect(screen.queryByTestId(TEST_IDS.userPopoverBanner)).toBeNull();
   });
 
   it('navigates to /onboarding when Log in is clicked for anonymous session', async () => {

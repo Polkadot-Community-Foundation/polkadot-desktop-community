@@ -9,225 +9,271 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as OnboardingRouteImport } from './routes/onboarding'
-import { Route as DashboardRouteImport } from './routes/dashboard'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as SettingsIndexRouteImport } from './routes/settings.index'
-import { Route as SettingsDevelopmentRouteImport } from './routes/settings.development'
-import { Route as SettingsAppearanceRouteImport } from './routes/settings.appearance'
-import { Route as NewTabIdRouteImport } from './routes/new-tab.$id'
-import { Route as ChatChar123ChatIdChar125RouteImport } from './routes/chat.{-$chatId}'
-import { Route as SettingsDevelopmentUpdateChannelRouteImport } from './routes/settings.development.update-channel'
-import { Route as SettingsDevelopmentNetworkRouteImport } from './routes/settings.development.network'
-import { Route as SettingsDevelopmentCustomChainsRouteImport } from './routes/settings.development.custom-chains'
-import { Route as ProductIdChar123RouteChar125RouteImport } from './routes/product.$id.{-$route}'
-import { Route as SettingsPrivacyPermissionsIndexRouteImport } from './routes/settings.privacy.permissions.index'
-import { Route as SettingsPrivacyAppsIndexRouteImport } from './routes/settings.privacy.apps.index'
-import { Route as SettingsPrivacyPermissionsPermissionIdRouteImport } from './routes/settings.privacy.permissions.$permissionId'
-import { Route as SettingsPrivacyAppsProductIdRouteImport } from './routes/settings.privacy.apps.$productId'
-import { Route as SettingsPrivacyPermissionsPermissionIdIndexRouteImport } from './routes/settings.privacy.permissions.$permissionId.index'
-import { Route as SettingsPrivacyAppsProductIdIndexRouteImport } from './routes/settings.privacy.apps.$productId.index'
-import { Route as SettingsPrivacyPermissionsPermissionIdProductIdRouteImport } from './routes/settings.privacy.permissions.$permissionId.$productId'
-import { Route as SettingsPrivacyAppsProductIdPermissionIdRouteImport } from './routes/settings.privacy.apps.$productId.$permissionId'
+import { Route as AppRouteImport } from './routes/_app'
+import { Route as CallRouteImport } from './routes/call'
+import { Route as AppIndexRouteImport } from './routes/_app.index'
+import { Route as AppDashboardRouteImport } from './routes/_app.dashboard'
+import { Route as AppFavoritesRouteImport } from './routes/_app.favorites'
+import { Route as AppOnboardingRouteImport } from './routes/_app.onboarding'
+import { Route as AppSettingsRouteImport } from './routes/_app.settings'
+import { Route as AppChatChar123ChatIdChar125RouteImport } from './routes/_app.chat.{-$chatId}'
+import { Route as AppNewTabIdRouteImport } from './routes/_app.new-tab.$id'
+import { Route as AppSettingsIndexRouteImport } from './routes/_app.settings.index'
+import { Route as AppSettingsAppearanceRouteImport } from './routes/_app.settings.appearance'
+import { Route as AppSettingsChatsRouteImport } from './routes/_app.settings.chats'
+import { Route as AppSettingsDevelopmentRouteImport } from './routes/_app.settings.development'
+import { Route as AppSettingsLanguageRouteImport } from './routes/_app.settings.language'
+import { Route as AppProductIdChar123RouteChar125RouteImport } from './routes/_app.product.$id.{-$route}'
+import { Route as AppSettingsDevelopmentCustomChainsRouteImport } from './routes/_app.settings.development.custom-chains'
+import { Route as AppSettingsDevelopmentNetworkRouteImport } from './routes/_app.settings.development.network'
+import { Route as AppSettingsDevelopmentUpdateChannelRouteImport } from './routes/_app.settings.development.update-channel'
+import { Route as AppSettingsPrivacyAppsIndexRouteImport } from './routes/_app.settings.privacy.apps.index'
+import { Route as AppSettingsPrivacyAppsProductIdRouteImport } from './routes/_app.settings.privacy.apps.$productId'
+import { Route as AppSettingsPrivacyPermissionsIndexRouteImport } from './routes/_app.settings.privacy.permissions.index'
+import { Route as AppSettingsPrivacyPermissionsPermissionIdRouteImport } from './routes/_app.settings.privacy.permissions.$permissionId'
+import { Route as AppSettingsPrivacyAppsProductIdIndexRouteImport } from './routes/_app.settings.privacy.apps.$productId.index'
+import { Route as AppSettingsPrivacyAppsProductIdPermissionIdRouteImport } from './routes/_app.settings.privacy.apps.$productId.$permissionId'
+import { Route as AppSettingsPrivacyPermissionsPermissionIdIndexRouteImport } from './routes/_app.settings.privacy.permissions.$permissionId.index'
+import { Route as AppSettingsPrivacyPermissionsPermissionIdProductIdRouteImport } from './routes/_app.settings.privacy.permissions.$permissionId.$productId'
 
-const SettingsRoute = SettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
+const AppRoute = AppRouteImport.update({
+  id: '/_app',
   getParentRoute: () => rootRouteImport,
 } as any)
-const OnboardingRoute = OnboardingRouteImport.update({
-  id: '/onboarding',
-  path: '/onboarding',
+const CallRoute = CallRouteImport.update({
+  id: '/call',
+  path: '/call',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DashboardRoute = DashboardRouteImport.update({
+const AppIndexRoute = AppIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppDashboardRoute = AppDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AppRoute,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => rootRouteImport,
+const AppFavoritesRoute = AppFavoritesRouteImport.update({
+  id: '/favorites',
+  path: '/favorites',
+  getParentRoute: () => AppRoute,
 } as any)
-const SettingsIndexRoute = SettingsIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => SettingsRoute,
+const AppOnboardingRoute = AppOnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
+  getParentRoute: () => AppRoute,
 } as any)
-const SettingsDevelopmentRoute = SettingsDevelopmentRouteImport.update({
-  id: '/development',
-  path: '/development',
-  getParentRoute: () => SettingsRoute,
+const AppSettingsRoute = AppSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AppRoute,
 } as any)
-const SettingsAppearanceRoute = SettingsAppearanceRouteImport.update({
-  id: '/appearance',
-  path: '/appearance',
-  getParentRoute: () => SettingsRoute,
-} as any)
-const NewTabIdRoute = NewTabIdRouteImport.update({
-  id: '/new-tab/$id',
-  path: '/new-tab/$id',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ChatChar123ChatIdChar125Route =
-  ChatChar123ChatIdChar125RouteImport.update({
+const AppChatChar123ChatIdChar125Route =
+  AppChatChar123ChatIdChar125RouteImport.update({
     id: '/chat/{-$chatId}',
     path: '/chat/{-$chatId}',
-    getParentRoute: () => rootRouteImport,
+    getParentRoute: () => AppRoute,
   } as any)
-const SettingsDevelopmentUpdateChannelRoute =
-  SettingsDevelopmentUpdateChannelRouteImport.update({
-    id: '/update-channel',
-    path: '/update-channel',
-    getParentRoute: () => SettingsDevelopmentRoute,
-  } as any)
-const SettingsDevelopmentNetworkRoute =
-  SettingsDevelopmentNetworkRouteImport.update({
-    id: '/network',
-    path: '/network',
-    getParentRoute: () => SettingsDevelopmentRoute,
-  } as any)
-const SettingsDevelopmentCustomChainsRoute =
-  SettingsDevelopmentCustomChainsRouteImport.update({
-    id: '/custom-chains',
-    path: '/custom-chains',
-    getParentRoute: () => SettingsDevelopmentRoute,
-  } as any)
-const ProductIdChar123RouteChar125Route =
-  ProductIdChar123RouteChar125RouteImport.update({
+const AppNewTabIdRoute = AppNewTabIdRouteImport.update({
+  id: '/new-tab/$id',
+  path: '/new-tab/$id',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSettingsIndexRoute = AppSettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
+const AppSettingsAppearanceRoute = AppSettingsAppearanceRouteImport.update({
+  id: '/appearance',
+  path: '/appearance',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
+const AppSettingsChatsRoute = AppSettingsChatsRouteImport.update({
+  id: '/chats',
+  path: '/chats',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
+const AppSettingsDevelopmentRoute = AppSettingsDevelopmentRouteImport.update({
+  id: '/development',
+  path: '/development',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
+const AppSettingsLanguageRoute = AppSettingsLanguageRouteImport.update({
+  id: '/language',
+  path: '/language',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
+const AppProductIdChar123RouteChar125Route =
+  AppProductIdChar123RouteChar125RouteImport.update({
     id: '/product/$id/{-$route}',
     path: '/product/$id/{-$route}',
-    getParentRoute: () => rootRouteImport,
+    getParentRoute: () => AppRoute,
   } as any)
-const SettingsPrivacyPermissionsIndexRoute =
-  SettingsPrivacyPermissionsIndexRouteImport.update({
-    id: '/privacy/permissions/',
-    path: '/privacy/permissions/',
-    getParentRoute: () => SettingsRoute,
+const AppSettingsDevelopmentCustomChainsRoute =
+  AppSettingsDevelopmentCustomChainsRouteImport.update({
+    id: '/custom-chains',
+    path: '/custom-chains',
+    getParentRoute: () => AppSettingsDevelopmentRoute,
   } as any)
-const SettingsPrivacyAppsIndexRoute =
-  SettingsPrivacyAppsIndexRouteImport.update({
+const AppSettingsDevelopmentNetworkRoute =
+  AppSettingsDevelopmentNetworkRouteImport.update({
+    id: '/network',
+    path: '/network',
+    getParentRoute: () => AppSettingsDevelopmentRoute,
+  } as any)
+const AppSettingsDevelopmentUpdateChannelRoute =
+  AppSettingsDevelopmentUpdateChannelRouteImport.update({
+    id: '/update-channel',
+    path: '/update-channel',
+    getParentRoute: () => AppSettingsDevelopmentRoute,
+  } as any)
+const AppSettingsPrivacyAppsIndexRoute =
+  AppSettingsPrivacyAppsIndexRouteImport.update({
     id: '/privacy/apps/',
     path: '/privacy/apps/',
-    getParentRoute: () => SettingsRoute,
+    getParentRoute: () => AppSettingsRoute,
   } as any)
-const SettingsPrivacyPermissionsPermissionIdRoute =
-  SettingsPrivacyPermissionsPermissionIdRouteImport.update({
-    id: '/privacy/permissions/$permissionId',
-    path: '/privacy/permissions/$permissionId',
-    getParentRoute: () => SettingsRoute,
-  } as any)
-const SettingsPrivacyAppsProductIdRoute =
-  SettingsPrivacyAppsProductIdRouteImport.update({
+const AppSettingsPrivacyAppsProductIdRoute =
+  AppSettingsPrivacyAppsProductIdRouteImport.update({
     id: '/privacy/apps/$productId',
     path: '/privacy/apps/$productId',
-    getParentRoute: () => SettingsRoute,
+    getParentRoute: () => AppSettingsRoute,
   } as any)
-const SettingsPrivacyPermissionsPermissionIdIndexRoute =
-  SettingsPrivacyPermissionsPermissionIdIndexRouteImport.update({
+const AppSettingsPrivacyPermissionsIndexRoute =
+  AppSettingsPrivacyPermissionsIndexRouteImport.update({
+    id: '/privacy/permissions/',
+    path: '/privacy/permissions/',
+    getParentRoute: () => AppSettingsRoute,
+  } as any)
+const AppSettingsPrivacyPermissionsPermissionIdRoute =
+  AppSettingsPrivacyPermissionsPermissionIdRouteImport.update({
+    id: '/privacy/permissions/$permissionId',
+    path: '/privacy/permissions/$permissionId',
+    getParentRoute: () => AppSettingsRoute,
+  } as any)
+const AppSettingsPrivacyAppsProductIdIndexRoute =
+  AppSettingsPrivacyAppsProductIdIndexRouteImport.update({
     id: '/',
     path: '/',
-    getParentRoute: () => SettingsPrivacyPermissionsPermissionIdRoute,
+    getParentRoute: () => AppSettingsPrivacyAppsProductIdRoute,
   } as any)
-const SettingsPrivacyAppsProductIdIndexRoute =
-  SettingsPrivacyAppsProductIdIndexRouteImport.update({
-    id: '/',
-    path: '/',
-    getParentRoute: () => SettingsPrivacyAppsProductIdRoute,
-  } as any)
-const SettingsPrivacyPermissionsPermissionIdProductIdRoute =
-  SettingsPrivacyPermissionsPermissionIdProductIdRouteImport.update({
-    id: '/$productId',
-    path: '/$productId',
-    getParentRoute: () => SettingsPrivacyPermissionsPermissionIdRoute,
-  } as any)
-const SettingsPrivacyAppsProductIdPermissionIdRoute =
-  SettingsPrivacyAppsProductIdPermissionIdRouteImport.update({
+const AppSettingsPrivacyAppsProductIdPermissionIdRoute =
+  AppSettingsPrivacyAppsProductIdPermissionIdRouteImport.update({
     id: '/$permissionId',
     path: '/$permissionId',
-    getParentRoute: () => SettingsPrivacyAppsProductIdRoute,
+    getParentRoute: () => AppSettingsPrivacyAppsProductIdRoute,
+  } as any)
+const AppSettingsPrivacyPermissionsPermissionIdIndexRoute =
+  AppSettingsPrivacyPermissionsPermissionIdIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AppSettingsPrivacyPermissionsPermissionIdRoute,
+  } as any)
+const AppSettingsPrivacyPermissionsPermissionIdProductIdRoute =
+  AppSettingsPrivacyPermissionsPermissionIdProductIdRouteImport.update({
+    id: '/$productId',
+    path: '/$productId',
+    getParentRoute: () => AppSettingsPrivacyPermissionsPermissionIdRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '/dashboard': typeof DashboardRoute
-  '/onboarding': typeof OnboardingRoute
-  '/settings': typeof SettingsRouteWithChildren
-  '/chat/{-$chatId}': typeof ChatChar123ChatIdChar125Route
-  '/new-tab/$id': typeof NewTabIdRoute
-  '/settings/appearance': typeof SettingsAppearanceRoute
-  '/settings/development': typeof SettingsDevelopmentRouteWithChildren
-  '/settings/': typeof SettingsIndexRoute
-  '/product/$id/{-$route}': typeof ProductIdChar123RouteChar125Route
-  '/settings/development/custom-chains': typeof SettingsDevelopmentCustomChainsRoute
-  '/settings/development/network': typeof SettingsDevelopmentNetworkRoute
-  '/settings/development/update-channel': typeof SettingsDevelopmentUpdateChannelRoute
-  '/settings/privacy/apps/$productId': typeof SettingsPrivacyAppsProductIdRouteWithChildren
-  '/settings/privacy/permissions/$permissionId': typeof SettingsPrivacyPermissionsPermissionIdRouteWithChildren
-  '/settings/privacy/apps/': typeof SettingsPrivacyAppsIndexRoute
-  '/settings/privacy/permissions/': typeof SettingsPrivacyPermissionsIndexRoute
-  '/settings/privacy/apps/$productId/$permissionId': typeof SettingsPrivacyAppsProductIdPermissionIdRoute
-  '/settings/privacy/permissions/$permissionId/$productId': typeof SettingsPrivacyPermissionsPermissionIdProductIdRoute
-  '/settings/privacy/apps/$productId/': typeof SettingsPrivacyAppsProductIdIndexRoute
-  '/settings/privacy/permissions/$permissionId/': typeof SettingsPrivacyPermissionsPermissionIdIndexRoute
+  '/': typeof AppIndexRoute
+  '/call': typeof CallRoute
+  '/dashboard': typeof AppDashboardRoute
+  '/favorites': typeof AppFavoritesRoute
+  '/onboarding': typeof AppOnboardingRoute
+  '/settings': typeof AppSettingsRouteWithChildren
+  '/chat/{-$chatId}': typeof AppChatChar123ChatIdChar125Route
+  '/new-tab/$id': typeof AppNewTabIdRoute
+  '/settings/appearance': typeof AppSettingsAppearanceRoute
+  '/settings/chats': typeof AppSettingsChatsRoute
+  '/settings/development': typeof AppSettingsDevelopmentRouteWithChildren
+  '/settings/language': typeof AppSettingsLanguageRoute
+  '/settings/': typeof AppSettingsIndexRoute
+  '/product/$id/{-$route}': typeof AppProductIdChar123RouteChar125Route
+  '/settings/development/custom-chains': typeof AppSettingsDevelopmentCustomChainsRoute
+  '/settings/development/network': typeof AppSettingsDevelopmentNetworkRoute
+  '/settings/development/update-channel': typeof AppSettingsDevelopmentUpdateChannelRoute
+  '/settings/privacy/apps/$productId': typeof AppSettingsPrivacyAppsProductIdRouteWithChildren
+  '/settings/privacy/permissions/$permissionId': typeof AppSettingsPrivacyPermissionsPermissionIdRouteWithChildren
+  '/settings/privacy/apps/': typeof AppSettingsPrivacyAppsIndexRoute
+  '/settings/privacy/permissions/': typeof AppSettingsPrivacyPermissionsIndexRoute
+  '/settings/privacy/apps/$productId/$permissionId': typeof AppSettingsPrivacyAppsProductIdPermissionIdRoute
+  '/settings/privacy/permissions/$permissionId/$productId': typeof AppSettingsPrivacyPermissionsPermissionIdProductIdRoute
+  '/settings/privacy/apps/$productId/': typeof AppSettingsPrivacyAppsProductIdIndexRoute
+  '/settings/privacy/permissions/$permissionId/': typeof AppSettingsPrivacyPermissionsPermissionIdIndexRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/dashboard': typeof DashboardRoute
-  '/onboarding': typeof OnboardingRoute
-  '/chat/{-$chatId}': typeof ChatChar123ChatIdChar125Route
-  '/new-tab/$id': typeof NewTabIdRoute
-  '/settings/appearance': typeof SettingsAppearanceRoute
-  '/settings/development': typeof SettingsDevelopmentRouteWithChildren
-  '/settings': typeof SettingsIndexRoute
-  '/product/$id/{-$route}': typeof ProductIdChar123RouteChar125Route
-  '/settings/development/custom-chains': typeof SettingsDevelopmentCustomChainsRoute
-  '/settings/development/network': typeof SettingsDevelopmentNetworkRoute
-  '/settings/development/update-channel': typeof SettingsDevelopmentUpdateChannelRoute
-  '/settings/privacy/apps': typeof SettingsPrivacyAppsIndexRoute
-  '/settings/privacy/permissions': typeof SettingsPrivacyPermissionsIndexRoute
-  '/settings/privacy/apps/$productId/$permissionId': typeof SettingsPrivacyAppsProductIdPermissionIdRoute
-  '/settings/privacy/permissions/$permissionId/$productId': typeof SettingsPrivacyPermissionsPermissionIdProductIdRoute
-  '/settings/privacy/apps/$productId': typeof SettingsPrivacyAppsProductIdIndexRoute
-  '/settings/privacy/permissions/$permissionId': typeof SettingsPrivacyPermissionsPermissionIdIndexRoute
+  '/call': typeof CallRoute
+  '/dashboard': typeof AppDashboardRoute
+  '/favorites': typeof AppFavoritesRoute
+  '/onboarding': typeof AppOnboardingRoute
+  '/': typeof AppIndexRoute
+  '/chat/{-$chatId}': typeof AppChatChar123ChatIdChar125Route
+  '/new-tab/$id': typeof AppNewTabIdRoute
+  '/settings/appearance': typeof AppSettingsAppearanceRoute
+  '/settings/chats': typeof AppSettingsChatsRoute
+  '/settings/development': typeof AppSettingsDevelopmentRouteWithChildren
+  '/settings/language': typeof AppSettingsLanguageRoute
+  '/settings': typeof AppSettingsIndexRoute
+  '/product/$id/{-$route}': typeof AppProductIdChar123RouteChar125Route
+  '/settings/development/custom-chains': typeof AppSettingsDevelopmentCustomChainsRoute
+  '/settings/development/network': typeof AppSettingsDevelopmentNetworkRoute
+  '/settings/development/update-channel': typeof AppSettingsDevelopmentUpdateChannelRoute
+  '/settings/privacy/apps': typeof AppSettingsPrivacyAppsIndexRoute
+  '/settings/privacy/permissions': typeof AppSettingsPrivacyPermissionsIndexRoute
+  '/settings/privacy/apps/$productId/$permissionId': typeof AppSettingsPrivacyAppsProductIdPermissionIdRoute
+  '/settings/privacy/permissions/$permissionId/$productId': typeof AppSettingsPrivacyPermissionsPermissionIdProductIdRoute
+  '/settings/privacy/apps/$productId': typeof AppSettingsPrivacyAppsProductIdIndexRoute
+  '/settings/privacy/permissions/$permissionId': typeof AppSettingsPrivacyPermissionsPermissionIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
-  '/dashboard': typeof DashboardRoute
-  '/onboarding': typeof OnboardingRoute
-  '/settings': typeof SettingsRouteWithChildren
-  '/chat/{-$chatId}': typeof ChatChar123ChatIdChar125Route
-  '/new-tab/$id': typeof NewTabIdRoute
-  '/settings/appearance': typeof SettingsAppearanceRoute
-  '/settings/development': typeof SettingsDevelopmentRouteWithChildren
-  '/settings/': typeof SettingsIndexRoute
-  '/product/$id/{-$route}': typeof ProductIdChar123RouteChar125Route
-  '/settings/development/custom-chains': typeof SettingsDevelopmentCustomChainsRoute
-  '/settings/development/network': typeof SettingsDevelopmentNetworkRoute
-  '/settings/development/update-channel': typeof SettingsDevelopmentUpdateChannelRoute
-  '/settings/privacy/apps/$productId': typeof SettingsPrivacyAppsProductIdRouteWithChildren
-  '/settings/privacy/permissions/$permissionId': typeof SettingsPrivacyPermissionsPermissionIdRouteWithChildren
-  '/settings/privacy/apps/': typeof SettingsPrivacyAppsIndexRoute
-  '/settings/privacy/permissions/': typeof SettingsPrivacyPermissionsIndexRoute
-  '/settings/privacy/apps/$productId/$permissionId': typeof SettingsPrivacyAppsProductIdPermissionIdRoute
-  '/settings/privacy/permissions/$permissionId/$productId': typeof SettingsPrivacyPermissionsPermissionIdProductIdRoute
-  '/settings/privacy/apps/$productId/': typeof SettingsPrivacyAppsProductIdIndexRoute
-  '/settings/privacy/permissions/$permissionId/': typeof SettingsPrivacyPermissionsPermissionIdIndexRoute
+  '/_app': typeof AppRouteWithChildren
+  '/call': typeof CallRoute
+  '/_app/dashboard': typeof AppDashboardRoute
+  '/_app/favorites': typeof AppFavoritesRoute
+  '/_app/onboarding': typeof AppOnboardingRoute
+  '/_app/settings': typeof AppSettingsRouteWithChildren
+  '/_app/': typeof AppIndexRoute
+  '/_app/chat/{-$chatId}': typeof AppChatChar123ChatIdChar125Route
+  '/_app/new-tab/$id': typeof AppNewTabIdRoute
+  '/_app/settings/appearance': typeof AppSettingsAppearanceRoute
+  '/_app/settings/chats': typeof AppSettingsChatsRoute
+  '/_app/settings/development': typeof AppSettingsDevelopmentRouteWithChildren
+  '/_app/settings/language': typeof AppSettingsLanguageRoute
+  '/_app/settings/': typeof AppSettingsIndexRoute
+  '/_app/product/$id/{-$route}': typeof AppProductIdChar123RouteChar125Route
+  '/_app/settings/development/custom-chains': typeof AppSettingsDevelopmentCustomChainsRoute
+  '/_app/settings/development/network': typeof AppSettingsDevelopmentNetworkRoute
+  '/_app/settings/development/update-channel': typeof AppSettingsDevelopmentUpdateChannelRoute
+  '/_app/settings/privacy/apps/$productId': typeof AppSettingsPrivacyAppsProductIdRouteWithChildren
+  '/_app/settings/privacy/permissions/$permissionId': typeof AppSettingsPrivacyPermissionsPermissionIdRouteWithChildren
+  '/_app/settings/privacy/apps/': typeof AppSettingsPrivacyAppsIndexRoute
+  '/_app/settings/privacy/permissions/': typeof AppSettingsPrivacyPermissionsIndexRoute
+  '/_app/settings/privacy/apps/$productId/$permissionId': typeof AppSettingsPrivacyAppsProductIdPermissionIdRoute
+  '/_app/settings/privacy/permissions/$permissionId/$productId': typeof AppSettingsPrivacyPermissionsPermissionIdProductIdRoute
+  '/_app/settings/privacy/apps/$productId/': typeof AppSettingsPrivacyAppsProductIdIndexRoute
+  '/_app/settings/privacy/permissions/$permissionId/': typeof AppSettingsPrivacyPermissionsPermissionIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/call'
     | '/dashboard'
+    | '/favorites'
     | '/onboarding'
     | '/settings'
     | '/chat/{-$chatId}'
     | '/new-tab/$id'
     | '/settings/appearance'
+    | '/settings/chats'
     | '/settings/development'
+    | '/settings/language'
     | '/settings/'
     | '/product/$id/{-$route}'
     | '/settings/development/custom-chains'
@@ -243,13 +289,17 @@ export interface FileRouteTypes {
     | '/settings/privacy/permissions/$permissionId/'
   fileRoutesByTo: FileRoutesByTo
   to:
-    | '/'
+    | '/call'
     | '/dashboard'
+    | '/favorites'
     | '/onboarding'
+    | '/'
     | '/chat/{-$chatId}'
     | '/new-tab/$id'
     | '/settings/appearance'
+    | '/settings/chats'
     | '/settings/development'
+    | '/settings/language'
     | '/settings'
     | '/product/$id/{-$route}'
     | '/settings/development/custom-chains'
@@ -263,276 +313,340 @@ export interface FileRouteTypes {
     | '/settings/privacy/permissions/$permissionId'
   id:
     | '__root__'
-    | '/'
-    | '/dashboard'
-    | '/onboarding'
-    | '/settings'
-    | '/chat/{-$chatId}'
-    | '/new-tab/$id'
-    | '/settings/appearance'
-    | '/settings/development'
-    | '/settings/'
-    | '/product/$id/{-$route}'
-    | '/settings/development/custom-chains'
-    | '/settings/development/network'
-    | '/settings/development/update-channel'
-    | '/settings/privacy/apps/$productId'
-    | '/settings/privacy/permissions/$permissionId'
-    | '/settings/privacy/apps/'
-    | '/settings/privacy/permissions/'
-    | '/settings/privacy/apps/$productId/$permissionId'
-    | '/settings/privacy/permissions/$permissionId/$productId'
-    | '/settings/privacy/apps/$productId/'
-    | '/settings/privacy/permissions/$permissionId/'
+    | '/_app'
+    | '/call'
+    | '/_app/dashboard'
+    | '/_app/favorites'
+    | '/_app/onboarding'
+    | '/_app/settings'
+    | '/_app/'
+    | '/_app/chat/{-$chatId}'
+    | '/_app/new-tab/$id'
+    | '/_app/settings/appearance'
+    | '/_app/settings/chats'
+    | '/_app/settings/development'
+    | '/_app/settings/language'
+    | '/_app/settings/'
+    | '/_app/product/$id/{-$route}'
+    | '/_app/settings/development/custom-chains'
+    | '/_app/settings/development/network'
+    | '/_app/settings/development/update-channel'
+    | '/_app/settings/privacy/apps/$productId'
+    | '/_app/settings/privacy/permissions/$permissionId'
+    | '/_app/settings/privacy/apps/'
+    | '/_app/settings/privacy/permissions/'
+    | '/_app/settings/privacy/apps/$productId/$permissionId'
+    | '/_app/settings/privacy/permissions/$permissionId/$productId'
+    | '/_app/settings/privacy/apps/$productId/'
+    | '/_app/settings/privacy/permissions/$permissionId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  DashboardRoute: typeof DashboardRoute
-  OnboardingRoute: typeof OnboardingRoute
-  SettingsRoute: typeof SettingsRouteWithChildren
-  ChatChar123ChatIdChar125Route: typeof ChatChar123ChatIdChar125Route
-  NewTabIdRoute: typeof NewTabIdRoute
-  ProductIdChar123RouteChar125Route: typeof ProductIdChar123RouteChar125Route
+  AppRoute: typeof AppRouteWithChildren
+  CallRoute: typeof CallRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/settings': {
-      id: '/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof SettingsRouteImport
+    '/_app': {
+      id: '/_app'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AppRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/onboarding': {
-      id: '/onboarding'
-      path: '/onboarding'
-      fullPath: '/onboarding'
-      preLoaderRoute: typeof OnboardingRouteImport
+    '/call': {
+      id: '/call'
+      path: '/call'
+      fullPath: '/call'
+      preLoaderRoute: typeof CallRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/dashboard': {
-      id: '/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof DashboardRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/': {
-      id: '/'
+    '/_app/': {
+      id: '/_app/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRoute
     }
-    '/settings/': {
-      id: '/settings/'
-      path: '/'
-      fullPath: '/settings/'
-      preLoaderRoute: typeof SettingsIndexRouteImport
-      parentRoute: typeof SettingsRoute
+    '/_app/dashboard': {
+      id: '/_app/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AppDashboardRouteImport
+      parentRoute: typeof AppRoute
     }
-    '/settings/development': {
-      id: '/settings/development'
-      path: '/development'
-      fullPath: '/settings/development'
-      preLoaderRoute: typeof SettingsDevelopmentRouteImport
-      parentRoute: typeof SettingsRoute
+    '/_app/favorites': {
+      id: '/_app/favorites'
+      path: '/favorites'
+      fullPath: '/favorites'
+      preLoaderRoute: typeof AppFavoritesRouteImport
+      parentRoute: typeof AppRoute
     }
-    '/settings/appearance': {
-      id: '/settings/appearance'
-      path: '/appearance'
-      fullPath: '/settings/appearance'
-      preLoaderRoute: typeof SettingsAppearanceRouteImport
-      parentRoute: typeof SettingsRoute
+    '/_app/onboarding': {
+      id: '/_app/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof AppOnboardingRouteImport
+      parentRoute: typeof AppRoute
     }
-    '/new-tab/$id': {
-      id: '/new-tab/$id'
-      path: '/new-tab/$id'
-      fullPath: '/new-tab/$id'
-      preLoaderRoute: typeof NewTabIdRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_app/settings': {
+      id: '/_app/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AppSettingsRouteImport
+      parentRoute: typeof AppRoute
     }
-    '/chat/{-$chatId}': {
-      id: '/chat/{-$chatId}'
+    '/_app/chat/{-$chatId}': {
+      id: '/_app/chat/{-$chatId}'
       path: '/chat/{-$chatId}'
       fullPath: '/chat/{-$chatId}'
-      preLoaderRoute: typeof ChatChar123ChatIdChar125RouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AppChatChar123ChatIdChar125RouteImport
+      parentRoute: typeof AppRoute
     }
-    '/settings/development/update-channel': {
-      id: '/settings/development/update-channel'
-      path: '/update-channel'
-      fullPath: '/settings/development/update-channel'
-      preLoaderRoute: typeof SettingsDevelopmentUpdateChannelRouteImport
-      parentRoute: typeof SettingsDevelopmentRoute
+    '/_app/new-tab/$id': {
+      id: '/_app/new-tab/$id'
+      path: '/new-tab/$id'
+      fullPath: '/new-tab/$id'
+      preLoaderRoute: typeof AppNewTabIdRouteImport
+      parentRoute: typeof AppRoute
     }
-    '/settings/development/network': {
-      id: '/settings/development/network'
-      path: '/network'
-      fullPath: '/settings/development/network'
-      preLoaderRoute: typeof SettingsDevelopmentNetworkRouteImport
-      parentRoute: typeof SettingsDevelopmentRoute
+    '/_app/settings/': {
+      id: '/_app/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof AppSettingsIndexRouteImport
+      parentRoute: typeof AppSettingsRoute
     }
-    '/settings/development/custom-chains': {
-      id: '/settings/development/custom-chains'
-      path: '/custom-chains'
-      fullPath: '/settings/development/custom-chains'
-      preLoaderRoute: typeof SettingsDevelopmentCustomChainsRouteImport
-      parentRoute: typeof SettingsDevelopmentRoute
+    '/_app/settings/appearance': {
+      id: '/_app/settings/appearance'
+      path: '/appearance'
+      fullPath: '/settings/appearance'
+      preLoaderRoute: typeof AppSettingsAppearanceRouteImport
+      parentRoute: typeof AppSettingsRoute
     }
-    '/product/$id/{-$route}': {
-      id: '/product/$id/{-$route}'
+    '/_app/settings/chats': {
+      id: '/_app/settings/chats'
+      path: '/chats'
+      fullPath: '/settings/chats'
+      preLoaderRoute: typeof AppSettingsChatsRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
+    '/_app/settings/development': {
+      id: '/_app/settings/development'
+      path: '/development'
+      fullPath: '/settings/development'
+      preLoaderRoute: typeof AppSettingsDevelopmentRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
+    '/_app/settings/language': {
+      id: '/_app/settings/language'
+      path: '/language'
+      fullPath: '/settings/language'
+      preLoaderRoute: typeof AppSettingsLanguageRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
+    '/_app/product/$id/{-$route}': {
+      id: '/_app/product/$id/{-$route}'
       path: '/product/$id/{-$route}'
       fullPath: '/product/$id/{-$route}'
-      preLoaderRoute: typeof ProductIdChar123RouteChar125RouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof AppProductIdChar123RouteChar125RouteImport
+      parentRoute: typeof AppRoute
     }
-    '/settings/privacy/permissions/': {
-      id: '/settings/privacy/permissions/'
-      path: '/privacy/permissions'
-      fullPath: '/settings/privacy/permissions/'
-      preLoaderRoute: typeof SettingsPrivacyPermissionsIndexRouteImport
-      parentRoute: typeof SettingsRoute
+    '/_app/settings/development/custom-chains': {
+      id: '/_app/settings/development/custom-chains'
+      path: '/custom-chains'
+      fullPath: '/settings/development/custom-chains'
+      preLoaderRoute: typeof AppSettingsDevelopmentCustomChainsRouteImport
+      parentRoute: typeof AppSettingsDevelopmentRoute
     }
-    '/settings/privacy/apps/': {
-      id: '/settings/privacy/apps/'
+    '/_app/settings/development/network': {
+      id: '/_app/settings/development/network'
+      path: '/network'
+      fullPath: '/settings/development/network'
+      preLoaderRoute: typeof AppSettingsDevelopmentNetworkRouteImport
+      parentRoute: typeof AppSettingsDevelopmentRoute
+    }
+    '/_app/settings/development/update-channel': {
+      id: '/_app/settings/development/update-channel'
+      path: '/update-channel'
+      fullPath: '/settings/development/update-channel'
+      preLoaderRoute: typeof AppSettingsDevelopmentUpdateChannelRouteImport
+      parentRoute: typeof AppSettingsDevelopmentRoute
+    }
+    '/_app/settings/privacy/apps/': {
+      id: '/_app/settings/privacy/apps/'
       path: '/privacy/apps'
       fullPath: '/settings/privacy/apps/'
-      preLoaderRoute: typeof SettingsPrivacyAppsIndexRouteImport
-      parentRoute: typeof SettingsRoute
+      preLoaderRoute: typeof AppSettingsPrivacyAppsIndexRouteImport
+      parentRoute: typeof AppSettingsRoute
     }
-    '/settings/privacy/permissions/$permissionId': {
-      id: '/settings/privacy/permissions/$permissionId'
-      path: '/privacy/permissions/$permissionId'
-      fullPath: '/settings/privacy/permissions/$permissionId'
-      preLoaderRoute: typeof SettingsPrivacyPermissionsPermissionIdRouteImport
-      parentRoute: typeof SettingsRoute
-    }
-    '/settings/privacy/apps/$productId': {
-      id: '/settings/privacy/apps/$productId'
+    '/_app/settings/privacy/apps/$productId': {
+      id: '/_app/settings/privacy/apps/$productId'
       path: '/privacy/apps/$productId'
       fullPath: '/settings/privacy/apps/$productId'
-      preLoaderRoute: typeof SettingsPrivacyAppsProductIdRouteImport
-      parentRoute: typeof SettingsRoute
+      preLoaderRoute: typeof AppSettingsPrivacyAppsProductIdRouteImport
+      parentRoute: typeof AppSettingsRoute
     }
-    '/settings/privacy/permissions/$permissionId/': {
-      id: '/settings/privacy/permissions/$permissionId/'
-      path: '/'
-      fullPath: '/settings/privacy/permissions/$permissionId/'
-      preLoaderRoute: typeof SettingsPrivacyPermissionsPermissionIdIndexRouteImport
-      parentRoute: typeof SettingsPrivacyPermissionsPermissionIdRoute
+    '/_app/settings/privacy/permissions/': {
+      id: '/_app/settings/privacy/permissions/'
+      path: '/privacy/permissions'
+      fullPath: '/settings/privacy/permissions/'
+      preLoaderRoute: typeof AppSettingsPrivacyPermissionsIndexRouteImport
+      parentRoute: typeof AppSettingsRoute
     }
-    '/settings/privacy/apps/$productId/': {
-      id: '/settings/privacy/apps/$productId/'
+    '/_app/settings/privacy/permissions/$permissionId': {
+      id: '/_app/settings/privacy/permissions/$permissionId'
+      path: '/privacy/permissions/$permissionId'
+      fullPath: '/settings/privacy/permissions/$permissionId'
+      preLoaderRoute: typeof AppSettingsPrivacyPermissionsPermissionIdRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
+    '/_app/settings/privacy/apps/$productId/': {
+      id: '/_app/settings/privacy/apps/$productId/'
       path: '/'
       fullPath: '/settings/privacy/apps/$productId/'
-      preLoaderRoute: typeof SettingsPrivacyAppsProductIdIndexRouteImport
-      parentRoute: typeof SettingsPrivacyAppsProductIdRoute
+      preLoaderRoute: typeof AppSettingsPrivacyAppsProductIdIndexRouteImport
+      parentRoute: typeof AppSettingsPrivacyAppsProductIdRoute
     }
-    '/settings/privacy/permissions/$permissionId/$productId': {
-      id: '/settings/privacy/permissions/$permissionId/$productId'
-      path: '/$productId'
-      fullPath: '/settings/privacy/permissions/$permissionId/$productId'
-      preLoaderRoute: typeof SettingsPrivacyPermissionsPermissionIdProductIdRouteImport
-      parentRoute: typeof SettingsPrivacyPermissionsPermissionIdRoute
-    }
-    '/settings/privacy/apps/$productId/$permissionId': {
-      id: '/settings/privacy/apps/$productId/$permissionId'
+    '/_app/settings/privacy/apps/$productId/$permissionId': {
+      id: '/_app/settings/privacy/apps/$productId/$permissionId'
       path: '/$permissionId'
       fullPath: '/settings/privacy/apps/$productId/$permissionId'
-      preLoaderRoute: typeof SettingsPrivacyAppsProductIdPermissionIdRouteImport
-      parentRoute: typeof SettingsPrivacyAppsProductIdRoute
+      preLoaderRoute: typeof AppSettingsPrivacyAppsProductIdPermissionIdRouteImport
+      parentRoute: typeof AppSettingsPrivacyAppsProductIdRoute
+    }
+    '/_app/settings/privacy/permissions/$permissionId/': {
+      id: '/_app/settings/privacy/permissions/$permissionId/'
+      path: '/'
+      fullPath: '/settings/privacy/permissions/$permissionId/'
+      preLoaderRoute: typeof AppSettingsPrivacyPermissionsPermissionIdIndexRouteImport
+      parentRoute: typeof AppSettingsPrivacyPermissionsPermissionIdRoute
+    }
+    '/_app/settings/privacy/permissions/$permissionId/$productId': {
+      id: '/_app/settings/privacy/permissions/$permissionId/$productId'
+      path: '/$productId'
+      fullPath: '/settings/privacy/permissions/$permissionId/$productId'
+      preLoaderRoute: typeof AppSettingsPrivacyPermissionsPermissionIdProductIdRouteImport
+      parentRoute: typeof AppSettingsPrivacyPermissionsPermissionIdRoute
     }
   }
 }
 
-interface SettingsDevelopmentRouteChildren {
-  SettingsDevelopmentCustomChainsRoute: typeof SettingsDevelopmentCustomChainsRoute
-  SettingsDevelopmentNetworkRoute: typeof SettingsDevelopmentNetworkRoute
-  SettingsDevelopmentUpdateChannelRoute: typeof SettingsDevelopmentUpdateChannelRoute
+interface AppSettingsDevelopmentRouteChildren {
+  AppSettingsDevelopmentCustomChainsRoute: typeof AppSettingsDevelopmentCustomChainsRoute
+  AppSettingsDevelopmentNetworkRoute: typeof AppSettingsDevelopmentNetworkRoute
+  AppSettingsDevelopmentUpdateChannelRoute: typeof AppSettingsDevelopmentUpdateChannelRoute
 }
 
-const SettingsDevelopmentRouteChildren: SettingsDevelopmentRouteChildren = {
-  SettingsDevelopmentCustomChainsRoute: SettingsDevelopmentCustomChainsRoute,
-  SettingsDevelopmentNetworkRoute: SettingsDevelopmentNetworkRoute,
-  SettingsDevelopmentUpdateChannelRoute: SettingsDevelopmentUpdateChannelRoute,
-}
-
-const SettingsDevelopmentRouteWithChildren =
-  SettingsDevelopmentRoute._addFileChildren(SettingsDevelopmentRouteChildren)
-
-interface SettingsPrivacyAppsProductIdRouteChildren {
-  SettingsPrivacyAppsProductIdPermissionIdRoute: typeof SettingsPrivacyAppsProductIdPermissionIdRoute
-  SettingsPrivacyAppsProductIdIndexRoute: typeof SettingsPrivacyAppsProductIdIndexRoute
-}
-
-const SettingsPrivacyAppsProductIdRouteChildren: SettingsPrivacyAppsProductIdRouteChildren =
+const AppSettingsDevelopmentRouteChildren: AppSettingsDevelopmentRouteChildren =
   {
-    SettingsPrivacyAppsProductIdPermissionIdRoute:
-      SettingsPrivacyAppsProductIdPermissionIdRoute,
-    SettingsPrivacyAppsProductIdIndexRoute:
-      SettingsPrivacyAppsProductIdIndexRoute,
+    AppSettingsDevelopmentCustomChainsRoute:
+      AppSettingsDevelopmentCustomChainsRoute,
+    AppSettingsDevelopmentNetworkRoute: AppSettingsDevelopmentNetworkRoute,
+    AppSettingsDevelopmentUpdateChannelRoute:
+      AppSettingsDevelopmentUpdateChannelRoute,
   }
 
-const SettingsPrivacyAppsProductIdRouteWithChildren =
-  SettingsPrivacyAppsProductIdRoute._addFileChildren(
-    SettingsPrivacyAppsProductIdRouteChildren,
+const AppSettingsDevelopmentRouteWithChildren =
+  AppSettingsDevelopmentRoute._addFileChildren(
+    AppSettingsDevelopmentRouteChildren,
   )
 
-interface SettingsPrivacyPermissionsPermissionIdRouteChildren {
-  SettingsPrivacyPermissionsPermissionIdProductIdRoute: typeof SettingsPrivacyPermissionsPermissionIdProductIdRoute
-  SettingsPrivacyPermissionsPermissionIdIndexRoute: typeof SettingsPrivacyPermissionsPermissionIdIndexRoute
+interface AppSettingsPrivacyAppsProductIdRouteChildren {
+  AppSettingsPrivacyAppsProductIdPermissionIdRoute: typeof AppSettingsPrivacyAppsProductIdPermissionIdRoute
+  AppSettingsPrivacyAppsProductIdIndexRoute: typeof AppSettingsPrivacyAppsProductIdIndexRoute
 }
 
-const SettingsPrivacyPermissionsPermissionIdRouteChildren: SettingsPrivacyPermissionsPermissionIdRouteChildren =
+const AppSettingsPrivacyAppsProductIdRouteChildren: AppSettingsPrivacyAppsProductIdRouteChildren =
   {
-    SettingsPrivacyPermissionsPermissionIdProductIdRoute:
-      SettingsPrivacyPermissionsPermissionIdProductIdRoute,
-    SettingsPrivacyPermissionsPermissionIdIndexRoute:
-      SettingsPrivacyPermissionsPermissionIdIndexRoute,
+    AppSettingsPrivacyAppsProductIdPermissionIdRoute:
+      AppSettingsPrivacyAppsProductIdPermissionIdRoute,
+    AppSettingsPrivacyAppsProductIdIndexRoute:
+      AppSettingsPrivacyAppsProductIdIndexRoute,
   }
 
-const SettingsPrivacyPermissionsPermissionIdRouteWithChildren =
-  SettingsPrivacyPermissionsPermissionIdRoute._addFileChildren(
-    SettingsPrivacyPermissionsPermissionIdRouteChildren,
+const AppSettingsPrivacyAppsProductIdRouteWithChildren =
+  AppSettingsPrivacyAppsProductIdRoute._addFileChildren(
+    AppSettingsPrivacyAppsProductIdRouteChildren,
   )
 
-interface SettingsRouteChildren {
-  SettingsAppearanceRoute: typeof SettingsAppearanceRoute
-  SettingsDevelopmentRoute: typeof SettingsDevelopmentRouteWithChildren
-  SettingsIndexRoute: typeof SettingsIndexRoute
-  SettingsPrivacyAppsProductIdRoute: typeof SettingsPrivacyAppsProductIdRouteWithChildren
-  SettingsPrivacyPermissionsPermissionIdRoute: typeof SettingsPrivacyPermissionsPermissionIdRouteWithChildren
-  SettingsPrivacyAppsIndexRoute: typeof SettingsPrivacyAppsIndexRoute
-  SettingsPrivacyPermissionsIndexRoute: typeof SettingsPrivacyPermissionsIndexRoute
+interface AppSettingsPrivacyPermissionsPermissionIdRouteChildren {
+  AppSettingsPrivacyPermissionsPermissionIdProductIdRoute: typeof AppSettingsPrivacyPermissionsPermissionIdProductIdRoute
+  AppSettingsPrivacyPermissionsPermissionIdIndexRoute: typeof AppSettingsPrivacyPermissionsPermissionIdIndexRoute
 }
 
-const SettingsRouteChildren: SettingsRouteChildren = {
-  SettingsAppearanceRoute: SettingsAppearanceRoute,
-  SettingsDevelopmentRoute: SettingsDevelopmentRouteWithChildren,
-  SettingsIndexRoute: SettingsIndexRoute,
-  SettingsPrivacyAppsProductIdRoute:
-    SettingsPrivacyAppsProductIdRouteWithChildren,
-  SettingsPrivacyPermissionsPermissionIdRoute:
-    SettingsPrivacyPermissionsPermissionIdRouteWithChildren,
-  SettingsPrivacyAppsIndexRoute: SettingsPrivacyAppsIndexRoute,
-  SettingsPrivacyPermissionsIndexRoute: SettingsPrivacyPermissionsIndexRoute,
+const AppSettingsPrivacyPermissionsPermissionIdRouteChildren: AppSettingsPrivacyPermissionsPermissionIdRouteChildren =
+  {
+    AppSettingsPrivacyPermissionsPermissionIdProductIdRoute:
+      AppSettingsPrivacyPermissionsPermissionIdProductIdRoute,
+    AppSettingsPrivacyPermissionsPermissionIdIndexRoute:
+      AppSettingsPrivacyPermissionsPermissionIdIndexRoute,
+  }
+
+const AppSettingsPrivacyPermissionsPermissionIdRouteWithChildren =
+  AppSettingsPrivacyPermissionsPermissionIdRoute._addFileChildren(
+    AppSettingsPrivacyPermissionsPermissionIdRouteChildren,
+  )
+
+interface AppSettingsRouteChildren {
+  AppSettingsAppearanceRoute: typeof AppSettingsAppearanceRoute
+  AppSettingsChatsRoute: typeof AppSettingsChatsRoute
+  AppSettingsDevelopmentRoute: typeof AppSettingsDevelopmentRouteWithChildren
+  AppSettingsLanguageRoute: typeof AppSettingsLanguageRoute
+  AppSettingsIndexRoute: typeof AppSettingsIndexRoute
+  AppSettingsPrivacyAppsProductIdRoute: typeof AppSettingsPrivacyAppsProductIdRouteWithChildren
+  AppSettingsPrivacyPermissionsPermissionIdRoute: typeof AppSettingsPrivacyPermissionsPermissionIdRouteWithChildren
+  AppSettingsPrivacyAppsIndexRoute: typeof AppSettingsPrivacyAppsIndexRoute
+  AppSettingsPrivacyPermissionsIndexRoute: typeof AppSettingsPrivacyPermissionsIndexRoute
 }
 
-const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
-  SettingsRouteChildren,
+const AppSettingsRouteChildren: AppSettingsRouteChildren = {
+  AppSettingsAppearanceRoute: AppSettingsAppearanceRoute,
+  AppSettingsChatsRoute: AppSettingsChatsRoute,
+  AppSettingsDevelopmentRoute: AppSettingsDevelopmentRouteWithChildren,
+  AppSettingsLanguageRoute: AppSettingsLanguageRoute,
+  AppSettingsIndexRoute: AppSettingsIndexRoute,
+  AppSettingsPrivacyAppsProductIdRoute:
+    AppSettingsPrivacyAppsProductIdRouteWithChildren,
+  AppSettingsPrivacyPermissionsPermissionIdRoute:
+    AppSettingsPrivacyPermissionsPermissionIdRouteWithChildren,
+  AppSettingsPrivacyAppsIndexRoute: AppSettingsPrivacyAppsIndexRoute,
+  AppSettingsPrivacyPermissionsIndexRoute:
+    AppSettingsPrivacyPermissionsIndexRoute,
+}
+
+const AppSettingsRouteWithChildren = AppSettingsRoute._addFileChildren(
+  AppSettingsRouteChildren,
 )
 
+interface AppRouteChildren {
+  AppDashboardRoute: typeof AppDashboardRoute
+  AppFavoritesRoute: typeof AppFavoritesRoute
+  AppOnboardingRoute: typeof AppOnboardingRoute
+  AppSettingsRoute: typeof AppSettingsRouteWithChildren
+  AppIndexRoute: typeof AppIndexRoute
+  AppChatChar123ChatIdChar125Route: typeof AppChatChar123ChatIdChar125Route
+  AppNewTabIdRoute: typeof AppNewTabIdRoute
+  AppProductIdChar123RouteChar125Route: typeof AppProductIdChar123RouteChar125Route
+}
+
+const AppRouteChildren: AppRouteChildren = {
+  AppDashboardRoute: AppDashboardRoute,
+  AppFavoritesRoute: AppFavoritesRoute,
+  AppOnboardingRoute: AppOnboardingRoute,
+  AppSettingsRoute: AppSettingsRouteWithChildren,
+  AppIndexRoute: AppIndexRoute,
+  AppChatChar123ChatIdChar125Route: AppChatChar123ChatIdChar125Route,
+  AppNewTabIdRoute: AppNewTabIdRoute,
+  AppProductIdChar123RouteChar125Route: AppProductIdChar123RouteChar125Route,
+}
+
+const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
-  DashboardRoute: DashboardRoute,
-  OnboardingRoute: OnboardingRoute,
-  SettingsRoute: SettingsRouteWithChildren,
-  ChatChar123ChatIdChar125Route: ChatChar123ChatIdChar125Route,
-  NewTabIdRoute: NewTabIdRoute,
-  ProductIdChar123RouteChar125Route: ProductIdChar123RouteChar125Route,
+  AppRoute: AppRouteWithChildren,
+  CallRoute: CallRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
