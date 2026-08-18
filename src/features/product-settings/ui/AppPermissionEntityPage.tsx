@@ -139,7 +139,7 @@ export const AppPermissionEntityPage = ({ productId, permissionId, backLabel, on
                     }
                   />
                 </div>
-                <div className="absolute -right-1 -bottom-1 flex size-10 items-center justify-center rounded-xl bg-bg-surface-container text-fg-primary">
+                <div className="absolute -end-1 -bottom-1 flex size-10 items-center justify-center rounded-xl bg-bg-surface-container text-fg-primary">
                   {headerIcon}
                 </div>
               </div>
@@ -256,7 +256,7 @@ type ModalityEntryLayoutProps = {
 
 const ModalityEntryLayout = ({ label, description, icon }: ModalityEntryLayoutProps) => (
   <div className="flex min-w-0 flex-1 items-center gap-3">
-    <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-bg-illustration-light text-primary">
+    <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-bg-illustration-light text-fg-primary">
       {icon}
     </div>
     <div className="flex min-w-0 flex-1 flex-col">
@@ -297,7 +297,7 @@ const ModalityNavigationEntry = ({
   <button
     type="button"
     data-testid={TEST_IDS.permissionModalityRow}
-    className="flex w-full items-center gap-4 rounded-xl p-3 text-left transition-colors enabled:hover:bg-bg-selection-container-hover disabled:cursor-not-allowed disabled:opacity-50"
+    className="flex w-full items-center gap-4 rounded-xl p-3 text-start transition-colors enabled:hover:bg-bg-selection-container-hover disabled:cursor-not-allowed disabled:opacity-50"
     disabled={disabled}
     title={disabled ? noDomainsTitle : undefined}
     onClick={onClick}

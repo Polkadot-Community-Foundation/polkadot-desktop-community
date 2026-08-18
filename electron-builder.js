@@ -1,4 +1,17 @@
-import { appId, author, electronProtocol, folders, title, updateServerUrl } from './config/index.js';
+import {
+  appId,
+  assertPackagingIdentity,
+  author,
+  autoUpdateUrl,
+  electronProtocol,
+  folders,
+  title,
+  updateFeed,
+} from './config/index.js';
+
+// Packaging is the moment an identity starts to mean something to an operating system, so it is
+// also the moment a missing one has to stop the build.
+assertPackagingIdentity();
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -10,7 +23,7 @@ const CURRENT_YEAR = new Date().getFullYear();
 export default {
   appId: appId,
   productName: title,
-  copyright: `Copyright © ${CURRENT_YEAR} — ${author.name}`,
+  copyright: `Copyright © ${CURRENT_YEAR} — ${author}`,
 
   directories: {
     app: folders.devBuild,
@@ -25,7 +38,7 @@ export default {
   mac: {
     category: 'public.app-category.finance',
     hardenedRuntime: true,
-    icon: `${folders.resources}/icons/icon.png`,
+    icon: `${folders.resources}/icons/icon-mac.png`,
     entitlements: `${folders.resources}/entitlements/entitlements.mac.plist`,
     entitlementsInherit: `${folders.resources}/entitlements/entitlements.mac.plist`,
     target: [
@@ -58,11 +71,19 @@ export default {
     target: ['nsis'],
   },
 
-  publish: updateServerUrl ? { provider: 'generic', url: updateServerUrl } : null,
+  publish: updateFeed,
 
   generateUpdatesFilesForAllChannels: false,
   detectUpdateChannel: false,
 
   compression: 'normal',
-  artifactName: '${productName}-${version}-${arch}.${ext}',
+  // `${name}` (`polkadot-desktop`), not `${productName}` ("Polkadot Desktop"): a GitHub release
+  // asset's name must not contain spaces. GitHub rewrites a space to `.`, while electron-updater
+  // rewrites it to `-` when building the download URL from the metadata, so a spaced name is
+  // uploaded and requested under two different filenames and every download 404s.
+  //
+  // A static feed has no such rewriting and its publishing steps address artifacts by the spaced
+  // name, so that deployment keeps `${productName}` — changing it would rename every object in the
+  // bucket for no benefit.
+  artifactName: autoUpdateUrl ? '${productName}-${version}-${arch}.${ext}' : '${name}-${version}-${arch}.${ext}',
 };

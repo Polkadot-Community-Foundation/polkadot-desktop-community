@@ -14,20 +14,8 @@ export function useToggleReaction(session: ChatSession, messages: ChatMessage[])
 
   return useCallback(
     async (messageId: string, emoji: string) => {
-      const existing = reactions.get(messageId);
-      const myReaction = existing?.find(r => r.reactedByMe);
-
-      // If I already reacted with this emoji, remove it
-      if (myReaction?.emoji === emoji) {
-        await session.sendMessage({ type: 'reactionRemoved', messageId, emoji });
-        return;
-      }
-
-      // Send new reaction first, then remove old (matches iOS ordering)
-      await session.sendMessage({ type: 'reacted', messageId, emoji });
-
-      if (myReaction) {
-        await session.sendMessage({ type: 'reactionRemoved', messageId, emoji: myReaction.emoji });
+      for (const content of reactionService.resolveToggle(reactions.get(messageId), messageId, emoji)) {
+        await session.sendMessage(content);
       }
     },
     [session, reactions],

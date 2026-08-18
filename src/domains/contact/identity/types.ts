@@ -2,7 +2,7 @@
  * A single device registered against a user identity.
  *
  * `statementAccountId` is the device's sr25519 public key (32 bytes, hex).
- * `encryptionPublicKey` is the device's P-256 uncompressed public key (65 bytes, hex)
+ * `encryptionPublicKey` is the device's X25519 public key (32 bytes, hex)
  * used for ECDH-derived per-device key wrapping in MultiDeviceRequest envelopes.
  */
 export type Device = {

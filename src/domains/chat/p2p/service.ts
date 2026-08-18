@@ -1,7 +1,7 @@
 /**
  * Shared P2P chat helpers used across the container's sub-modules.
  *
- * - `computeSharedSecret` — P-256 ECDH derivation used across the V2 chat
+ * - `computeSharedSecret` — X25519 key agreement used across the V2 chat
  *   stack (requests, session transport, multi-device crypto, and the V2
  *   manager's push-notification path).
  * - `stamp*` — `lastUpdate` stamp helpers for p2p-chat tables. Write-side
@@ -9,11 +9,13 @@
  *   device-sync's collector (`listMessagesChangedSince` & co in
  *   `repository.ts`).
  * - `isPending*Request` — request-state predicates the read hooks filter by.
+ * - `isRequestMessageHidden` — whether an incoming request's welcome message is
+ *   currently hidden in the UI (carries a message, hiding is on, not yet revealed).
  * - `bytesEqual` / `buildSessionIdParam` — wire-byte helpers shared across the
  *   sub-modules (multi-device, session-transport, requests, notifications).
  */
 
-import { p256 } from '@noble/curves/nist.js';
+import { x25519 } from '@noble/curves/ed25519.js';
 import { mergeUint8 } from '@polkadot-api/utils';
 
 import { type ChatMessage } from '../session/types';
@@ -23,11 +25,12 @@ import { type P2PChatRequest, type P2PRoom } from './types';
 const SESSION_ID_SEPARATOR = new TextEncoder().encode('/');
 
 /**
- * Compute ECDH shared secret between our P256 private key and peer's P256 public key.
- * Returns the X coordinate (32 bytes), matching host-papp's createSharedSecret.
+ * X25519 shared secret, used whole (CHAT-RFC-0004) — matches host-papp's
+ * `createSharedSecret`. `@noble` aborts on an all-zero result (RFC 7748), so a
+ * hostile peer key fails loudly.
  */
 function computeSharedSecret(privateKey: Uint8Array, peerPublicKey: Uint8Array): Uint8Array {
-  return p256.getSharedSecret(privateKey, peerPublicKey).slice(1, 33);
+  return x25519.getSharedSecret(privateKey, peerPublicKey);
 }
 
 /** Byte-for-byte equality for two `Uint8Array`s (length-checked first). */
@@ -67,6 +70,15 @@ function isPendingOutgoingRequest(request: P2PChatRequest): boolean {
   return request.direction === 'outgoing' && request.status === 'pending';
 }
 
+/**
+ * Whether an incoming request's message should be hidden in the UI: the request
+ * carries a message, hiding is on by default, and the user hasn't revealed it
+ * yet (the per-request `revealed` flag overrides the default).
+ */
+function isRequestMessageHidden(request: P2PChatRequest, hideByDefault: boolean): boolean {
+  return Boolean(request.welcomeMessage) && hideByDefault && request.revealed !== true;
+}
+
 export const p2pService = {
   computeSharedSecret,
   bytesEqual,
@@ -76,4 +88,5 @@ export const p2pService = {
   stampRequest,
   isPendingIncomingRequest,
   isPendingOutgoingRequest,
+  isRequestMessageHidden,
 };

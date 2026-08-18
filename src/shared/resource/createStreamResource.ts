@@ -2,7 +2,8 @@ import { createNanoEvents } from 'nanoevents';
 import { type Observable, BehaviorSubject, finalize, shareReplay, tap } from 'rxjs';
 
 import { createDefaultCacheMapper, createDefaultInitial, wrapKeyFactory } from './generic';
-import { type KeyFn, type Resource, type ResourceKey } from './types';
+import { onOverride } from './overrides';
+import { type KeyFn, type Overridable, type Resource, type ResourceKey } from './types';
 
 type MapCacheFn<Params, Response, Cache> = (cache: Cache, result: Response, params: Params) => Cache;
 
@@ -25,7 +26,9 @@ function build<Params, Response, Cache>({
   key,
   fn,
   cache,
-}: StreamParams<Params, Response, Cache>): Resource<Params, Response, Cache> {
+}: StreamParams<Params, Response, Cache>): Resource<Params, Response, Cache> & Overridable<StreamFactoryFn<Params, Response>> {
+  // Read through at subscribe time rather than captured, so `instead` can swap it.
+  let activeFn = fn;
   const events = createNanoEvents<{ read: Parameters<Resource<Params, Response, Cache>['onRead']>[0] }>();
 
   const createKey = wrapKeyFactory(key);
@@ -45,7 +48,7 @@ function build<Params, Response, Cache>({
       return existing;
     }
 
-    const stream$ = fn(params).pipe(
+    const stream$ = activeFn(params).pipe(
       tap(response => cache$.next(cache.map(cache$.value, response, params))),
       finalize(() => delete subscriptions[key]),
       shareReplay({ bufferSize: 1, refCount: true }),
@@ -91,6 +94,16 @@ function build<Params, Response, Cache>({
     },
     invalidate,
     invalidateAll,
+    instead(next) {
+      activeFn = next;
+      // Live subscriptions were built from the real factory; drop them so the
+      // next read resubscribes through the override.
+      invalidateAll();
+      onOverride(() => {
+        activeFn = fn;
+        invalidateAll();
+      });
+    },
     snapshot() {
       return cache$.value;
     },
@@ -108,7 +121,7 @@ export const createStreamResource = <Params = unknown>({ key }: { key: KeyFn<Par
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         return internal<Response, Cache>({ ...params, cache } as Partial<StreamParams<Params, Response, Cache>>);
       },
-      build(): Resource<Params, Response, CacheOrDefault<Cache, Response>> {
+      build(): Resource<Params, Response, CacheOrDefault<Cache, Response>> & Overridable<StreamFactoryFn<Params, Response>> {
         if (!params.fn) {
           throw new Error('Missing subscription function');
         }
@@ -119,7 +132,7 @@ export const createStreamResource = <Params = unknown>({ key }: { key: KeyFn<Par
             cache: params.cache,
             key,
             fn: params.fn,
-          }) as Resource<Params, Response, CacheOrDefault<Cache, Response>>;
+          }) as Resource<Params, Response, CacheOrDefault<Cache, Response>> & Overridable<StreamFactoryFn<Params, Response>>;
         } else {
           const initial = createDefaultInitial<Response>();
           const cacheMapper = createDefaultCacheMapper<Params, Response>(wrapKeyFactory(key));
@@ -132,7 +145,7 @@ export const createStreamResource = <Params = unknown>({ key }: { key: KeyFn<Par
             },
             key,
             fn: params.fn,
-          }) as Resource<Params, Response, CacheOrDefault<Cache, Response>>;
+          }) as Resource<Params, Response, CacheOrDefault<Cache, Response>> & Overridable<StreamFactoryFn<Params, Response>>;
         }
       },
     };

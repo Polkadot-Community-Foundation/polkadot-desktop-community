@@ -1,5 +1,4 @@
 import { useRead } from '@/shared/hooks';
-import { environmentService } from '../environment';
 import { type EnvironmentId } from '../environment/types';
 
 import { environmentUseCase } from './environment';
@@ -14,5 +13,5 @@ export function useEnvironment(id: EnvironmentId) {
 }
 
 export function useActiveEnvironment() {
-  return useEnvironment(environmentService.getActiveId());
+  return useEnvironment(environmentUseCase.getActiveId());
 }

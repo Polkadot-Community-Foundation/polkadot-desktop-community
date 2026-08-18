@@ -2,7 +2,7 @@ import { type ReactNode } from 'react';
 
 import { cnTw } from '@/shared/utils';
 
-const iconSlotClassName = 'flex size-4 shrink-0 items-center justify-center overflow-hidden rounded-[4px] text-fg-secondary';
+const iconSlotClassName = cnTw('flex size-4 shrink-0 items-center justify-center overflow-hidden rounded-sm text-fg-secondary');
 
 export const AddWidgetSidebarPlaceholderIcon = ({ className }: { className?: string }) => (
   <svg

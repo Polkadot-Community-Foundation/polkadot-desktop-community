@@ -52,7 +52,7 @@ export const PermissionDeniedDialog = memo(({ permission, deniedAt, onOpenPrimar
       >
         <PermissionIcon>{icon}</PermissionIcon>
 
-        <div className="flex w-full flex-col gap-2 py-1 text-left">
+        <div className="flex w-full flex-col gap-2 py-1 text-start">
           <Dialog.Title>
             <span className="text-2xl leading-8 font-semibold text-fg-primary">{t(`${keyBase}.title`)}</span>
           </Dialog.Title>
@@ -64,14 +64,14 @@ export const PermissionDeniedDialog = memo(({ permission, deniedAt, onOpenPrimar
         <div className="flex w-full gap-2">
           <button
             type="button"
-            className="flex h-9 min-h-9 flex-1 items-center justify-center rounded-lg border border-border-primary bg-bg-action-primary-inverted px-4 py-1 text-base leading-6 font-medium text-fg-primary hover:bg-bg-action-primary-inverted-hover focus-visible:ring-[4px] focus-visible:ring-border-tertiary/35 focus-visible:ring-offset-0 focus-visible:outline-none"
+            className="flex h-9 min-h-9 flex-1 items-center justify-center rounded-lg border border-stroke-primary bg-bg-action-primary-inverted px-4 py-1 text-base leading-6 font-medium text-fg-primary hover:bg-bg-action-primary-inverted-hover focus-visible:ring-4 focus-visible:ring-stroke-tertiary/35 focus-visible:ring-offset-0 focus-visible:outline-none"
             onClick={onClose}
           >
             {t('common.action.cancel')}
           </button>
           <button
             type="button"
-            className="flex h-9 min-h-9 flex-1 items-center justify-center rounded-lg bg-bg-action-primary px-4 py-1 text-base leading-6 font-medium text-fg-primary-inverted hover:bg-bg-action-primary-hover focus-visible:ring-[4px] focus-visible:ring-border-tertiary/35 focus-visible:ring-offset-0 focus-visible:outline-none"
+            className="flex h-9 min-h-9 flex-1 items-center justify-center rounded-lg bg-bg-action-primary px-4 py-1 text-base leading-6 font-medium text-fg-primary-inverted hover:bg-bg-action-primary-hover focus-visible:ring-4 focus-visible:ring-stroke-tertiary/35 focus-visible:ring-offset-0 focus-visible:outline-none"
             onClick={() => void handlePrimarySettings()}
           >
             {primarySettingsLabel}

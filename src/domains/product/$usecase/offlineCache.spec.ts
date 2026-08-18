@@ -4,6 +4,7 @@ import { okAsync } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { database } from '@/shared/database';
+import { environmentUseCase } from '@/domains/application';
 import { executableCacheRepository } from '../product/executable-cache/repository';
 import { archiveGateway } from '../product/manifest/gateway';
 import { peekExecutableArchive } from '../product/manifest/resource';
@@ -27,6 +28,13 @@ const product: Product = {
 };
 
 beforeEach(() => {
+  // The prefetch path resolves the IPFS gateway URL before reaching
+  // `archiveGateway.fetchExecutable`. Unmocked it throws (no Remote Config in
+  // tests), and `prefetchArchives` is best-effort — every kind would land on
+  // 'failed' through the catch, so the fetch spies below would never be hit.
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- only the ipfs URL is read here
+  vi.spyOn(environmentUseCase, 'getActive').mockResolvedValue({ ipfsGatewayUrl: 'https://ipfs.test' } as never);
+
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- minimal window.App stub for the use case
   globalThis.window = {
     App: {
@@ -91,29 +99,49 @@ describe('offlineCacheUseCase.evictArchives', () => {
 });
 
 describe('offlineCacheUseCase.reconcilePinnedArchives', () => {
-  it('re-pins products missing bytes and survives a per-product chain rejection', async () => {
-    // Bytes missing on disk → every pinned product needs a re-pin.
-    window.App.hasArchive = vi.fn(async () => false);
+  const pinnedRow = (baseName: string, identifier: string, contenthash: string): PersistedProduct => ({
+    ...product,
+    baseName,
+    pinned: true,
+    createdAt: 1,
+    updatedAt: 1,
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- test fixture executable
+    executables: { app: { kind: 'app', identifier, appVersion: [0, 0, 0], contenthash } as never },
+  });
 
-    const persisted = (baseName: string, identifier: string, contenthash: string): PersistedProduct => ({
-      ...product,
-      baseName,
-      pinned: true,
-      createdAt: 1,
-      updatedAt: 1,
-      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- test fixture executable
-      executables: { app: { kind: 'app', identifier, appVersion: [0, 0, 0], contenthash } as never },
+  it('re-persists the FROZEN version on a disk miss — never re-resolves chain', async () => {
+    window.App.hasArchive = vi.fn(async () => false); // bytes missing → needs re-persist
+
+    const p1 = pinnedRow('p1.dot', 'app.p1.dot', '0xfrozen');
+    vi.spyOn(productDb, 'getAll').mockReturnValue(okAsync([p1]));
+    const chainSpy = vi.spyOn(resolveProductUseCase, 'fetchProductFromChain');
+    const upsertSpy = vi.spyOn(productDb, 'upsert');
+    vi.spyOn(archiveGateway, 'fetchExecutable').mockResolvedValue({
+      contenthash: '0xfrozen',
+      archive: { domain: 'app.p1.dot', origin: 'polkadot://app.p1.dot', files: { 'index.html': new Uint8Array([1]) } },
     });
-    const p1 = persisted('p1.dot', 'app.p1.dot', '0xaa');
-    const p2 = persisted('p2.dot', 'app.p2.dot', '0xbb');
 
+    await offlineCacheUseCase.reconcilePinnedArchives();
+
+    // The pin is NOT advanced: no chain resolve, no row upsert.
+    expect(chainSpy).not.toHaveBeenCalled();
+    expect(upsertSpy).not.toHaveBeenCalled();
+    // The frozen bytes are re-persisted.
+    expect(window.App.persistArchive).toHaveBeenCalledTimes(1);
+    const rows = await executableCacheRepository.getByBaseName('p1.dot');
+    expect(rows[0]).toEqual(expect.objectContaining({ status: 'ready', contenthash: '0xfrozen' }));
+  });
+
+  it('a per-product failure does not abort re-persist of the remaining pinned products', async () => {
+    const p1 = pinnedRow('p1.dot', 'app.p1.dot', '0xaa');
+    const p2 = pinnedRow('p2.dot', 'app.p2.dot', '0xbb');
     vi.spyOn(productDb, 'getAll').mockReturnValue(okAsync([p1, p2]));
-    const upsertSpy = vi
-      .spyOn(productDb, 'upsert')
-      .mockImplementation(fresh => okAsync({ ...fresh, pinned: true, createdAt: 1, updatedAt: 2 }));
-    vi.spyOn(resolveProductUseCase, 'fetchProductFromChain').mockImplementation(async (baseName: string) => {
-      if (baseName === 'p1.dot') throw new Error('rpc down');
-      return p2;
+
+    // p1's presence probe rejects (IPC failure); p2's reports the bytes missing so it
+    // needs a re-persist. p1's rejection must not abort the loop before p2 is reached.
+    window.App.hasArchive = vi.fn(async (identifier: string) => {
+      if (identifier === 'app.p1.dot') throw new Error('ipc down');
+      return false;
     });
     vi.spyOn(archiveGateway, 'fetchExecutable').mockResolvedValue({
       contenthash: '0xbb',
@@ -122,11 +150,25 @@ describe('offlineCacheUseCase.reconcilePinnedArchives', () => {
 
     await offlineCacheUseCase.reconcilePinnedArchives();
 
-    // p1's rejection did not abort the loop; p2 was still re-pinned + prefetched.
-    expect(upsertSpy).toHaveBeenCalledTimes(1);
-    expect(window.App.persistArchive).toHaveBeenCalled();
+    // p1 threw, but p2 was still re-persisted from its frozen bytes.
+    expect(window.App.persistArchive).toHaveBeenCalledTimes(1);
     const rows = await executableCacheRepository.getByBaseName('p2.dot');
     expect(rows[0]).toEqual(expect.objectContaining({ status: 'ready', contenthash: '0xbb' }));
+  });
+
+  it('marks the kind failed (not advanced) when the frozen bytes are unfetchable', async () => {
+    window.App.hasArchive = vi.fn(async () => false);
+
+    const p1 = pinnedRow('p1.dot', 'app.p1.dot', '0xfrozen');
+    vi.spyOn(productDb, 'getAll').mockReturnValue(okAsync([p1]));
+    const upsertSpy = vi.spyOn(productDb, 'upsert');
+    vi.spyOn(archiveGateway, 'fetchExecutable').mockResolvedValue(null); // gone from IPFS
+
+    await offlineCacheUseCase.reconcilePinnedArchives();
+
+    expect(upsertSpy).not.toHaveBeenCalled();
+    const rows = await executableCacheRepository.getByBaseName('p1.dot');
+    expect(rows[0]).toEqual(expect.objectContaining({ status: 'failed', contenthash: '0xfrozen' }));
   });
 });
 

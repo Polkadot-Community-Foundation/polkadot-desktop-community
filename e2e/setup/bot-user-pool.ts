@@ -22,10 +22,11 @@ const BotUserPoolSchema = v.object({
 export type BotUserPool = v.InferOutput<typeof BotUserPoolSchema>;
 
 /**
- * Singleton roles — one user per role, reused across all tests in a project.
- * Projects using `botUsername` via `base.ts` look up by `project.name`.
+ * Singleton roles — one per-run user per role. Only `chat` remains: auth /
+ * authenticated / product-sdk moved to permanent deterministic identities
+ * (see helpers/bot-user.ts permanentBotUsername) that need no per-run pool.
  */
-export const POOL_ROLES = ['auth', 'authenticated', 'product-sdk', 'chat'] as const;
+export const POOL_ROLES = ['chat'] as const;
 export type PoolRole = (typeof POOL_ROLES)[number];
 
 /**
@@ -54,15 +55,18 @@ export async function removePool(): Promise<void> {
   await fs.rm(POOL_FILE, { force: true });
 }
 
-export function isPoolRole(value: string): value is PoolRole {
-  return POOL_ROLES.some(role => role === value);
-}
-
 /**
- * Typed singleton-user lookup. Returns `undefined` when the pool file is
- * missing (fallback path) or the role isn't in the pool.
+ * Per-worker identity lookup, keyed by `parallelIndex` so concurrent workers
+ * never share an on-chain identity. The role keeps a single pooled identity,
+ * handed only to worker 0; any further parallel worker gets `undefined` so
+ * the caller falls back to a freshly generated identity instead of colliding
+ * on the singleton.
+ *
+ * Returns `undefined` (→ caller generates a fresh identity) when the pool file
+ * is missing or the slot is unfilled.
  */
-export async function readPoolUser(role: PoolRole): Promise<string | undefined> {
+export async function readPoolUserForSlot(role: PoolRole, parallelIndex: number): Promise<string | undefined> {
   const pool = await readPool();
-  return pool?.users[role];
+  if (!pool) return undefined;
+  return parallelIndex === 0 ? pool.users[role] : undefined;
 }

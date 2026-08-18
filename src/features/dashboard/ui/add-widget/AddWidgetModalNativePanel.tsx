@@ -2,21 +2,29 @@ import { ScrollArea, toast } from '@novasamatech/tr-ui';
 import { useEffect, useMemo, useState } from 'react';
 
 import { useTranslation } from '@/shared/translation';
+import { cnTw } from '@/shared/utils';
 import { type DashboardCard, type WidgetSizeIconVariant, dashboardLayoutService } from '@/domains/application';
 import { ProductDialogHeader } from '@/widgets/ProductDialogHeader';
 import { WIDGET_SIZE_CONFIG } from '../../constants';
 import { type AddableDashboardCard } from '../../di';
 
-import { findNativeDashboardPlacement } from './addWidgetList';
 import { useWidgetAddedToast } from './useWidgetAddedToast';
 import { type WidgetCardDefinition } from './widgetModalConstants';
-import { AddWidgetModalCard } from './widgetModalParts';
+import { AddWidgetFavoritesButton, AddWidgetModalCard } from './widgetModalParts';
+
+export type AddWidgetModalNativePanelFavorites = {
+  ids: ReadonlySet<string>;
+  onAdd: (entry: AddableDashboardCard) => Promise<{ ok: boolean; pageIndex?: number }>;
+};
 
 export type AddWidgetModalNativePanelProps = {
   entry: AddableDashboardCard;
   dashboardPages: DashboardCard[][];
   onAddNativeCard: (entry: AddableDashboardCard, size: { w: number; h: number }) => Promise<{ ok: boolean; pageIndex?: number }>;
   onNavigateToDashboardPage: (pageIndex: number) => void;
+  // When set and `entry.supportsFavorites`, renders the 1×1 "Add to Favorites"
+  // button. Both the Add Widget catalog modal and the AtD dialog pass this.
+  favorites?: AddWidgetModalNativePanelFavorites;
 };
 
 export const AddWidgetModalNativePanel = ({
@@ -24,11 +32,18 @@ export const AddWidgetModalNativePanel = ({
   dashboardPages,
   onAddNativeCard,
   onNavigateToDashboardPage,
+  favorites,
 }: AddWidgetModalNativePanelProps) => {
   const { t } = useTranslation();
   const [selectedVariants, setSelectedVariants] = useState<Record<string, WidgetSizeIconVariant>>({});
 
-  const dashboardPlacement = useMemo(() => findNativeDashboardPlacement(dashboardPages, entry), [dashboardPages, entry]);
+  // Detect the placed WIDGET card by its own grid id (`widgetGridId`, distinct
+  // from the favourite/identity `gridId` for coexistence entries like chat).
+  const widgetGridId = entry.widgetGridId ?? entry.gridId;
+  const dashboardPlacement = useMemo(
+    () => dashboardLayoutService.findCardPlacementById(dashboardPages, widgetGridId),
+    [dashboardPages, widgetGridId],
+  );
 
   const isWidgetAlreadyOnDashboard = dashboardPlacement !== null;
 
@@ -55,6 +70,24 @@ export const AddWidgetModalNativePanel = ({
   }, [dashboardPlacement, widgetCards]);
 
   const showSuccessToastWithView = useWidgetAddedToast(onNavigateToDashboardPage);
+
+  const showFavorites = entry.supportsFavorites === true && favorites !== undefined;
+  const isInFavorites = favorites?.ids.has(entry.gridId) ?? false;
+
+  const handleAddToFavorites = async () => {
+    if (isInFavorites) return;
+
+    const outcome = await favorites!.onAdd(entry);
+    if (!outcome.ok) {
+      toast.error(t('feature.dashboard.addWidget.toast.favoritesAddFailed'));
+      return;
+    }
+
+    showSuccessToastWithView(
+      t('feature.dashboard.addWidget.toast.addedToFavorites', { productName: t(entry.displayNameKey) }),
+      outcome.pageIndex,
+    );
+  };
 
   const handleOpenWidget = () => {
     if (!dashboardPlacement) return;
@@ -91,7 +124,13 @@ export const AddWidgetModalNativePanel = ({
         icon={entry.icon}
       />
 
-      <div className="min-h-0 flex-1 overflow-hidden pt-8">
+      {showFavorites && (
+        <div className="flex shrink-0 justify-start pt-8 pb-4">
+          <AddWidgetFavoritesButton isInFavorites={isInFavorites} onAdd={handleAddToFavorites} />
+        </div>
+      )}
+
+      <div className={cnTw('min-h-0 flex-1 overflow-hidden', showFavorites ? 'pt-4' : 'pt-8')}>
         <ScrollArea>
           <div className="flex flex-col gap-4">
             {widgetCards.map(card => {

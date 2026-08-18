@@ -19,10 +19,10 @@ const isBotPairingInfo = (value: unknown): value is BotPairingInfo => {
   }
 
   return (
-    typeof value.clientId === 'string' &&
-    typeof value.sessionId === 'string' &&
-    typeof value.botUrl === 'string' &&
-    (value.botToken === undefined || typeof value.botToken === 'string')
+    typeof value['clientId'] === 'string' &&
+    typeof value['sessionId'] === 'string' &&
+    typeof value['botUrl'] === 'string' &&
+    (value['botToken'] === undefined || typeof value['botToken'] === 'string')
   );
 };
 
@@ -40,10 +40,26 @@ export async function clearAppData(page: Page): Promise<void> {
   // already runs in a fresh userDataDir so storage is clean; the evaluate is
   // best-effort defense against stale in-memory state on re-runs.
   await page.evaluate(() => {
-    try { localStorage.clear(); } catch { /* opaque origin — fresh userDataDir covers this */ }
-    try { sessionStorage.clear(); } catch { /* opaque origin */ }
-    try { indexedDB.deleteDatabase('polkadot-desktop'); } catch { /* opaque origin */ }
-    try { indexedDB.deleteDatabase('polkadot-desktop-product-storage'); } catch { /* opaque origin */ }
+    try {
+      localStorage.clear();
+    } catch {
+      /* opaque origin — fresh userDataDir covers this */
+    }
+    try {
+      sessionStorage.clear();
+    } catch {
+      /* opaque origin */
+    }
+    try {
+      indexedDB.deleteDatabase('polkadot-desktop');
+    } catch {
+      /* opaque origin */
+    }
+    try {
+      indexedDB.deleteDatabase('polkadot-desktop-product-storage');
+    } catch {
+      /* opaque origin */
+    }
   });
 
   // Reload so the app starts fresh with empty state
@@ -52,11 +68,24 @@ export async function clearAppData(page: Page): Promise<void> {
 
 /**
  * Disconnect bot sessions for the current pairing.
- * Reads clientId from window.__botPairingInfo (set by pairViaBotApi),
- * then calls the bot's disconnect endpoint from Node.js.
+ * Reads clientId from window.__botPairingInfo (set by pairViaBotApi), falling
+ * back to its localStorage mirror — the window property does not survive the
+ * page.reload() the soft-reset and chat-state reset perform — then calls the
+ * bot's disconnect endpoint from Node.js.
  */
 export async function disconnectBotSession(page: Page): Promise<void> {
-  const rawInfo = await page.evaluate(() => Reflect.get(window, '__botPairingInfo')).catch(() => null);
+  const rawInfo = await page
+    .evaluate(() => {
+      const fromWindow = Reflect.get(window, '__botPairingInfo');
+      if (fromWindow) return fromWindow;
+      try {
+        const stored = localStorage.getItem('__botPairingInfo');
+        return stored ? JSON.parse(stored) : null;
+      } catch {
+        return null;
+      }
+    })
+    .catch(() => null);
   const info = isBotPairingInfo(rawInfo) ? rawInfo : null;
   if (!info?.clientId) {
     console.info('[CLEANUP] No bot pairing info found — skipping disconnect');

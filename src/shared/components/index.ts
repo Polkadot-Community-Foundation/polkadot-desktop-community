@@ -1,6 +1,7 @@
 export { BlurhashCanvas } from './BlurhashCanvas/BlurhashCanvas';
 export { Box } from './Box/Box';
 export { ConfirmationProvider, useConfirmation } from './Confirmation/Confirmation';
+export { DismissOverlay } from './DismissOverlay/DismissOverlay';
 export {
   DASHBOARD_GRID_SNAP_Y_STEP,
   DashboardGrid,
@@ -28,6 +29,7 @@ export { LoadingScreen } from './LoadingScreen/LoadingScreen';
 export { ProductLoadingScreen } from './ProductLoadingScreen/ProductLoadingScreen';
 export { Spinner } from './Spinner/Spinner';
 export { WidgetLoadingScreen } from './WidgetLoadingScreen/WidgetLoadingScreen';
+export { WidgetPlaceholder } from './WidgetPlaceholder/WidgetPlaceholder';
 export { TabChip, tabIconClassName } from './TabChip/TabChip';
 export { TabHoverTitle } from './TabHoverTitle/TabHoverTitle';
 export { WebSplashScreen } from './WebSplashScreen/WebSplashScreen';

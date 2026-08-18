@@ -46,28 +46,42 @@ Polkadot Desktop is an Electron app with three build targets:
 
 The static dependency rules — what each artifact may import and who may import it. For the runtime traces that show these artifacts interacting in sequence, see [architecture.md](./architecture.md); for deciding which artifact a given piece of code _is_, see [code-placement.md](./code-placement.md).
 
-| Artifact                           | Role                                           | Imports allowed                                           | Imported by                                               |
-| ---------------------------------- | ---------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------- |
-| `gateway.ts`                       | leaf — wire I/O                                | schemas, shared utils                                     | resources, use cases (own domain only via public surface) |
-| `repository.ts`                    | leaf — persistence                             | `@/shared/dexie`, types                                   | resources (own domain only)                               |
-| `schemas.ts`                       | leaf — boundary validation                     | `valibot` / scale codecs                                  | gateways, resources, use cases                            |
-| `service.ts`                       | leaf — pure helpers                            | types only                                                | anywhere, including features                              |
-| `resource.ts`                      | composes gateway + repository                  | gateway, repository, service (+ a multi-source use case, only to cache its read — see below) | hooks, use cases                                          |
-| `$usecase/*.ts`                    | composes ≥2 resources/repos/gateways/use-cases | everything in the domain + other domains' public surfaces | hooks, other use cases                                    |
-| `hooks.ts` / `$usecase/*.hooks.ts` | React binding via `useRead` / `useAction`      | resources, use cases, services                            | features, widgets, aggregate hooks                        |
-| aggregate `state/`                 | RxJS state                                     | `@/shared/rxstate`                                        | aggregate use cases, aggregate hooks                      |
-| aggregate `*UseCase.ts`            | composes domain surfaces + own state           | domain public surfaces, own state                         | aggregate hooks                                           |
-| feature UI / hooks                 | calls domain + aggregate hooks                 | domain + aggregate public surfaces, DI primitives         | route, other features only via DI                         |
+| Artifact                           | Role                                      | Imports allowed                                                               | Imported by                                               |
+| ---------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `gateway.ts`                       | leaf — wire I/O                           | schemas, shared utils                                                         | resources, use cases (own domain only via public surface) |
+| `repository.ts`                    | leaf — persistence                        | `@/shared/dexie`, types                                                       | resources (own domain only)                               |
+| `schemas.ts`                       | leaf — boundary validation                | `valibot` / scale codecs                                                      | gateways, resources, use cases                            |
+| `service.ts`                       | leaf — pure helpers                       | types only                                                                    | anywhere, including features                              |
+| `resource.ts`                      | the data layer — one read or write        | gateway, repository, service — **never a resource or a use case** (see below) | hooks, use cases                                          |
+| `$usecase/*.ts`                    | composes ≥2 resources                     | everything in the domain + other domains' public surfaces                     | hooks, other use cases                                    |
+| `hooks.ts` / `$usecase/*.hooks.ts` | React binding via `useRead` / `useAction` | resources, use cases, services                                                | features, widgets, aggregate hooks                        |
+| aggregate `state/`                 | RxJS state                                | `@/shared/rxstate`                                                            | aggregate use cases, aggregate hooks                      |
+| aggregate `*UseCase.ts`            | composes domain surfaces + own state      | domain public surfaces, own state                                             | aggregate hooks                                           |
+| feature UI / hooks                 | calls domain + aggregate hooks            | domain + aggregate public surfaces, DI primitives                             | route, other features only via DI                         |
 
 If a piece of code crosses two rows of this table (e.g. a resource that talks to another domain's resource, or a feature that
 imports a repository), it is in the wrong file.
 
-**The one carve-out — a resource over a use case.** A `resource.ts` may import a use case in exactly one case: to add a cache /
-subscription lifecycle over a read that is _genuinely multi-source_ (the use case composes ≥2 sources, e.g. DB + chain). The
-resource adds nothing but caching; all orchestration stays in the use case. This is the permitted direction in
-[anti-pattern #2](#anti-patterns) — not the inverted shape it forbids. It does **not** license a resource to call a single-source
-use case (inline the source instead), nor a write/mutation that composes a use case to live in `resource.ts` (that write is itself
-a use case by the [cut rules](./code-placement.md#cut-rules) and belongs in `$usecase/`).
+**A resource reads leaves and parameters — nothing else.** Its sources are `gateway.ts` and `repository.ts`; its `service.ts`
+helpers are pure. It never reads another resource, and it never calls a use case (not directly, and not through another domain's
+barrel — re-exporting a use case does not make it a legal dependency of a resource). Use cases sit **above** the data layer and
+the arrow never points back.
+
+_Why:_ a resource is a cache with a key, and the key must describe everything that can change the value. A gateway call is safe
+to hide inside it — one wire call, no cache, no identity of its own. Another resource or a use case is not: it carries sources
+that can change without this resource's key changing, so the entry goes stale invisibly. It also makes the dependency graph
+two-way (`$usecase → resource → $usecase`), which is what the `local-rules/enforce-import-restrictions` ESLint rule blocks as an
+`error`.
+
+**When a resource needs a value it may not fetch itself** — the active environment, a session token, anything produced by
+another resource — that value is a **parameter**, supplied by the use case (or the `$usecase/*.hooks.ts` binding) that read it.
+The parameter joins the cache key, so the entry stays honest. This is the sanctioned shape, not a workaround.
+
+_Exception — a parameter the key already subsumes._ A parameter stays out of the key when it cannot change the value the key
+identifies. The clear case is a **content-addressed** read: a key containing a contenthash already names the bytes exactly, so
+which gateway URL fetched them is not part of the entry's identity, and adding it would only refetch byte-identical content on
+every environment change. The test is strict — if two different parameter values could ever produce two different values under
+one key, it belongs in the key.
 
 ---
 
@@ -163,11 +177,15 @@ function isChainAccount(account: AnyAccount) {
 export const accountService = { isChainAccount /* ... */ };
 ```
 
-**`resource.ts`** — cached/streamed reads built with `createQueryResource` / `createStreamResource` from `@/shared/resource`.
-Caching, retries, and subscription lifecycle live here.
+**`resource.ts`** — **the domain's data layer.** Cached/streamed reads built with `createQueryResource` /
+`createStreamResource` from `@/shared/resource`. Caching, retries, and subscription lifecycle live here.
 
 - Multiple resources per file are fine. Features reach them only through `hooks.ts`.
-- Persistence calls `repository.ts`. External I/O calls `gateway.ts`.
+- Persistence calls `repository.ts`. External I/O calls `gateway.ts`. A single resource may call several of them and merge the
+  results into one domain entity — that is still data access, not composition.
+- Everything a resource needs that it may not fetch itself arrives as a **parameter** (see the rule above).
+- Retry/fallback chains (try disk, then the network) belong here, not in a use case: choosing where a value comes from is data
+  access, not a business decision.
 - Mutations are plain Observable-returning (or async) functions exported here or from `$usecase/`. Consumed via `useAction`. No
   primitive wrapper.
 
@@ -209,7 +227,9 @@ object.
   React, UI, or Electron/IPC types.
 - **Return**: `Promise<T>` for atomic completion, `Observable<T>` for multi-stage status or live-updating reads, raw value for
   synchronous (rare).
-- **Composition**: may call other use cases, services, resources, repositories, gateways.
+- **Composition**: may call other use cases, services, resources, and — for work that needs no cache (a one-off write, a
+  fire-and-forget wire call) — repositories and gateways directly. Reaching a leaf to reproduce a read a resource already owns is
+  the exception: that duplicates the source and strands the cache.
 - **Invariants**: a use case is the **enforcement chokepoint** for the domain's business invariants — the rules that must hold
   for the entity to be valid (e.g. "a product is on the dashboard at most once", "a transfer amount ≤ spendable balance"). Check
   the invariant here, before the write, and reject the operation if it would break (throw / return an error result). Enforce each
@@ -245,8 +265,9 @@ export const installationUseCase = {
 
 **`bootstrap.ts`** _(optional, at the domain root only)_ — wires the domain to the host environment: registering IPC request
 handlers, bridging native event subscriptions into the domain. Exports `bootstrap<Action>` functions (`bootstrapProduct`); the
-domain-root file composes per-module bootstraps (`bootstrapPermissions`) and is the canonical entry point, re-exported from the
-domain `index.ts`.
+domain-root file is the **single** bootstrap location and the canonical entry point, re-exported from the domain `index.ts`. It may
+organize its wiring into per-module functions (`bootstrapPermissions`, `bootstrapProduct`), but those functions live **inside this
+root file** — a sub-module must not carry its own `bootstrap.ts` (the PreToolUse hook and the architecture checklist enforce this).
 
 - **Called once from the app `bootstrap.ts`** — never at module-import time, so host wiring and its load order stay explicit (no
   hidden side effects on import).
@@ -349,6 +370,7 @@ Links domain logic to the user — one or several tightly coupled user flows + t
     ├── feature.tsx   feature definition and slot injections
     ├── ui/           UI components
     ├── hooks/        feature-specific orchestration hooks
+    ├── service.ts    stateless sync helpers (same contract as a domain service.ts)
     ├── state/        feature-local state (never exported)
     ├── di.{ts,tsx}   DI identifiers
     ├── types.ts      feature-shared types
@@ -375,8 +397,16 @@ dashboardFeature.inject(topBarLeftSlot, { order: 0, render: () => <HomeButton />
 **`ui/`** — React components. Read via domain/aggregate hooks; dispatch via feature state, use cases, or aggregate hooks.
 Domain/aggregate services may be imported directly. No resource definitions.
 
-**`hooks/`** — feature-specific orchestration. Hooks that merely wrap a domain resource belong in the domain. One-component hooks
-should be inlined.
+**`hooks/`** — feature-specific orchestration, **React hooks only**. Hooks that merely wrap a domain resource belong in the domain.
+One-component hooks should be inlined. A **pure, non-React helper** (formatter, predicate, derivation) is not a hook — it never
+belongs in this folder or inline in a hook file; it goes in the feature's `service.ts`.
+
+**`service.ts`** — feature-root stateless synchronous helpers, **same contract as a domain `service.ts`** (§ Domain `service.ts`):
+a single `${featureName}Service` object of predicates, formatters, and derivations over already-loaded entities. No I/O, no React,
+no imports of resources / hooks / state. May import domain **types** and domain `service.ts` helpers. Not re-exported from the
+feature `index.ts` (features never export services). **Check the domain first** (§ Placement, "check the domain before the
+feature"): a derivation over domain entities that another layer could reuse belongs in that domain's `service.ts` — keep here only
+what is genuinely feature-local presentation/composition.
 
 **`state/`** — feature-local RxJS state coordinating the UI. Never exported. Don't persist here — if it must survive reloads, it's
 a domain resource.
@@ -453,7 +483,8 @@ is one library with a single `index.ts` public surface. Consumers import from `@
 - `@/shared/hooks` — generic React hooks (`useRead`, `useAction`, plus DOM/intersection/etc. helpers).
 - `@/shared/components` — presentational components.
 - `@/shared/resource` — `createQueryResource` / `createStreamResource` primitives consumed by domain `resource.ts`.
-- `@/shared/rxstate` — `createState`, `createEvent`, `combine`, `persistLocalStorage` consumed by domain/aggregate `state/`.
+- `@/shared/rxstate` — `createState`, `createEvent`, `combine`, `persistLocalStorage` consumed by aggregate `state/` (and, for
+  persistence only, a domain `repository.ts` via `persistLocalStorage` — a domain has no `state/`).
 - `@/shared/di` — slot/pipeline/SDK primitives consumed by `feature.tsx`.
 - `@/shared/translation` — i18n setup and `useTranslation`.
 - `@/shared/dexie` — IndexedDB wrapper consumed by domain `repository.ts`.
@@ -462,6 +493,9 @@ is one library with a single `index.ts` public surface. Consumers import from `@
   `production` mode, so `import.meta.env.MODE` alone cannot tell the two apart).
 - `@/shared/logger` — `silenceDebugConsole`, the app-level switch that mutes `console.debug` in production builds
   (called once from `src/index.tsx`).
+- `@/shared/statement-store` — `signAndSubmitStatement`, the domain-agnostic app-policy submit-with-retry wrapper over the
+  `@novasamatech/statement-store` library (adapter injected). Shared so gateways/resources/use cases may all consume it without a
+  gateway→use-case inversion.
 
 ---
 
@@ -472,10 +506,10 @@ Codebase-wide rules. The cut rules above say where things belong; this section s
 1. **Single-line passthrough use case** — a `${name}UseCase` whose only method calls one resource. Inline at the caller; the
    wrapper buys nothing.
 
-2. **Resource wrapping a single-source use case** — use cases compose resources; the reverse is allowed _only_ when the use case
-   genuinely orchestrates multiple sources and the resource adds nothing but caching (the carve-out under
-   [the artifact table](#where-each-artifact-sits)). Wrapping a single-source use case in a resource buys nothing —
-   inline the source.
+2. **A resource reading another resource, or a use case** — the data layer is flat: a resource composes leaves and parameters
+   only. Neither direction of reasoning exempts it (not "it only adds caching", not a barrel re-export). Whatever the resource
+   was reaching for arrives as a **parameter** instead, supplied by the use case that read it — see
+   [the artifact table](#where-each-artifact-sits).
 
 3. **Inline `useRead(resource, {...})` at a feature callsite** — features call named domain hooks (`useProducts`,
    `useProductById`). The `useRead` indirection lives in the domain's `hooks.ts`.
@@ -492,3 +526,5 @@ Codebase-wide rules. The cut rules above say where things belong; this section s
 7. **Mutation primitive wrapper** — there is no `createMutation`. Writes are plain functions; React binding is `useAction(fn)`.
 
 8. **`hooks.ts` reaching into `repository.ts` / `gateway.ts`** — hooks bind to resources, use cases, and services only. A repository or gateway is consumed solely by a `resource.ts` (or a use case). A hook that needs persisted or wire data reads it through a resource — never the storage/wire leaf directly.
+
+9. **UI presentation vocabulary inside a domain** — a domain (service / resource / types) must not encode how a value is _presented_: no UI-widget names (`banner`, `badge`, `toast`), no visibility decision (`null`/absent meaning "hide"), no copy/icon mapping. The domain exposes a **semantic** state (e.g. `'syncing' | 'synced' | 'stale' | 'error' | 'inactive'`); the consuming feature maps that to icon / copy / visibility. _Why:_ presentation is the feature's job — baking it into the domain couples the business core to one UI and forces a synonym ("banner state") where a domain concept ("sync status") belongs. A `service.ts` predicate may express a domain condition, but the word for the rendered thing lives in the feature.

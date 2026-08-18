@@ -1,12 +1,9 @@
-> [!WARNING]
-> The following is a prototype, reference implementation, and proof-of-concept. This open source code is provided for research, experimentation, and developer education only. This code has not been audited, is actively experimental, and may contain bugs, vulnerabilities, or incomplete features. Use at your own risk.
-
 <div align="center">
   <img src="src/shared/assets/images/logo.svg" alt="Polkadot Desktop logo" width="120">
 
 # Polkadot Desktop
 
-*A desktop browser for Polkadot applications. Open any app by its on-chain name, run it in a sandbox you control, and sign with your phone — no web servers in the loop.*
+_A desktop browser for Polkadot applications. Open any app by its on-chain name, run it in a sandbox you control, and sign with your phone — no web servers in the loop._
 
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue?style=flat-square)](./LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-black?style=flat-square)](#getting-started)
@@ -33,7 +30,7 @@
 <details>
 <summary>Prerequisites</summary>
 
-- **Node.js** v20+
+- **Node.js** v24+
 - **npm** v10+
 
 </details>
@@ -53,7 +50,7 @@ npm start
 npm run start:web
 ```
 
-Copy [`.env.example`](./.env.example) to `.env` and fill in your Firebase Remote Config identifiers — the chain catalog is served from Remote Config, so the app needs them to connect to networks. Optional features whose configuration is empty (crash reporting, auto-update, TURN relay) stay disabled. Every variable is documented in [`.env.example`](./.env.example) and [docs/PUBLISHING.md](./docs/PUBLISHING.md).
+Copy [`.env.example`](./.env.example) to `.env.local` and fill in your Firebase Remote Config identifiers (`VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`) and the `VITE_ENVIRONMENTS` channel catalog — the chain catalog is served from Remote Config, so **the app needs them to connect to networks and will fail to boot without them** (`[network] Remote Config "chains_v2" unavailable`). Optional features whose configuration is empty (crash reporting, auto-update, TURN relay) stay disabled. Every variable is documented in [`.env.example`](./.env.example) and [docs/PUBLISHING.md](./docs/PUBLISHING.md).
 
 The app talks to Polkadot system chains (People Chain, Asset Hub, Bulletin Chain), and development builds are exercised against Polkadot's [Paseo](https://wiki.polkadot.network/docs/learn-paseo) testnet contour.
 
@@ -84,7 +81,6 @@ Polkadot Desktop is a browser for a web that lives on-chain: apps are published 
 
 - It does **not** hold your keys or your money — signing authority stays on your paired phone. There is no custodian, and nobody can move your account from the desktop.
 - It does **not** route your data through company servers — names resolve on-chain, content comes from the Bulletin Chain / IPFS, and messages travel through the public chain. At present the preferred method for retrieving chain data is RPC, with light-client access supported.
-- It is **not** a production-hardened product — treat it as a reference implementation (see the warning at the top).
 
 ### Under the hood
 
@@ -94,30 +90,35 @@ An Electron app with three build targets — `main` (Node.js), `preload` (bridge
 
 ### Environments
 
-| Build | Command | Chains config | Debug tools | Error handling |
-|-------|---------|---------------|-------------|----------------|
-| Development | `npm run build:dev` | testnet catalog | on | off (fail loud) |
-| Staging | `npm run build:staging` | production catalog | on | graceful |
-| Production | `npm run build` | production catalog | off | graceful |
+| Build       | Command                 | Chains config      | Debug tools | Error handling  |
+| ----------- | ----------------------- | ------------------ | ----------- | --------------- |
+| Development | `npm run build:dev`     | testnet catalog    | on          | off (fail loud) |
+| Staging     | `npm run build:staging` | production catalog | on          | graceful        |
+| Production  | `npm run build`         | production catalog | off         | graceful        |
 
 ### Localisation
 
 Localisation files live in `src/locales/`. ESLint validates that the JSON is well-formed, every locale has the same keys and placeholders, and all `tsx` files are translated. When a string must stay untranslated, disable the rule explicitly:
 
 ```tsx
-{/* eslint-disable-next-line i18next/no-literal-string */}
-{data?.asset.symbol}
+<span className="font-bold">
+  {/* eslint-disable-next-line i18next/no-literal-string */}
+  {data?.asset.symbol} ({data?.asset.name})
+</span>
 ```
 
 ### Troubleshooting
 
 Logs are collected in `polkadot-desktop.log`:
 
-| OS | Path |
-|----|------|
-| macOS | `~/Library/Logs/polkadot-desktop/polkadot-desktop.log` |
+| OS      | Path                                                                       |
+| ------- | -------------------------------------------------------------------------- |
+| macOS   | `~/Library/Logs/polkadot-desktop/polkadot-desktop.log`                     |
 | Windows | `%USERPROFILE%\AppData\Roaming\polkadot-desktop\logs\polkadot-desktop.log` |
-| Linux | `~/.config/polkadot-desktop/logs/polkadot-desktop.log` |
+| Linux   | `~/.config/polkadot-desktop/logs/polkadot-desktop.log`                     |
+
+A develop build keeps its own profile, so substitute `polkadot-desktop-develop` for the directory
+name above.
 
 Attach the log file when reporting a problem — it speeds up the fix.
 
@@ -126,16 +127,6 @@ Attach the log file when reporting a problem — it speeds up the fix.
 Issues and pull requests are welcome. Read [CONTRIBUTING.md](./CONTRIBUTING.md) before you start. Use GitHub issues for feedback and bug reports.
 
 ## Security
-
-This is a prototype, reference implementation, and proof-of-concept provided for research,
-experimentation, and developer education only. It has not been audited — use at your own risk.
-
-Before deploying this for real use cases, you are responsible for:
-
-- Reviewing the code yourself — we publish a reference, not a hardened production build.
-- Checking that the dependencies are up to date and free of known vulnerabilities.
-- Securing your own fork or deployment environment (keys, secrets, network configuration).
-- Tracking the latest commits for security fixes; older revisions are not backported.
 
 Report vulnerabilities responsibly following [Parity's security policy](https://github.com/paritytech/.github/blob/main/SECURITY.md) — do not open public issues for security reports. For Parity's disclosure process and Bug Bounty programme, see [parity.io/bug-bounty](https://parity.io/bug-bounty).
 

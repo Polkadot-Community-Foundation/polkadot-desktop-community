@@ -31,7 +31,7 @@ describe('buildIceConfig', () => {
   });
 
   it('derives TURN REST credentials from the shared secret', () => {
-    const config = buildIceConfig({ turnHost: 'turn.example.com:3478', turnSecret: SECRET });
+    const config = buildIceConfig({ turnHost: 'turn.example.com', turnSecret: SECRET });
     const turnServer = turnServerOf(config);
 
     const expectedUsername = String(Math.floor(NOW_MS / 1000) + TTL_SECONDS);
@@ -41,7 +41,7 @@ describe('buildIceConfig', () => {
 
   it('honours a custom credential lifetime', () => {
     const ttl = 3_600;
-    const config = buildIceConfig({ turnHost: 'turn.example.com:3478', turnSecret: SECRET, turnTtlSeconds: ttl });
+    const config = buildIceConfig({ turnHost: 'turn.example.com', turnSecret: SECRET, turnTtlSeconds: ttl });
     const turnServer = turnServerOf(config);
 
     const expectedUsername = String(Math.floor(NOW_MS / 1000) + ttl);
@@ -51,21 +51,22 @@ describe('buildIceConfig', () => {
 
   it('omits the TURN server when host or secret is missing', () => {
     expect(turnServerOf(buildIceConfig({}))).toBeUndefined();
-    expect(turnServerOf(buildIceConfig({ turnHost: 'turn.example.com:3478' }))).toBeUndefined();
+    expect(turnServerOf(buildIceConfig({ turnHost: 'turn.example.com' }))).toBeUndefined();
     expect(turnServerOf(buildIceConfig({ turnSecret: SECRET }))).toBeUndefined();
   });
 
-  it('does not double-prefix `turn:` when the host already includes the scheme', () => {
-    const config = buildIceConfig({ turnHost: 'turn:relay.example.com:3478', turnSecret: SECRET });
+  it('emits UDP, TCP, and TLS transports under a single credential', () => {
+    const config = buildIceConfig({ turnHost: 'turn.example.com', turnSecret: SECRET });
     const turnServer = turnServerOf(config);
     const urls = Array.isArray(turnServer?.urls) ? turnServer.urls : [turnServer?.urls];
-    expect(urls).toEqual(['turn:relay.example.com:3478']);
-  });
-
-  it('accepts a `turns:` (TURN over TLS) scheme verbatim', () => {
-    const config = buildIceConfig({ turnHost: 'turns:relay.example.com:5349', turnSecret: SECRET });
-    const turnServer = turnServerOf(config);
-    const urls = Array.isArray(turnServer?.urls) ? turnServer.urls : [turnServer?.urls];
-    expect(urls).toEqual(['turns:relay.example.com:5349']);
+    expect(urls).toEqual([
+      'turn:turn.example.com:3478?transport=udp',
+      'turn:turn.example.com:3478?transport=tcp',
+      'turns:turn.example.com:5349',
+    ]);
+    // One entry, so the derived credential applies to every transport.
+    const expectedUsername = String(Math.floor(NOW_MS / 1000) + TTL_SECONDS);
+    expect(turnServer?.username).toBe(expectedUsername);
+    expect(turnServer?.credential).toBe(EXPECTED_CREDENTIALS);
   });
 });

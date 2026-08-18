@@ -1,8 +1,19 @@
-import { ArrowUp } from 'lucide-react';
-import { type ChangeEvent, type KeyboardEvent, type Ref, useCallback, useEffect, useRef, useState, useTransition } from 'react';
+import { ArrowUp, X } from 'lucide-react';
+import {
+  type ChangeEvent,
+  type KeyboardEvent,
+  type Ref,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useTransition,
+} from 'react';
 
 import { TEST_IDS } from '@/shared/test-ids';
 import { useTranslation } from '@/shared/translation';
+import { cnTw } from '@/shared/utils';
 
 import { type SelectedAttachment, AttachmentPreview } from './AttachmentPreview';
 
@@ -28,15 +39,26 @@ const MAX_LINES = 5;
 //     img.src = url;
 //   });
 
+// Reply/edit context card above the textarea (Figma "_Edit or Reply Message").
+type ComposerPreview = {
+  testId?: string;
+  title: string;
+  text: string;
+  onClose: () => void;
+};
+
 type Props = {
   ref?: Ref<HTMLTextAreaElement>;
   initialText?: string;
+  preview?: ComposerPreview;
+  // Blocks typing and sending while an outgoing chat request is still pending acceptance.
+  disabled?: boolean;
   submitAction(message: string, attachments?: SelectedAttachment[]): Promise<void>;
 };
 
 const MAX_HEIGHT = LINE_HEIGHT * MAX_LINES;
 
-export const MessageInput = ({ ref, initialText, submitAction }: Props) => {
+export const MessageInput = ({ ref, initialText, preview, disabled = false, submitAction }: Props) => {
   const { t } = useTranslation();
   const [pending, startTransition] = useTransition();
   const [text, setText] = useState('');
@@ -66,10 +88,15 @@ export const MessageInput = ({ ref, initialText, submitAction }: Props) => {
 
   useEffect(() => {
     setText(initialText ?? '');
-    if (textareaRef.current) autoSizeTo(textareaRef.current);
   }, [initialText]);
 
-  const canSend = (text.trim().length > 0 || attachments.length > 0) && !pending;
+  // Re-size on `text` (not just typing) to track programmatic changes (send clears, edit seeds);
+  // layout effect reads `scrollHeight` post-commit but pre-paint, so the height never flickers.
+  useLayoutEffect(() => {
+    if (textareaRef.current) autoSizeTo(textareaRef.current);
+  }, [text]);
+
+  const canSend = !disabled && (text.trim().length > 0 || attachments.length > 0) && !pending;
 
   const send = () => {
     if (!canSend) return;
@@ -84,7 +111,6 @@ export const MessageInput = ({ ref, initialText, submitAction }: Props) => {
       }
       setText('');
       setAttachments([]);
-      if (textareaRef.current) autoSizeTo(textareaRef.current);
     });
   };
 
@@ -96,7 +122,6 @@ export const MessageInput = ({ ref, initialText, submitAction }: Props) => {
   };
 
   const handleChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
-    autoSizeTo(e.target);
     setText(e.target.value);
   };
 
@@ -153,30 +178,61 @@ export const MessageInput = ({ ref, initialText, submitAction }: Props) => {
         </button>
         <input ref={fileInputRef} type="file" multiple accept={ACCEPTED_TYPES} className="hidden" onChange={handleFileSelect} />
         */}
-        <div className="flex min-h-12 min-w-0 flex-1 items-center gap-2 rounded-3xl bg-bg-action-secondary py-2 pr-2 pl-4">
-          <textarea
-            ref={setRef}
-            data-testid={TEST_IDS.chatMessageInput}
-            data-no-app-focus
-            rows={1}
-            value={text}
-            className="block min-w-0 flex-1 resize-none overflow-y-hidden bg-transparent text-base leading-5 text-fg-primary outline-none placeholder:text-fg-tertiary"
-            style={{ maxHeight: MAX_HEIGHT }}
-            placeholder={t('common.action.writeMessage')}
-            onChange={handleChange}
-            onKeyDown={handleKeyDown}
-          />
-          {canSend && (
-            <button
-              data-testid={TEST_IDS.chatSendButton}
-              // eslint-disable-next-line formatjs/no-literal-string-in-jsx -- aria-label retained for e2e selector
-              aria-label="Send"
-              className="flex size-8 shrink-0 items-center justify-center rounded-full bg-bg-action-primary transition-colors hover:bg-bg-action-primary-hover"
-              onClick={() => send()}
-            >
-              <ArrowUp className="size-5 text-fg-primary-inverted" />
-            </button>
+        <div
+          className={cnTw(
+            'flex min-w-0 flex-1 flex-col bg-bg-action-secondary',
+            // Top corners tighten while a reply/edit card is stacked above the textarea.
+            preview ? 'rounded-t-2xl rounded-b-3xl' : 'rounded-3xl',
+            disabled && 'opacity-60',
           )}
+        >
+          {preview && (
+            <div data-testid={preview.testId} className="px-1 pt-1">
+              <div className="flex items-start overflow-hidden rounded-xl bg-bg-surface-container">
+                <div className="flex min-w-0 flex-1 flex-col justify-center border-s-4 border-stroke-tertiary px-3 py-2">
+                  <p className="truncate text-xs leading-4 font-semibold text-fg-primary">{preview.title}</p>
+                  <p className="line-clamp-3 text-xs leading-4 font-medium text-fg-primary">{preview.text}</p>
+                </div>
+                <div className="flex items-center pe-0.5 pt-0.5">
+                  <button
+                    className="flex size-6 items-center justify-center rounded-full text-fg-secondary transition-colors hover:bg-bg-selection-container-hover"
+                    onClick={preview.onClose}
+                  >
+                    <X className="size-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          <div className="flex min-h-12 items-center gap-2 py-2 ps-4 pe-2">
+            <textarea
+              ref={setRef}
+              data-testid={TEST_IDS.chatMessageInput}
+              data-no-app-focus
+              rows={1}
+              value={text}
+              disabled={disabled}
+              className={cnTw(
+                'block min-w-0 flex-1 resize-none overflow-y-hidden bg-transparent text-base leading-5 text-fg-primary outline-none placeholder:text-fg-tertiary',
+                disabled && 'cursor-not-allowed',
+              )}
+              style={{ maxHeight: MAX_HEIGHT }}
+              placeholder={t('common.action.writeMessage')}
+              onChange={handleChange}
+              onKeyDown={handleKeyDown}
+            />
+            {canSend && (
+              <button
+                data-testid={TEST_IDS.chatSendButton}
+                // eslint-disable-next-line formatjs/no-literal-string-in-jsx -- aria-label retained for e2e selector
+                aria-label="Send"
+                className="flex size-8 shrink-0 items-center justify-center rounded-full bg-bg-action-primary transition-colors hover:bg-bg-action-primary-hover"
+                onClick={() => send()}
+              >
+                <ArrowUp className="size-5 text-fg-primary-inverted" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

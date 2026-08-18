@@ -176,7 +176,10 @@ export default tseslint.config(
     },
     settings: {
       react: {
-        version: 'detect',
+        // eslint-plugin-react's version detection calls context.getFilename(), removed in eslint 10.
+        // Restore 'detect' once the plugin supports it.
+        // https://github.com/jsx-eslint/eslint-plugin-react/issues/3977
+        version: '19.2',
       },
     },
     rules: {
@@ -255,6 +258,34 @@ export default tseslint.config(
         },
       ],
       'local-rules/enforce-di-naming-convention': ['error'],
+      'local-rules/enforce-import-restrictions': [
+        'error',
+        {
+          './src/domains/*': {
+            'index.ts': {
+              forbid: ['**/gateway.ts', '**/repository.ts'],
+            },
+            '**/gateway.ts': {
+              forbid: ['**/resource.ts', '**/repository.ts', '**/hooks.ts', '**/$usecase/*.ts'],
+            },
+            '**/repository.ts': {
+              forbid: ['**/resource.ts', '**/gateway.ts', '**/service.ts', '**/hooks.ts', '**/$usecase/*.ts'],
+            },
+            '**/service.ts': {
+              forbid: ['**/resource.ts', '**/repository.ts', '**/gateway.ts', '**/hooks.ts', '**/$usecase/*.ts'],
+            },
+            '**/schemas.ts': {
+              forbid: ['**/resource.ts', '**/repository.ts', '**/gateway.ts', '**/service.ts', '**/hooks.ts', '**/$usecase/*.ts'],
+            },
+            '**/hooks.ts': {
+              forbid: ['**/repository.ts', '**/gateway.ts'],
+            },
+            '**/resource.ts': {
+              forbid: ['**/hooks.ts', '**/$usecase/*.ts'],
+            },
+          },
+        },
+      ],
 
       'no-console': ['error', { allow: ['warn', 'error', 'info', 'group', 'groupCollapsed', 'groupEnd', 'table', 'debug'] }],
 
@@ -304,7 +335,7 @@ export default tseslint.config(
         'error',
         {
           default: 'disallow',
-          rules: boundaryDependencyRules,
+          policies: boundaryDependencyRules,
         },
       ],
     },

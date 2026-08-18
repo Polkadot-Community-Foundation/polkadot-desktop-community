@@ -18,7 +18,7 @@ After the user has accepted the plan or the implementation, check whether **subs
 ## Procedure
 
 1. **Re-read the session.** Collect each substantive, generalizable correction.
-2. **Form candidate rules** — one line each, prescriptive ("do X when Y" / "don't do Z"), severity-tagged (`blocking` / `major` / `minor`), with a target doc § and a one-line *why* (quote the user's rationale where given). **Cap at 5 per session**; if more surface, present the top 5 and note the rest are in the conversation.
+2. **Form candidate rules** — one line each, prescriptive ("do X when Y" / "don't do Z"), severity-tagged (`blocking` / `major` / `minor`), with a target doc § and a one-line _why_ (quote the user's rationale where given). **Cap at 5 per session**; if more surface, present the top 5 and note the rest are in the conversation.
 3. **Ask one candidate at a time** via `AskUserQuestion`:
 
    > **Rule:** `<severity>` — <one-line rule>
@@ -26,6 +26,7 @@ After the user has accepted the plan or the implementation, check whether **subs
    > **Where:** `<doc § section>` + matching checklist row
 
    Options: `Add as proposed` / `Add with my wording` / `Skip — not a general rule`.
+
 4. **On approval**, edit the target doc:
    - Append the rule to the matching `docs/code/*.md` section (most placement rules → `project-structure.md`; code rules → `style.md`; DI → `di.md`).
    - Mirror a one-line entry into `docs/claude/architecture-checklist.md` or `code-checklist.md` so the reviewer can cite it.
@@ -36,12 +37,12 @@ After the user has accepted the plan or the implementation, check whether **subs
 
 ## Where rules land — routing
 
-| Correction is about… | Doc | Checklist mirror |
-|---|---|---|
+| Correction is about…                                      | Doc                                          | Checklist mirror            |
+| --------------------------------------------------------- | -------------------------------------------- | --------------------------- |
 | Layer choice, module/file placement, dependency direction | `project-structure.md` / `code-placement.md` | `architecture-checklist.md` |
-| A coding pattern (types, React, hygiene, data access) | `style.md` | `code-checklist.md` |
-| A DI identifier / extension-point convention | `di.md` | `architecture-checklist.md` |
-| A new threshold definition | `glossary.md` | — |
+| A coding pattern (types, React, hygiene, data access)     | `style.md`                                   | `code-checklist.md`         |
+| A DI identifier / extension-point convention              | `di.md`                                      | `architecture-checklist.md` |
+| A new threshold definition                                | `glossary.md`                                | —                           |
 
 ## Why mirror into a checklist and a hook
 

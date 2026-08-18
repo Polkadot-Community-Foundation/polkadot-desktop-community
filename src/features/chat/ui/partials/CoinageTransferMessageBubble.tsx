@@ -3,9 +3,9 @@ import { type ComponentType, type MouseEvent } from 'react';
 
 import { useTranslation } from '@/shared/translation';
 import { amountToString, cnTw } from '@/shared/utils';
-import { environmentService } from '@/domains/application';
+import { environmentUseCase } from '@/domains/application';
 import { type ChatMessage, type TransferContent } from '@/domains/chat';
-import { formatMessageDate } from '../helpers/message';
+import { chatService } from '../../service';
 
 import { StatusIcon } from './MessageBubble';
 
@@ -45,7 +45,7 @@ export const CoinageTransferMessageBubble = ({ message, content, isMe, onContext
   // tracks Android's `DigitalDollarChainAssetProvider` so the same amount renders
   // identically on both ends. It's synchronous `VITE_ENVIRONMENTS` config (not
   // Remote Config), so it's available on the first render — no blank-amount flicker.
-  const precision = environmentService.getActiveDigitalDollarAsset().precision;
+  const precision = environmentUseCase.getActiveDigitalDollarAsset().precision;
   const formattedAmount = amountToString(content.amount, precision);
   const headerLabel = isMe ? t('feature.chat.transfer.youSent') : t('feature.chat.transfer.received');
 
@@ -63,14 +63,15 @@ export const CoinageTransferMessageBubble = ({ message, content, isMe, onContext
   return (
     <div
       className={cnTw(
-        'flex w-[250px] flex-col items-start gap-2 pt-3 pr-2 pb-2 pl-3.5',
+        'flex w-62.5 flex-col items-start gap-2 ps-3.5 pe-2 pt-3 pb-2',
+        'rounded-ss-[14px] rounded-se-[14px]',
         isMe
-          ? 'rounded-tl-[14px] rounded-tr-[14px] rounded-br-[4px] rounded-bl-[14px] bg-bg-surface-container-inverted'
-          : 'rounded-tl-[14px] rounded-tr-[14px] rounded-br-[14px] rounded-bl-[4px] bg-bg-surface-nested',
+          ? 'rounded-ee-sm rounded-es-[14px] bg-bg-surface-container-inverted'
+          : 'rounded-ee-[14px] rounded-es-sm bg-bg-surface-nested',
       )}
       onContextMenu={onContextMenu}
     >
-      <div className="flex w-full flex-col items-start gap-2 pr-1">
+      <div className="flex w-full flex-col items-start gap-2 pe-1">
         <p className={cnTw('w-full text-sm leading-5', isMe ? 'text-fg-secondary-inverted' : 'text-fg-secondary')}>
           {headerLabel}
         </p>
@@ -82,7 +83,7 @@ export const CoinageTransferMessageBubble = ({ message, content, isMe, onContext
         >
           <p
             className={cnTw(
-              'text-[32px] leading-[38px] font-semibold whitespace-nowrap',
+              'text-[32px] leading-9.5 font-semibold whitespace-nowrap',
               isMe ? 'text-fg-primary-inverted' : 'text-fg-primary',
             )}
           >
@@ -115,10 +116,8 @@ export const CoinageTransferMessageBubble = ({ message, content, isMe, onContext
         </p>
       </div>
       <div className="flex w-full items-center justify-end gap-0.5">
-        <span
-          className={cnTw('text-xs leading-[18px] whitespace-nowrap', isMe ? 'text-fg-secondary-inverted' : 'text-fg-tertiary')}
-        >
-          {formatMessageDate(message.timestamp)}
+        <span className={cnTw('text-xs leading-4.5 whitespace-nowrap', isMe ? 'text-fg-secondary-inverted' : 'text-fg-tertiary')}>
+          {chatService.formatMessageDate(message.timestamp)}
         </span>
         {isMe && (
           <div className="flex size-3.5 items-center justify-center">

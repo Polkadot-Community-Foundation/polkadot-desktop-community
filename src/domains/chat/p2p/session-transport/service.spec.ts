@@ -1,6 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ChatMessage as ChatMessageCodec } from '@novasamatech/host-chat/codec/message';
+import { type CodecType } from 'scale-ts';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { chatContentService } from './service';
+
+type ChatMessageInput = CodecType<typeof ChatMessageCodec>;
 
 const BLURHASH = 'LKO2?U%2Tw=w]~RBVZRi};RPxuwH';
 
@@ -115,42 +119,53 @@ describe('contentMappers — coinage / send / call signals', () => {
       expect(out).toMatchObject({ type: 'transfer', kind: 'legacy', amount: 1n, assetId: '0xdeadbeef' });
     });
 
-    it('decodes dataChannelOffer (audio) with bare-string purpose', () => {
-      expect(
-        chatContentService.mapSdkContent({ tag: 'dataChannelOffer', value: { sdp: new Uint8Array(), purpose: 'AUDIO_CALL' } }),
-      ).toEqual({
+    it('decodes dataChannelOffer (audio) with bare-string purpose — preserves sdp bytes', () => {
+      const sdp = new Uint8Array([0x01, 0x02]);
+      expect(chatContentService.mapSdkContent({ tag: 'dataChannelOffer', value: { sdp, purpose: 'AUDIO_CALL' } })).toEqual({
         type: 'callSignal',
         signal: 'offer',
         purpose: 'audio',
+        sdp,
       });
     });
 
-    it('decodes dataChannelOffer (video) with { tag, value } purpose', () => {
+    it('decodes dataChannelOffer (video) with { tag, value } purpose — preserves sdp bytes', () => {
+      const sdp = new Uint8Array([0x03, 0x04]);
       expect(
         chatContentService.mapSdkContent({
           tag: 'dataChannelOffer',
-          value: { sdp: new Uint8Array(), purpose: { tag: 'VIDEO_CALL', value: undefined } },
+          value: { sdp, purpose: { tag: 'VIDEO_CALL', value: undefined } },
         }),
-      ).toEqual({ type: 'callSignal', signal: 'offer', purpose: 'video' });
+      ).toEqual({ type: 'callSignal', signal: 'offer', purpose: 'video', sdp });
     });
 
-    it('decodes dataChannelAnswer / ice / closed and preserves offerMessageId', () => {
-      const value = { offerMessageId: 'offer-42', sdp: new Uint8Array() };
+    it('decodes dataChannelAnswer / ice / closed and preserves offerMessageId + sdp bytes', () => {
+      const sdp = new Uint8Array([0x05, 0x06]);
+      const value = { offerMessageId: 'offer-42', sdp };
       expect(chatContentService.mapSdkContent({ tag: 'dataChannelAnswer', value })).toEqual({
         type: 'callSignal',
         signal: 'answer',
         offerMessageId: 'offer-42',
+        sdp,
       });
       expect(chatContentService.mapSdkContent({ tag: 'dataChannelIceCandidate', value })).toEqual({
         type: 'callSignal',
         signal: 'ice',
         offerMessageId: 'offer-42',
+        sdp,
       });
+      // closed carries no sdp
       expect(chatContentService.mapSdkContent({ tag: 'dataChannelClosed', value: { offerMessageId: 'offer-42' } })).toEqual({
         type: 'callSignal',
         signal: 'closed',
         offerMessageId: 'offer-42',
       });
+    });
+
+    it('omits sdp field when the wire value carries no sdp bytes', () => {
+      const out = chatContentService.mapSdkContent({ tag: 'dataChannelOffer', value: { purpose: 'AUDIO_CALL' } });
+      expect(out).toEqual({ type: 'callSignal', signal: 'offer', purpose: 'audio' });
+      expect(out && 'sdp' in out).toBe(false);
     });
 
     it('rejects a coinage payment payload missing totalValue', () => {
@@ -175,8 +190,115 @@ describe('contentMappers — coinage / send / call signals', () => {
       expect(chatContentService.mapUiContentToSdk({ type: 'transfer', kind: 'coinage', amount: 1n })).toBeNull();
     });
 
-    it('returns null for callSignal (desktop never sends)', () => {
-      expect(chatContentService.mapUiContentToSdk({ type: 'callSignal', signal: 'offer', purpose: 'audio' })).toBeNull();
+    it('encodes offer (video) → dataChannelOffer with VIDEO_CALL purpose and sdp', () => {
+      const sdp = new Uint8Array([0x11, 0x22]);
+      expect(chatContentService.mapUiContentToSdk({ type: 'callSignal', signal: 'offer', purpose: 'video', sdp })).toEqual({
+        tag: 'dataChannelOffer',
+        value: { sdp, purpose: 'VIDEO_CALL' },
+      });
     });
+
+    it('encodes offer (audio) → dataChannelOffer with AUDIO_CALL purpose and sdp', () => {
+      const sdp = new Uint8Array([0x33, 0x44]);
+      expect(chatContentService.mapUiContentToSdk({ type: 'callSignal', signal: 'offer', purpose: 'audio', sdp })).toEqual({
+        tag: 'dataChannelOffer',
+        value: { sdp, purpose: 'AUDIO_CALL' },
+      });
+    });
+
+    it('encodes offer with no sdp → falls back to empty Uint8Array', () => {
+      const out = chatContentService.mapUiContentToSdk({ type: 'callSignal', signal: 'offer', purpose: 'audio' });
+      expect(out).toEqual({ tag: 'dataChannelOffer', value: { sdp: new Uint8Array(), purpose: 'AUDIO_CALL' } });
+    });
+
+    it('encodes answer → dataChannelAnswer with offerMessageId and sdp', () => {
+      const sdp = new Uint8Array([0x55, 0x66]);
+      expect(
+        chatContentService.mapUiContentToSdk({ type: 'callSignal', signal: 'answer', offerMessageId: 'mid-1', sdp }),
+      ).toEqual({ tag: 'dataChannelAnswer', value: { offerMessageId: 'mid-1', sdp } });
+    });
+
+    it('encodes ice → dataChannelIceCandidate with offerMessageId and sdp', () => {
+      const sdp = new Uint8Array([0x77, 0x88]);
+      expect(chatContentService.mapUiContentToSdk({ type: 'callSignal', signal: 'ice', offerMessageId: 'mid-2', sdp })).toEqual({
+        tag: 'dataChannelIceCandidate',
+        value: { offerMessageId: 'mid-2', sdp },
+      });
+    });
+
+    it('encodes closed → dataChannelClosed with offerMessageId (no sdp)', () => {
+      expect(chatContentService.mapUiContentToSdk({ type: 'callSignal', signal: 'closed', offerMessageId: 'mid-3' })).toEqual({
+        tag: 'dataChannelClosed',
+        value: { offerMessageId: 'mid-3' },
+      });
+    });
+
+    it('encodes closed with no offerMessageId → falls back to empty string', () => {
+      expect(chatContentService.mapUiContentToSdk({ type: 'callSignal', signal: 'closed' })).toEqual({
+        tag: 'dataChannelClosed',
+        value: { offerMessageId: '' },
+      });
+    });
+  });
+});
+
+// ── Identity-channel events (absorbed from the former events.ts) ─────────
+
+const encodeChatMessage = (timestamp: number, content: ChatMessageInput['versioned']['value']): Uint8Array =>
+  ChatMessageCodec.enc({
+    messageId: 'msg-1',
+    timestamp: BigInt(timestamp),
+    versioned: { tag: 'v1', value: content },
+  });
+
+describe('decodeEventsFromChatMessage iOS VoIP token', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('decodes an iOSVoIP push token (platform index 2) without a decode failure', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const bytes = encodeChatMessage(1_700_000_000_000, {
+      tag: 'token',
+      value: { token: '0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd', platform: 'iOSVoIP' },
+    });
+
+    const events = chatContentService.decodeEventsFromChatMessage(bytes);
+
+    // A token carries no identity-channel event, but it must not throw/be dropped.
+    expect(events).toEqual([]);
+    expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('ChatMessage decode failed'), expect.anything());
+  });
+});
+
+describe('decodeEventsFromChatMessage acceptedAt', () => {
+  it('carries the wire timestamp on a deviceChatAccepted accept signal', () => {
+    const acceptedAt = 1_700_000_000_000;
+    const bytes = encodeChatMessage(acceptedAt, {
+      tag: 'deviceChatAccepted',
+      value: {
+        requestId: 'req-1',
+        device: {
+          statementAccountId: new Uint8Array(32).fill(0xaa),
+          encryptionPublicKey: new Uint8Array(32).fill(0xbb),
+        },
+      },
+    });
+
+    const events = chatContentService.decodeEventsFromChatMessage(bytes);
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ tag: 'acceptSignal', signal: { requestId: 'req-1', acceptedAt } });
+  });
+
+  it('drops Android-legacy chatAccepted @14 signals (no DeviceInfo on the wire)', () => {
+    // Accepting chatAccepted @14 would force the matcher into the
+    // identity-conflated synthetic-device fallback, which the peer cannot
+    // decrypt (bug #9, blocked-on-Android). Decoder must drop these silently
+    // until Android emits deviceChatAccepted @20.
+    const acceptedAt = 1_700_000_999_000;
+    const bytes = encodeChatMessage(acceptedAt, { tag: 'chatAccepted', value: { messageId: 'req-2' } });
+
+    const events = chatContentService.decodeEventsFromChatMessage(bytes);
+
+    expect(events).toHaveLength(0);
   });
 });

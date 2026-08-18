@@ -49,9 +49,9 @@ export function setAliasPermission({
 // Forget-flow cleanup: drop every alias decision the product made as
 // requester. Rows store the raw webview identifier, so match through
 // `isSameBaseName` rather than key equality.
-export async function deleteAliasPermissionsByRequester(requesterProductId: string): Promise<void> {
+export async function deleteAliasPermissionsByRequester(requesterProductId: string, tld: string): Promise<void> {
   await aliasPermissionsDatabase.table
-    .filter(row => dotNsService.isSameBaseName(row.requesterProductId, requesterProductId))
+    .filter(row => dotNsService.isSameBaseName(row.requesterProductId, requesterProductId, tld))
     .delete();
 }
 

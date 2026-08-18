@@ -35,11 +35,17 @@ orchestrates. Reach for one when the behaviour is reusable across features, rega
 | stateless helper on a loaded entity                          | `service.ts`                |
 | external I/O (RPC/HTTP/IPFS/P2P)                             | `gateway.ts`                |
 | persistence (Dexie / localStorage)                           | `repository.ts`             |
-| cached or streamed read                                      | `resource.ts`               |
-| multi-source orchestration                                   | `$usecase/{group}.ts`       |
+| any data access — cached/streamed read or write              | `resource.ts`               |
+| composition over ≥2 resources, or invariant enforcement      | `$usecase/{group}.ts`       |
 | React binding for a resource                                 | `hooks.ts`                  |
 | React binding for a use case                                 | `$usecase/{group}.hooks.ts` |
 | host-environment wiring (IPC handlers, native subscriptions) | `bootstrap.ts`              |
+
+> **A domain has no runtime state.** There is deliberately no `state/` row above. A module-level `Subject` / `BehaviorSubject` /
+> `createState` / `createEvent` living in a domain — anything other than a localStorage-backed `repository.ts` using
+> `persistLocalStorage` — is an aggregate smell. Move real cross-cutting runtime state (selections, in-flight flags, live
+> connection phase) to an aggregate's `state/`. If the thing carries no state — a fire-and-forget cross-module signal channel —
+> model it as a `createSideEffect` (DI) instead, not a shared module-level subject.
 
 **Aggregate** (`aggregates/{name}/`):
 
@@ -55,12 +61,34 @@ orchestrates. Reach for one when the behaviour is reusable across features, rega
 
 ## Cut rules
 
-When deciding which kind of artifact a piece of code is, count its sources.
+**Resources are the data layer; use cases are composition over it.** Two questions decide every artifact: what kind of work it
+does, and who else needs it.
 
-- **Service method** — stateless, operates on already-loaded entities, no I/O.
-- **Resource** — single-source cached/streamed read.
-- **Use case** — ≥2 sources (resources / repos / gateways / other use cases), or ≥2 side effects, or composes multiple entities
-  into a higher-level type.
+### What kind of work
+
+- **Service method** — a pure derivation over already-loaded entities. No I/O.
+- **Resource** — one cached or streamed read, or one write. Its sources are leaves (`gateway.ts`, `repository.ts`); everything
+  else it needs arrives as a **parameter**. It never reads another resource and never calls a use case.
+- **Use case** — composition. Composes ≥2 **resources**, enforces a business invariant, or fans out ≥2 side effects.
+
+A resource may call four gateway methods and merge the results into one domain entity — gateways are its internals, not
+composition. **Composition begins at the second _resource_.**
+
+Direction: use cases depend on resources, never the reverse.
+
+**A use case may also call a gateway or repository directly.** Leaves are open to both layers — a resource reaches them to build
+a cache, a use case reaches them for work that needs none (a one-off write, a fire-and-forget wire call). Doing so is not a
+missing resource: a resource exists to give a read an identity and a cache, so work that wants neither has no resource to skip.
+What a use case may **not** do is reach a leaf to reproduce a read a resource already owns — that duplicates the source and
+leaves the cache serving a value nobody refreshes.
+
+> **Why count resources and not gateways.** A gateway is one wire call with no cache and no identity; a resource is a cache with
+> a key. Counting gateways promotes ordinary fetches into orchestration, which then cannot be cached without inverting the
+> dependency — the knot that produced every "resource wrapping a use case" exemption this codebase used to carry. Counting
+> resources measures the thing that actually matters: how many independently-invalidating caches a piece of code depends on.
+
+### Who else needs it
+
 - **Aggregate** — ≥2 modules outside the aggregate share runtime state, OR cross-domain orchestration is consumed by ≥2 outside
   modules.
 - **Widget** — UI reused by ≥3 features, mounts inline at consumer-decided locations.
@@ -73,15 +101,15 @@ artifact may import and who may import it — the dependency-rule counterpart to
 
 ## Container-root orchestration (the `$usecase/`-is-domain-root-only gap)
 
-Multi-source orchestration belongs in `$usecase/` — but `$usecase/` exists **only at the domain root**, not inside a sub-module
-(container). When a container sub-module (e.g. `chat/p2p`) owns heavy, sub-module-specific cross-source orchestration or
-process-wide infra, none of the canonical *leaf* file kinds fit it, and lifting it to the domain-root `$usecase/` would pollute the
+Composition belongs in `$usecase/` — but `$usecase/` exists **only at the domain root**, not inside a sub-module
+(container). When a container sub-module (e.g. `chat/p2p`) owns heavy, sub-module-specific composition or
+process-wide infra, none of the canonical _leaf_ file kinds fit it, and lifting it to the domain-root `$usecase/` would pollute the
 whole domain with that sub-module's internals.
 
 Resolution — keep it as a **named container-root file** and frame it in the container's `README.md`. This is a deliberate,
 documented exemption, not a stray file. It applies only when **all** hold:
 
-- the logic is genuine multi-source orchestration (a lifecycle/factory composing ≥2 sources) or process-wide infra (a registry/budget singleton);
+- the logic is genuine composition (a lifecycle/factory composing ≥2 resources) or process-wide infra (a registry/budget singleton);
 - it is specific to this container, so domain-root `$usecase/` is the wrong home;
 - no canonical leaf kind (`service`/`resource`/`gateway`/`repository`) fits without distorting that kind's contract.
 

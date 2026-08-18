@@ -7,6 +7,7 @@ import { deviceSyncDatabase, deviceSyncRepository } from './repository';
 describe('deviceSyncRepository', () => {
   beforeEach(async () => {
     await deviceSyncDatabase.knownUserDevices.clear();
+    await deviceSyncDatabase.syncConnectionMeta.clear();
   });
 
   it('upserts and retrieves a known user device', async () => {
@@ -212,5 +213,18 @@ describe('deviceSyncRepository', () => {
 
     expect(await deviceSyncRepository.get('0xaa')).toBeUndefined();
     expect((await deviceSyncRepository.get('0xcc'))?.encryptionPublicKey).toBe('0xdd');
+  });
+
+  it('stores and reads lastConnectionClosedAt in sync UI meta', async () => {
+    const closedAt = 1_700_000_000_000;
+    await deviceSyncRepository.setLastConnectionClosedAt(closedAt);
+    const meta = await deviceSyncRepository.getConnectionMeta();
+    expect(meta.lastConnectionClosedAt).toBe(closedAt);
+  });
+
+  it('clears lastConnectionClosedAt', async () => {
+    await deviceSyncRepository.setLastConnectionClosedAt(1_700_000_000_000);
+    await deviceSyncRepository.clearLastConnectionClosedAt();
+    expect((await deviceSyncRepository.getConnectionMeta()).lastConnectionClosedAt).toBeNull();
   });
 });

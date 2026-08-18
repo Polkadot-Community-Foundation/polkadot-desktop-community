@@ -24,10 +24,10 @@ const remoteChainAssetSchema = v.looseObject({
   symbol: v.string(),
   precision: v.number(),
   name: v.optional(v.nullable(v.string())),
-  priceId: v.optional(v.string()),
+  priceId: v.optional(v.nullable(v.string())),
   type: v.optional(v.nullable(v.string())),
   typeExtras: v.optional(v.nullable(v.looseObject({}))),
-  icon: v.optional(v.string()),
+  icon: v.optional(v.nullable(v.string())),
 });
 
 export const remoteChainSchema = v.looseObject({

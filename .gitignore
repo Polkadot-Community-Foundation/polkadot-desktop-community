@@ -51,3 +51,6 @@ docs/_verification
 
 # nix
 result
+
+# Python bytecode from .github/scripts unit tests
+__pycache__/

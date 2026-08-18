@@ -34,21 +34,33 @@ export const RemoveOfflineDialog = ({ productId, onClose }: Props) => {
     >
       <Dialog.Content aria-describedby={undefined} variant="default">
         <ProductDialogHeader product={record} />
-        <div className="flex flex-col gap-2 py-6">
-          <span className="text-sm text-fg-secondary">{t('feature.offlineAccess.removeDescription')}</span>
+        <div className="flex flex-col gap-2">
+          <span className="text-2xl leading-8 font-semibold text-fg-primary">
+            {t('feature.offlineAccess.removeDialog.title')}
+          </span>
+          <span className="text-base leading-6 text-fg-secondary">
+            {t('feature.offlineAccess.removeDialog.description', { name })}
+          </span>
         </div>
         <Dialog.Footer>
-          <Button variant="secondary" onClick={onClose}>
-            {t('common.cancel')}
-          </Button>
-          <Button
-            data-testid={TEST_IDS.offlineAccessRemoveConfirm}
-            variant="destructive"
-            disabled={pending}
-            onClick={handleConfirm}
-          >
-            {t('feature.offlineAccess.removeConfirm')}
-          </Button>
+          <div className="flex w-full gap-2">
+            <div className="flex-1">
+              <Button variant="outline" fullWidth onClick={onClose}>
+                {t('common.cancel')}
+              </Button>
+            </div>
+            <div className="flex-1">
+              <Button
+                data-testid={TEST_IDS.offlineAccessRemoveConfirm}
+                variant="destructive"
+                fullWidth
+                disabled={pending}
+                onClick={handleConfirm}
+              >
+                {t('feature.offlineAccess.removeDialog.confirm')}
+              </Button>
+            </div>
+          </div>
         </Dialog.Footer>
       </Dialog.Content>
     </Dialog>

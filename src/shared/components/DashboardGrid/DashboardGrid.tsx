@@ -5,6 +5,8 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import { type Layout, type LayoutItem, ResponsiveGridLayout, noCompactor, useContainerWidth } from 'react-grid-layout';
 import { snapToGrid } from 'react-grid-layout/core';
 
+import { TEST_IDS } from '@/shared/test-ids';
+
 import { layoutInteractionSession } from './layoutInteractionSession';
 
 export const GRID_COLS = 4;
@@ -19,21 +21,29 @@ export const GRID_MAX_WIDTH = 1660;
 export const GRID_MIN_WIDTH = 1366;
 
 /**
- * CSS width of a widget spanning `span` grid columns, returned as a `calc(...)` string sized
- * against the element's own parent (`100%`). It stays responsive via CSS `clamp()` with no
- * measurement, mirroring how widgets reflow. Single source of truth for surfaces that must line
- * up with widget columns (e.g. the settings and chat side menus).
+ * CSS width of a widget spanning `span` grid columns, returned as a `calc(...)` string. It stays
+ * responsive via CSS `clamp()` with no measurement, mirroring how widgets reflow. Single source of
+ * truth for surfaces that must line up with widget columns (e.g. the settings and chat side menus).
+ *
+ * The clamp is sized against `100vw`, not `100%`, on purpose: the dashboard grid measures the full
+ * `main` width (it carries no horizontal padding) and `main` spans the whole viewport (the header is
+ * a separate top row, there is no left rail). Consuming surfaces wrap the menu in their own padding
+ * (e.g. `p-2`), which would shrink a `100%` base and desync the column width — `100vw` keeps the
+ * base identical to the grid's regardless of that padding.
  */
 export function widgetSpanWidthCss(span: number): string {
-  const clampedWidth = `clamp(${GRID_MIN_WIDTH}px, 100%, ${GRID_MAX_WIDTH}px)`;
+  const clampedWidth = `clamp(${GRID_MIN_WIDTH}px, 100vw, ${GRID_MAX_WIDTH}px)`;
   const columns = `(${clampedWidth} - ${GRID_MARGIN * (GRID_COLS + 1)}px) / ${GRID_COLS} * ${span}`;
   const gutters = GRID_MARGIN * (span - 1);
 
   return gutters > 0 ? `calc(${columns} + ${gutters}px)` : `calc(${columns})`;
 }
 
-const VIEWPORT_EDGE_MARGIN_PX = 72;
 const VIEWPORT_EDGE_DWELL_MS = 420;
+// A page transfer only arms once the dragged widget has crossed the grid's edge by more
+// than this fraction of its own width — so merely reaching the last column (or moving
+// vertically inside it) never triggers a transfer.
+const EDGE_OVERFLOW_RATIO = 0.5;
 
 export const DASHBOARD_GRID_SNAP_Y_STEP = 8 / 4;
 const DEFAULT_ALLOWED_WIDGET_HEIGHTS = [2, 4, 8];
@@ -66,7 +76,6 @@ const clampToGridBounds = (cols: number) => ({
 });
 
 const DEFAULT_MAX_ROWS = 8;
-const BOTTOM_GAP = 16;
 
 type Rect = { x: number; y: number; w: number; h: number };
 
@@ -117,14 +126,6 @@ const computeSwapLayout = (
   return isLayoutValid(next, cols, maxRows) ? next : null;
 };
 
-const detectViewportEdgeDirection = (event: Event): -1 | 1 | null => {
-  if (!(event instanceof MouseEvent)) return null;
-  const margin = Math.max(VIEWPORT_EDGE_MARGIN_PX, window.innerWidth * 0.11);
-  if (event.clientX >= window.innerWidth - margin) return 1;
-  if (event.clientX <= margin) return -1;
-  return null;
-};
-
 type CrossPageEdgeDwellConfig = {
   canDwellNavigate: (direction: -1 | 1) => boolean;
   onDwellNavigate: (direction: -1 | 1) => void;
@@ -141,10 +142,13 @@ type DashboardGridProps = {
   allowedHeights?: number[];
   getItemType?: (id: string) => 'widget' | 'folder' | undefined;
   onLayoutChange: (layout: Layout) => void;
-  onMoveToAdjacentPage?: (itemId: string, direction: -1 | 1) => void;
+  // `dropRow` is the grid row the widget was dragged at (vertical is never scrolled,
+  // so the placeholder's row is reliable across pages); the target column is decided
+  // by the consumer from the direction.
+  onMoveToAdjacentPage?: (itemId: string, direction: -1 | 1, dropRow?: number) => void;
   canMoveToAdjacentPage?: (direction: -1 | 1) => boolean;
   crossPageEdgeDwell?: CrossPageEdgeDwellConfig;
-  onResolveScrollCrossPageDrop?: (itemId: string) => boolean;
+  onResolveScrollCrossPageDrop?: (itemId: string, dropRow?: number) => boolean;
 };
 
 const snapToAllowedHeight = (height: number, allowedHeights: number[]): number => {
@@ -191,12 +195,20 @@ export const DashboardGrid = ({
 
   const rowHeight = useMemo(() => {
     if (containerHeight == null) return baseRowHeight;
-    const totalMargins = (maxRows - 1) * margin[1];
-    const fittedRowHeight = (containerHeight - totalMargins - BOTTOM_GAP) / maxRows;
+    // Reserve the inter-row gaps plus RGL's vertical container padding (top + bottom,
+    // pinned to `margin` below) so the full grid block — the thing that gets vertically
+    // centered — fits the viewport without overflowing.
+    const reservedVertical = (maxRows - 1) * margin[1] + 2 * margin[1];
+    const fittedRowHeight = (containerHeight - reservedVertical) / maxRows;
     return Math.min(baseRowHeight, Math.max(fittedRowHeight, 20));
   }, [containerHeight, baseRowHeight, maxRows, margin]);
 
-  const minHeight = maxRows * rowHeight + (maxRows - 1) * margin[1];
+  // The centered grid block must stay a constant height regardless of how many rows are
+  // filled — otherwise the top gap "jumps" when content reaches the last row. RGL sizes
+  // its own container as rows + inter-row margins + 2 * containerPadding (pinned to
+  // `margin` below), so mirror that here: minHeight always equals RGL's fullest height,
+  // and the block never grows past it.
+  const minHeight = maxRows * rowHeight + (maxRows - 1) * margin[1] + 2 * margin[1];
   const compactor = useMemo(() => createPreventCollisionCompactor(), []);
   const constraints = useMemo(
     () => [snapToGrid(1, DASHBOARD_GRID_SNAP_Y_STEP), createMaxRowsConstraint(maxRows), clampToGridBounds(GRID_COLS)],
@@ -290,23 +302,34 @@ export const DashboardGrid = ({
     [layout, colWidth, margin, rowHeight, maxRows, containerRef],
   );
 
-  const detectEdgeDirection = useCallback(
-    (event: Event, draggedItem: LayoutItem): -1 | 1 | null => {
-      if (!containerRef.current || !(event instanceof MouseEvent)) return null;
+  // Direction of a cross-page transfer, armed only once the dragged widget itself has
+  // crossed the grid's left/right edge by more than half its own width. Measured from the
+  // dragged node's live rect (the cursor is clamped to the window, but the node is not),
+  // so it reflects how far off the edge the widget actually is.
+  const detectEdgeOverflowDirection = useCallback(
+    (element: HTMLElement | null): -1 | 1 | null => {
+      if (!element || !containerRef.current) return null;
+      const nodeRect = element.getBoundingClientRect();
+      if (nodeRect.width <= 0) return null;
+      const gridRect = containerRef.current.getBoundingClientRect();
+      const threshold = nodeRect.width * EDGE_OVERFLOW_RATIO;
 
-      const rect = containerRef.current.getBoundingClientRect();
-      const itemWidthPx = draggedItem.w * colWidth + (draggedItem.w - 1) * margin[0];
-      const edgeThreshold = Math.max(itemWidthPx / 2, 1);
-
-      if (event.clientX >= rect.right - edgeThreshold) return 1;
-      if (event.clientX <= rect.left + edgeThreshold) return -1;
+      if (nodeRect.right - gridRect.right > threshold) return 1;
+      if (gridRect.left - nodeRect.left > threshold) return -1;
       return null;
     },
-    [colWidth, margin, containerRef],
+    [containerRef],
   );
 
   const handleDrag = useCallback(
-    (_layout: Layout, oldItem: LayoutItem | null, newItem: LayoutItem | null, placeholder: LayoutItem | null, event: Event) => {
+    (
+      _layout: Layout,
+      oldItem: LayoutItem | null,
+      newItem: LayoutItem | null,
+      placeholder: LayoutItem | null,
+      event: Event,
+      element: HTMLElement | null,
+    ) => {
       if (oldItem && newItem) {
         newItem.w = oldItem.w;
         if (placeholder) placeholder.w = oldItem.w;
@@ -317,15 +340,15 @@ export const DashboardGrid = ({
         return;
       }
 
-      const viewportEdge = detectViewportEdgeDirection(event);
-      if (crossPageEdgeDwell && viewportEdge && crossPageEdgeDwell.canDwellNavigate(viewportEdge)) {
+      const edgeDirection = detectEdgeOverflowDirection(element);
+      if (crossPageEdgeDwell && edgeDirection && crossPageEdgeDwell.canDwellNavigate(edgeDirection)) {
         setSwapTargetIds([]);
-        if (dwellEdgeDirRef.current !== viewportEdge) {
+        if (dwellEdgeDirRef.current !== edgeDirection) {
           clearEdgeDwellState();
-          dwellEdgeDirRef.current = viewportEdge;
+          dwellEdgeDirRef.current = edgeDirection;
           dwellTimerRef.current = window.setTimeout(() => {
             dwellTimerRef.current = null;
-            crossPageEdgeDwell.onDwellNavigate(viewportEdge);
+            crossPageEdgeDwell.onDwellNavigate(edgeDirection);
           }, VIEWPORT_EDGE_DWELL_MS);
         }
       } else {
@@ -344,25 +367,35 @@ export const DashboardGrid = ({
         setSwapTargetIds(ids);
       }
     },
-    [clearEdgeDwellState, crossPageEdgeDwell, findSwapTarget, layout],
+    [clearEdgeDwellState, crossPageEdgeDwell, detectEdgeOverflowDirection, findSwapTarget, layout],
   );
 
   // When a drop is blocked by preventCollision, swap positions with the widget under the cursor.
   const handleDragStop = useCallback(
-    (_layout: Layout, oldItem: LayoutItem | null, newItem: LayoutItem | null, _placeholder: LayoutItem | null, event: Event) => {
+    (
+      _layout: Layout,
+      oldItem: LayoutItem | null,
+      newItem: LayoutItem | null,
+      _placeholder: LayoutItem | null,
+      event: Event,
+      element: HTMLElement | null,
+    ) => {
       setSwapTargetIds([]);
       clearEdgeDwellState();
       if (!oldItem || !newItem) return;
 
-      if (onResolveScrollCrossPageDrop?.(oldItem.i)) {
+      // The placeholder's row tracks where the widget was dragged vertically (the
+      // pager only scrolls horizontally), so it carries to the target page as-is.
+      const dropRow = newItem.y;
+
+      if (onResolveScrollCrossPageDrop?.(oldItem.i, dropRow)) {
         return;
       }
 
-      const viewportEdge = detectViewportEdgeDirection(event);
-      const edgeDirection = viewportEdge ?? detectEdgeDirection(event, oldItem);
+      const edgeDirection = detectEdgeOverflowDirection(element);
       if (edgeDirection && onMoveToAdjacentPage && (canMoveToAdjacentPage?.(edgeDirection) ?? true)) {
         skipNextLayoutChangeRef.current = true;
-        onMoveToAdjacentPage(oldItem.i, edgeDirection);
+        onMoveToAdjacentPage(oldItem.i, edgeDirection, dropRow);
         return;
       }
 
@@ -383,7 +416,7 @@ export const DashboardGrid = ({
       onLayoutChange,
       maxRows,
       findSwapTarget,
-      detectEdgeDirection,
+      detectEdgeOverflowDirection,
       onMoveToAdjacentPage,
       canMoveToAdjacentPage,
       onResolveScrollCrossPageDrop,
@@ -425,7 +458,11 @@ export const DashboardGrid = ({
     }));
 
   return (
-    <div ref={outerRef} className="scrollbar-hidden flex min-h-0 flex-1 items-center overflow-x-auto overflow-y-hidden">
+    <div
+      ref={outerRef}
+      data-testid={TEST_IDS.dashboardGrid}
+      className="scrollbar-hidden flex min-h-0 flex-1 items-center overflow-x-auto overflow-y-hidden"
+    >
       <div
         ref={containerRef}
         className="relative mx-auto w-full shrink-0"
@@ -442,6 +479,7 @@ export const DashboardGrid = ({
             maxRows={maxRows}
             rowHeight={rowHeight}
             margin={margin}
+            containerPadding={margin}
             width={width}
             resizeConfig={{ enabled: false, handles: ['s'] }}
             dragConfig={{ enabled: true, handle: '.widget-topbar-drag-handle', cancel: '.widget-topbar-action' }}

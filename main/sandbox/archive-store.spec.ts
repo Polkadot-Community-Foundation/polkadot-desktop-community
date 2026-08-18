@@ -30,22 +30,21 @@ describe('archiveStore', () => {
     expect(new TextDecoder().decode(read?.files['a/b.js'])).toBe('export const x = 1');
   });
 
-  it('readCurrent resolves the active version without a contenthash', async () => {
-    await store.persist('app.foo.dot', '0xaa', 'polkadot://app.foo.dot', files);
-    const current = await store.readCurrent('app.foo.dot');
-    expect(current?.origin).toBe('polkadot://app.foo.dot');
-    expect(Object.keys(current?.files ?? {}).sort()).toEqual(['a/b.js', 'index.html']);
-  });
-
   it('re-persist with a new contenthash retires the old version', async () => {
     await store.persist('app.foo.dot', '0xaa', 'polkadot://app.foo.dot', files);
     await store.persist('app.foo.dot', '0xbb', 'polkadot://app.foo.dot', files);
     expect(await store.has('app.foo.dot', '0xbb')).toBe(true);
     expect(await store.has('app.foo.dot', '0xaa')).toBe(false);
-    expect((await store.readCurrent('app.foo.dot')) !== null).toBe(true);
+    expect(await store.read('app.foo.dot', '0xbb')).not.toBeNull();
     // read() of the retired (non-current) version resolves to null, not a
     // blank-origin archive.
     expect(await store.read('app.foo.dot', '0xaa')).toBeNull();
+  });
+
+  it('readPointer returns the current contenthash, or null when absent', async () => {
+    expect(await store.readPointer('missing.dot')).toBeNull();
+    await store.persist('app.foo.dot', '0xaa', 'polkadot://app.foo.dot', files);
+    expect((await store.readPointer('app.foo.dot'))?.contenthash).toBe('0xaa');
   });
 
   it('list ignores stray non-directory entries in the base dir', async () => {
@@ -92,13 +91,13 @@ describe('archiveStore', () => {
     // Simulate a crash between the version-dir rename and the current.json write.
     await fs.rm(path.join(baseDir, encodeURIComponent('app.foo.dot'), 'current.json'), { force: true });
     expect(await store.has('app.foo.dot', '0xaa')).toBe(false);
-    expect(await store.readCurrent('app.foo.dot')).toBeNull();
+    expect(await store.readPointer('app.foo.dot')).toBeNull();
   });
 
   it('clearAll wipes everything; read of absent returns null', async () => {
     await store.persist('app.foo.dot', '0xaa', 'polkadot://app.foo.dot', files);
     await store.clearAll();
     expect(await store.read('app.foo.dot', '0xaa')).toBeNull();
-    expect(await store.readCurrent('app.foo.dot')).toBeNull();
+    expect(await store.readPointer('app.foo.dot')).toBeNull();
   });
 });

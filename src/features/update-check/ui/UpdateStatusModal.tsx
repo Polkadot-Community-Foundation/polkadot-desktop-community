@@ -1,23 +1,33 @@
 import { Button, Dialog } from '@novasamatech/tr-ui';
 import { AlertCircle, CheckCircle, Loader } from 'lucide-react';
-import { memo } from 'react';
+import { type ReactNode, memo } from 'react';
 
 import { useTranslation } from '@/shared/translation';
 
-export type UpdateStatus = 'idle' | 'checking' | 'up-to-date' | 'downloading' | 'ready-to-install' | 'error';
+export type UpdateStatus = 'idle' | 'checking' | 'up-to-date' | 'downloading' | 'ready-to-install' | 'error' | 'unsupported';
 
 type UpdateStatusModalProps = {
   isOpen: boolean;
   onClose: VoidFunction;
   status: UpdateStatus;
   downloadProgress?: number;
+  currentVersion?: string;
   errorMessage?: string;
   onInstallNow?: VoidFunction;
   onNotNow?: VoidFunction;
 };
 
 export const UpdateStatusModal = memo(
-  ({ isOpen, onClose, status, downloadProgress = 0, errorMessage, onInstallNow, onNotNow }: UpdateStatusModalProps) => {
+  ({
+    isOpen,
+    onClose,
+    status,
+    downloadProgress = 0,
+    currentVersion,
+    errorMessage,
+    onInstallNow,
+    onNotNow,
+  }: UpdateStatusModalProps) => {
     const { t } = useTranslation();
 
     const handleOpenChange = (open: boolean) => {
@@ -29,71 +39,74 @@ export const UpdateStatusModal = memo(
       }
     };
 
+    let icon: ReactNode = null;
+    let title = '';
+    let description = '';
+
+    switch (status) {
+      case 'checking':
+        icon = <Loader className="h-8 w-8 animate-spin text-fg-secondary" />;
+        title = t('feature.updateCheck.checking');
+        description = t('feature.updateCheck.checkingHint');
+        break;
+      case 'downloading':
+        title = t('feature.updateCheck.downloading');
+        description = t('feature.updateCheck.downloadingHint');
+        break;
+      case 'up-to-date':
+        icon = <CheckCircle className="h-8 w-8 text-fg-success" />;
+        title = t('feature.updateCheck.upToDate');
+        // Omit the version clause until the running version is known, to avoid "Version  installed".
+        description = currentVersion
+          ? t('feature.updateCheck.upToDateHint', { version: currentVersion })
+          : t('feature.updateCheck.upToDateHintNoVersion');
+        break;
+      case 'ready-to-install':
+        title = t('feature.updateCheck.readyToInstall');
+        description = t('feature.updateCheck.readyToInstallHint');
+        break;
+      case 'error':
+        icon = <AlertCircle className="h-8 w-8 text-fg-error" />;
+        title = t('feature.updateCheck.error');
+        description = errorMessage || t('feature.updateCheck.errorHint');
+        break;
+      case 'unsupported':
+        icon = <AlertCircle className="h-8 w-8 text-fg-secondary" />;
+        title = t('feature.updateCheck.unsupported');
+        description = t('feature.updateCheck.unsupportedHint');
+        break;
+      default:
+        break;
+    }
+
     return (
       <Dialog modal open={isOpen} onOpenChange={handleOpenChange}>
         <Dialog.Content>
-          <div className="flex flex-col items-center gap-4 py-6">
-            {status === 'checking' && (
-              <>
-                <Loader className="h-8 w-8 animate-spin text-text-secondary" />
-                <p className="text-sm text-text-secondary">{t('feature.updateCheck.checking')}</p>
-              </>
-            )}
+          <Dialog.Header>
+            {icon}
+            <Dialog.Title>{title}</Dialog.Title>
+            <Dialog.Description>{description}</Dialog.Description>
+          </Dialog.Header>
 
-            {status === 'up-to-date' && (
-              <>
-                <CheckCircle className="text-text-positive h-8 w-8" />
-                <div className="text-center">
-                  <p className="text-sm font-semibold text-text-primary">{t('feature.updateCheck.upToDate')}</p>
-                  <p className="mt-1 text-xs text-text-secondary">{t('feature.updateCheck.upToDateHint')}</p>
-                </div>
-              </>
-            )}
-
-            {status === 'downloading' && (
-              <div className="flex w-full flex-col gap-2 px-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm text-text-secondary">{t('feature.updateCheck.downloading')}</p>
-                  <p className="text-sm font-medium text-text-primary">
-                    {t('feature.updateCheck.downloadingPercent', { percent: Math.round(downloadProgress) })}
-                  </p>
-                </div>
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-general-muted">
-                  <div
-                    className="h-full rounded-full bg-foreground transition-all duration-300"
-                    style={{ width: `${downloadProgress}%` }}
-                  />
-                </div>
+          {status === 'downloading' && (
+            <div className="mt-4 flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-fg-secondary">{t('feature.updateCheck.progress')}</p>
+                <p className="text-xs font-medium text-fg-primary">
+                  {t('feature.updateCheck.downloadingPercent', { percent: Math.round(downloadProgress) })}
+                </p>
               </div>
-            )}
-
-            {status === 'ready-to-install' && (
-              <>
-                <CheckCircle className="text-text-positive h-8 w-8" />
-                <div className="text-center">
-                  <p className="text-sm font-semibold text-text-primary">{t('feature.updateCheck.readyToInstall')}</p>
-                  <p className="mt-1 text-xs text-text-secondary">{t('feature.updateCheck.readyToInstallHint')}</p>
-                </div>
-              </>
-            )}
-
-            {status === 'error' && (
-              <>
-                <AlertCircle className="text-text-negative h-8 w-8" />
-                <div className="text-center">
-                  <p className="text-sm font-semibold text-text-primary">{t('feature.updateCheck.error')}</p>
-                  <p className="mt-1 text-xs text-text-secondary">{errorMessage || t('feature.updateCheck.errorHint')}</p>
-                </div>
-              </>
-            )}
-          </div>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-bg-surface-nested">
+                <div
+                  className="h-full rounded-full bg-fg-primary transition-all duration-300"
+                  style={{ width: `${downloadProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
 
           <Dialog.Footer>
-            {status === 'up-to-date' || status === 'error' ? (
-              <Button fullWidth variant="outline" onClick={onClose}>
-                {t('feature.updateCheck.close')}
-              </Button>
-            ) : status === 'ready-to-install' ? (
+            {status === 'ready-to-install' ? (
               <div className="flex w-full gap-2">
                 <div className="flex-1">
                   <Button fullWidth variant="outline" onClick={onNotNow}>
@@ -106,7 +119,7 @@ export const UpdateStatusModal = memo(
                   </Button>
                 </div>
               </div>
-            ) : status === 'checking' || status === 'downloading' ? (
+            ) : status === 'up-to-date' || status === 'error' || status === 'unsupported' ? (
               <Button fullWidth variant="outline" onClick={onClose}>
                 {t('feature.updateCheck.close')}
               </Button>

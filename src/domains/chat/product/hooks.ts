@@ -1,14 +1,12 @@
 import { useSession, useSessionIdentity } from '@novasamatech/host-papp-react-ui';
 import { useMemo } from 'react';
-import { useObservable } from 'react-rx';
 
-import { useAction, useRead } from '@/shared/hooks';
+import { useRead } from '@/shared/hooks';
+import { productRoomUseCase } from '../$usecase/productRoom';
 import { type UserPeer } from '../session/types';
 
-import { declaredProductRooms$ } from './declared-rooms';
-import { createProductRoom, roomsResource } from './resource';
+import { roomsResource } from './resource';
 import { productChatService } from './service';
-import { createProductChatSession } from './session';
 
 // function formatDate(timestamp: number): string {
 //   const date = new Date(timestamp);
@@ -60,7 +58,10 @@ const useUserRooms = () => {
 export const useProductSessions = () => {
   const { peer, rooms, pending, error } = useUserRooms();
 
-  const sessions = useMemo(() => (peer ? rooms.map(r => createProductChatSession(peer, r)) : []), [peer, rooms]);
+  const sessions = useMemo(
+    () => (peer ? rooms.map(r => productRoomUseCase.createProductChatSession(peer, r)) : []),
+    [peer, rooms],
+  );
 
   return { data: sessions, pending, error };
 };
@@ -77,17 +78,10 @@ export const useUserProductRooms = () => {
 export const useProductRooms = (productId: Nullable<string>) => {
   const { rooms, pending, error } = useUserRooms();
 
-  const data = useMemo(() => (productId ? rooms.filter(room => room.productId === productId) : []), [rooms, productId]);
+  const data = useMemo(
+    () => (productId ? rooms.filter(room => productChatService.belongsToProduct(room, productId)) : []),
+    [rooms, productId],
+  );
 
   return { data, pending, error };
 };
-
-// Worker-declared rooms held in memory until the user confirms Proceed in Chat.
-export const useDeclaredProductRooms = (productId: Nullable<string>) => {
-  const declared = useObservable(declaredProductRooms$, []);
-  const data = useMemo(() => (productId ? declared.filter(room => room.productId === productId) : []), [declared, productId]);
-
-  return { data, pending: false, error: null };
-};
-
-export const useCreateProductRoom = () => useAction(createProductRoom);

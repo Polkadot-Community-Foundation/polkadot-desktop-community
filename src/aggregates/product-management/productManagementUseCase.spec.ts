@@ -1,16 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/domains/application', () => ({
-  DEFAULT_DASHBOARD_WIDGET_PRODUCT_ID: 'browse.dot',
+  DEFAULT_DASHBOARD_WIDGET_PRODUCT_LABEL: 'browse',
+  DEFAULT_RESIZE_HANDLES: ['s'],
+  MAX_WIDGET_WIDTH: 2,
+  MAX_WIDGET_HEIGHT: 8,
   cardsUseCase: {
-    addWidgetToLayout: vi.fn(),
+    addCardToLayout: vi.fn(),
     resizeCardToGridSize: vi.fn(),
     removeCardFromLayout: vi.fn(),
     seedDefaultMainLayout: vi.fn(),
   },
   foldersUseCase: {
-    addIconToFavorites: vi.fn(),
-    removeIconFromFolder: vi.fn(),
+    addToFavorites: vi.fn(),
+    removeItemFromFolder: vi.fn(),
   },
 }));
 
@@ -22,6 +25,8 @@ vi.mock('@/domains/product', () => ({
   lifecycleUseCase: {
     purgeProduct: vi.fn(),
   },
+  dotNsUseCase: { getActiveTld: vi.fn().mockResolvedValue('.dot') },
+  dotNsService: { baseNameOf: (id: string, tld: string) => (id.endsWith(tld) ? id : `${id}${tld}`) },
 }));
 
 import { cardsUseCase, foldersUseCase } from '@/domains/application';
@@ -40,10 +45,10 @@ beforeEach(() => {
       ReturnType<typeof commitmentUseCase.commitResolvedProduct>
     >,
   );
-  vi.mocked(cardsUseCase.addWidgetToLayout).mockResolvedValue({ ok: true });
+  vi.mocked(cardsUseCase.addCardToLayout).mockResolvedValue({ ok: true });
   vi.mocked(cardsUseCase.resizeCardToGridSize).mockResolvedValue({ ok: true });
-  vi.mocked(foldersUseCase.addIconToFavorites).mockResolvedValue({ ok: true });
-  vi.mocked(foldersUseCase.removeIconFromFolder).mockResolvedValue(true);
+  vi.mocked(foldersUseCase.addToFavorites).mockResolvedValue({ ok: true });
+  vi.mocked(foldersUseCase.removeItemFromFolder).mockResolvedValue(true);
   vi.mocked(cardsUseCase.removeCardFromLayout).mockResolvedValue(true);
   vi.mocked(lifecycleUseCase.purgeProduct).mockResolvedValue(true);
   vi.mocked(cardsUseCase.seedDefaultMainLayout).mockResolvedValue(false);
@@ -69,29 +74,31 @@ describe('ensureDefaultDashboard', () => {
 });
 
 describe('addProductToDashboard', () => {
-  it('commits the product, then adds it as a widget', async () => {
-    vi.mocked(cardsUseCase.addWidgetToLayout).mockResolvedValue({ ok: true, pageIndex: 2 });
+  it('commits the product, then adds it as a product:widget card', async () => {
+    vi.mocked(cardsUseCase.addCardToLayout).mockResolvedValue({ ok: true, pageIndex: 2 });
 
     const result = await productManagementUseCase.addProductToDashboard(product, { w: 1, h: 4 });
 
     expect(commitmentUseCase.commitResolvedProduct).toHaveBeenCalledWith(product);
-    expect(cardsUseCase.addWidgetToLayout).toHaveBeenCalledWith('app.dot', { w: 1, h: 4 }, 4);
+    expect(cardsUseCase.addCardToLayout).toHaveBeenCalledWith(
+      expect.objectContaining({ i: 'app.dot', w: 1, h: 4, payload: { kind: 'product:widget', productId: 'app.dot' } }),
+    );
     expect(cardsUseCase.resizeCardToGridSize).not.toHaveBeenCalled();
     expect(result).toEqual({ ok: true, pageIndex: 2 });
   });
 
   it('adds a 1×1 to favorites (never resizes)', async () => {
-    vi.mocked(foldersUseCase.addIconToFavorites).mockResolvedValue({ ok: true, pageIndex: 0 });
+    vi.mocked(foldersUseCase.addToFavorites).mockResolvedValue({ ok: true, pageIndex: 0 });
 
     const result = await productManagementUseCase.addProductToDashboard(product, { w: 1, h: 1 });
 
-    expect(foldersUseCase.addIconToFavorites).toHaveBeenCalledWith('app.dot');
+    expect(foldersUseCase.addToFavorites).toHaveBeenCalledWith('app.dot');
     expect(cardsUseCase.resizeCardToGridSize).not.toHaveBeenCalled();
     expect(result).toEqual({ ok: true, pageIndex: 0 });
   });
 
   it('falls back to resize when the widget is already on a page', async () => {
-    vi.mocked(cardsUseCase.addWidgetToLayout).mockResolvedValue({ ok: false });
+    vi.mocked(cardsUseCase.addCardToLayout).mockResolvedValue({ ok: false });
     vi.mocked(cardsUseCase.resizeCardToGridSize).mockResolvedValue({ ok: true, pageIndex: 0 });
 
     const result = await productManagementUseCase.addProductToDashboard(product, { w: 2, h: 4 });
@@ -106,13 +113,13 @@ describe('addProductToDashboard', () => {
     const result = await productManagementUseCase.addProductToDashboard(product, { w: 1, h: 4 });
 
     expect(result).toEqual({ ok: false });
-    expect(cardsUseCase.addWidgetToLayout).not.toHaveBeenCalled();
+    expect(cardsUseCase.addCardToLayout).not.toHaveBeenCalled();
   });
 });
 
 describe('forgetProduct', () => {
-  it('skips removeCardFromLayout when removeIconFromFolder succeeded, then purges', async () => {
-    vi.mocked(foldersUseCase.removeIconFromFolder).mockResolvedValue(true);
+  it('skips removeCardFromLayout when removeItemFromFolder succeeded, then purges', async () => {
+    vi.mocked(foldersUseCase.removeItemFromFolder).mockResolvedValue(true);
 
     const result = await productManagementUseCase.forgetProduct('app.dot');
 
@@ -121,8 +128,8 @@ describe('forgetProduct', () => {
     expect(result).toBe(true);
   });
 
-  it('falls back to removeCardFromLayout when removeIconFromFolder returned false', async () => {
-    vi.mocked(foldersUseCase.removeIconFromFolder).mockResolvedValue(false);
+  it('falls back to removeCardFromLayout when removeItemFromFolder returned false', async () => {
+    vi.mocked(foldersUseCase.removeItemFromFolder).mockResolvedValue(false);
 
     await productManagementUseCase.forgetProduct('app.dot');
 

@@ -16,7 +16,7 @@ export const HomeButton = () => {
   };
 
   return (
-    <div className="mr-1 ml-2">
+    <div className="ms-2 me-1">
       <HeaderLink to="/dashboard" variant="icon" testId={TEST_IDS.homeButton} disableActive onClick={handleClick}>
         <HomeIcon className={homeIconClassName} aria-hidden />
       </HeaderLink>

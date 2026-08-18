@@ -1,41 +1,43 @@
 export { commandsService } from './commands/service';
-export { type SubmitErrorInfo, useSubmitError } from './statement-store/hooks';
+export { useSubmitError } from './statement-store/hooks';
 export type { Command } from './commands/types';
 export { failActivePeopleChain, lazyClient, setActivePeopleChain, statementStoreAdapter } from './statement-store/service';
-export { type StatementSubmitParams, signAndSubmitStatement } from './statement-store/submitStatement';
-export { type Environment, type EnvironmentId, SETTINGS_STORAGE_KEY, environmentService } from './environment';
+export { type Environment, type EnvironmentId } from './environment/types';
+export { SETTINGS_STORAGE_KEY } from './environment/constants';
+export { environmentService } from './environment/service';
 export { environmentUseCase } from './$usecase/environment';
 export { useActiveEnvironment, useEnvironment } from './$usecase/environment.hooks';
 
 export { web3SummitGateService } from './web3summit-gate/service';
 export { type Web3SummitGateMode, web3SummitGateModeSchema } from './web3summit-gate/schemas';
-export { usePappProvider } from './papp-provider/hooks';
-export { watchHostPappSessionTeardown } from './papp-provider/sessionTeardown';
-export { hydrateUserIdentity, loadDeviceIdentity, loadUserIdentity } from './papp-provider/identity';
 export {
-  migrateLegacySsoSessions,
-  performUserLogout,
-  resetDeviceIdentity,
-  resetPersistedStateToDefaultEnvironment,
-  runV2Logout,
-} from './papp-provider/service';
+  ensurePappProvider,
+  hydrateUserIdentity,
+  loadDeviceIdentity,
+  loadUserIdentity,
+  usePappProvider,
+  watchHostPappSessionTeardown,
+} from './papp-provider';
+export { onUserLoggedOutSideEffect, sessionUseCase } from './$usecase/session';
+export { localAllowanceUseCase } from './$usecase/localAllowance';
 
 export type {
+  ContentCardPayload,
   DashboardCard,
   DashboardCardLayoutRules,
   DashboardCardPayload,
   DashboardLayout,
   FolderCardPayload,
-  FolderItemPositions,
   WidgetSizeHints,
   WidgetSizeIconVariant,
   WidgetSizeKey,
 } from './dashboard-layout/types';
 export {
   ALLOWED_WIDGET_HEIGHTS,
-  DEFAULT_DASHBOARD_WIDGET_PRODUCT_ID,
+  DEFAULT_DASHBOARD_WIDGET_PRODUCT_LABEL,
   DEFAULT_RESIZE_HANDLES,
   FAVORITES_FOLDER_ID,
+  FAVORITES_GRID_COLS,
   FOLDER_DEFAULT_HEIGHT,
   FOLDER_MIN_HEIGHT,
   MAX_GRID_ROWS,
@@ -44,9 +46,14 @@ export {
   WIDGET_VARIANT_GRID_SIZE,
 } from './dashboard-layout/constants';
 export { dashboardLayoutService } from './dashboard-layout/service';
-export { useDashboardLayouts, useFavoriteProductIds, useSetMainActivePage } from './dashboard-layout/hooks';
+export {
+  useDashboardLayouts,
+  useDashboardProductIds,
+  useFavoriteProductIds,
+  useSetMainActivePage,
+} from './dashboard-layout/hooks';
 
 export { cardsUseCase } from './$usecase/cards';
 export { foldersUseCase } from './$usecase/folders';
-export { useAddCard, useAddWidget, useRemoveCard, useResizeCard } from './$usecase/cards.hooks';
-export { useRemoveFolder, useRemoveIconFromFolder, useSetFolderItemPositions } from './$usecase/folders.hooks';
+export { useAddCard, useRemoveCard, useResizeCard } from './$usecase/cards.hooks';
+export { useAddToFavorites, useRemoveFolder, useRemoveItemFromFolder } from './$usecase/folders.hooks';

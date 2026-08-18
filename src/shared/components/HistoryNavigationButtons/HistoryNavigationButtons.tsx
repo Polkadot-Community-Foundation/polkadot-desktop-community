@@ -54,8 +54,8 @@ const NavigationButton = ({ testId, ariaLabel, disabled, onClick, children }: Na
       className={cnTw(
         'relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-transparent transition-colors',
         disabled
-          ? 'cursor-default text-text-tertiary opacity-50'
-          : 'cursor-pointer text-text-secondary hover:bg-bg-action-secondary-hover',
+          ? 'cursor-default text-fg-tertiary opacity-50'
+          : 'cursor-pointer text-fg-secondary hover:bg-bg-action-secondary-hover',
       )}
       style={{ appRegion: 'no-drag' }}
       onClick={onClick}

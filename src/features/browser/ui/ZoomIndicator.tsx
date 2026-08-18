@@ -41,7 +41,7 @@ export const ZoomIndicator = ({ tabId }: Props) => {
   return (
     <div
       data-testid={TEST_IDS.zoomIndicator}
-      className="animate-find-bar-in absolute top-3 left-1/2 z-50 flex h-8 -translate-x-1/2 items-center gap-1 rounded-lg border border-border-primary bg-bg-surface-nested px-2 shadow-md"
+      className="animate-find-bar-in absolute top-3 left-1/2 z-50 flex h-8 -translate-x-1/2 items-center gap-1 rounded-lg border border-stroke-primary bg-bg-surface-nested px-2 shadow-md"
       style={{ appRegion: 'no-drag' }}
     >
       <ZoomButton testId={TEST_IDS.zoomOut} ariaLabel={t('feature.browser.zoomOut')} onClick={zoomOut}>

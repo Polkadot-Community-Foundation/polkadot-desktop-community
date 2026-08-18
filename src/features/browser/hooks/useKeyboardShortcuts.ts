@@ -2,6 +2,7 @@ import { useLocation } from '@tanstack/react-router';
 import { useEffect } from 'react';
 
 import { isElectron } from '@/shared/env';
+import { CHAT, isChatPathname } from '@/aggregates/browser-tabs';
 import { findInPage } from '@/aggregates/find-in-page';
 import { onProductRefreshRequestedSideEffect } from '@/aggregates/product-loading';
 import { webviewZoom } from '@/aggregates/webview-zoom';
@@ -22,9 +23,12 @@ export const useKeyboardShortcuts = () => {
   const { pathname } = useLocation();
   // The on-screen product tab — the shared target for both find-in-page and zoom.
   const productTarget = pathname.startsWith('/product/') && selected?.type === PRODUCT ? selected : null;
+  // Chat is a native SPA (not a product tab) but still supports Add to Dashboard.
+  const isChatRoute = isChatPathname(pathname);
 
-  // Cmd/Ctrl+K — focuses the address bar from any route, in both web and Electron.
-  // Registered once at the browser-feature level; only the listening AddressBar instance reacts.
+  // Cmd/Ctrl+K — raises `focusAddressBar` from any route, in both web and Electron.
+  // The address bar is a button now, so the input-modality feature handles this and
+  // opens the input surface; Cmd/Ctrl+T and Cmd/Ctrl+L raise the same contract.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -43,17 +47,20 @@ export const useKeyboardShortcuts = () => {
   // click into a renderer no-op — a dead end with no UX feedback. Disabling them also
   // means their accelerators don't fire against a stale on-screen product.
   const productOnScreen = !!productTarget;
+  // Add to Dashboard also targets chat, so its menu (Cmd/Ctrl+D accelerator) must
+  // be enabled on the chat route too — find/zoom stay product-only.
+  const dashboardMenuEnabled = productOnScreen || isChatRoute;
   useEffect(() => {
     if (!isElectron()) return;
     window.App.setFindMenuEnabled(productOnScreen);
     window.App.setZoomMenuEnabled(productOnScreen);
-    window.App.setProductDashboardMenuEnabled(productOnScreen);
+    window.App.setProductDashboardMenuEnabled(dashboardMenuEnabled);
     return () => {
       window.App.setFindMenuEnabled(false);
       window.App.setZoomMenuEnabled(false);
       window.App.setProductDashboardMenuEnabled(false);
     };
-  }, [productOnScreen]);
+  }, [productOnScreen, dashboardMenuEnabled]);
 
   useEffect(() => {
     const focusAddressBar = () => {
@@ -143,9 +150,11 @@ export const useKeyboardShortcuts = () => {
 
     // Cmd/Ctrl+D — Add to Dashboard or toggle Favorites (same as the product actions menu).
     // Menu accelerator is the reliable path when focus is inside the guest webview.
+    // Chat has no product tab, so fall back to its native id on the chat route.
     const addToDashboard = () => {
-      if (!productTarget) return;
-      void productAddToDashboardSideEffect.apply({ productId: productTarget.id });
+      const productId = productTarget?.id ?? (isChatRoute ? CHAT : null);
+      if (!productId) return;
+      void productAddToDashboardSideEffect.apply({ productId });
     };
 
     if (isElectron()) {
@@ -239,5 +248,5 @@ export const useKeyboardShortcuts = () => {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [tabs, selectedTabId, select, closeTab, goBack, goForward, productTarget]);
+  }, [tabs, selectedTabId, select, closeTab, goBack, goForward, productTarget, isChatRoute]);
 };

@@ -20,6 +20,11 @@ export type RateLimiterKind =
   | 'identityAccount'
   | 'productAccounts'
   | 'alias'
+  | 'proof'
+  | 'signVrf'
+  | 'ringVrfRegister'
+  | 'ringVrfList'
+  | 'ringVrfSign'
   | 'entropy'
   | 'login'
   | 'preimage';

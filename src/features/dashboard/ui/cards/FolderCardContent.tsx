@@ -1,73 +1,81 @@
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
+import { WidgetPlaceholder } from '@/shared/components';
 import { useTranslation } from '@/shared/translation';
-import { foldersUseCase } from '@/domains/application';
-import { type FolderItemPositions } from '@/domains/application';
-import { dotNsService, usePersistedProducts } from '@/domains/product';
-import { useOpenProductSurface } from '../../hooks/useOpenProductSurface';
-import { getProductIcon } from '../../productIcons';
-import { type FolderItem } from '../../types';
+import { dashboardLayoutService, foldersUseCase } from '@/domains/application';
+import { openFavoriteItemSideEffect, openFavoritesSideEffect } from '../../di';
 import { FolderGrid } from '../folder/FolderGrid';
 
 type Props = {
   cardId: string;
   items: string[];
-  positions?: FolderItemPositions;
   isActivePage: boolean;
+  maxVisibleItems: number;
+  onBrowseApps?: VoidFunction;
 };
 
 // Folder body — the grid of icon-sized shortcuts. The surrounding card frame
 // (topbar with FolderIcon + label + menu) comes from `DashboardCardChrome`;
-// this component renders only what lives inside the body.
-export const FolderCardContent = ({ cardId, items, positions, isActivePage }: Props) => {
+// this component renders only what lives inside the body. The per-item icon+label
+// and the open action are content-generic: rendering goes through
+// `folderItemContentTransformer` (per cell) and opening through
+// `openFavoriteItemSideEffect`, so the dashboard host stays product-agnostic.
+export const FolderCardContent = ({ cardId, items, isActivePage, maxVisibleItems, onBrowseApps }: Props) => {
   const { t } = useTranslation();
-  const { data: products } = usePersistedProducts();
-  const openProduct = useOpenProductSurface();
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
-  const folderItems: FolderItem[] = items
-    .map((id): FolderItem | null => {
-      const product = products.find(p => p.baseName === id);
-      if (!product) return null;
-      const NativeIcon = getProductIcon(product.baseName) ?? undefined;
-      return {
-        widgetId: id,
-        icon: product.icon,
-        NativeIcon,
-        name: dotNsService.toShortLabel(product.baseName),
-      };
-    })
-    .filter((entry): entry is FolderItem => entry !== null);
+  const handleOpen = useCallback((itemId: string) => {
+    void openFavoriteItemSideEffect.apply({ itemId });
+  }, []);
+
+  // Cap to what fits the current widget size. On overflow the last slot becomes a
+  // "View more" tile (opening the Favorites SPA), so one fewer item is shown. Extra
+  // favourites stay saved — the `items` source is untouched.
+  const { visibleCount, hasViewMore } = dashboardLayoutService.getFavoritesDisplay(items.length, maxVisibleItems);
+  // Memoized: the grid keeps an optimistic copy of this order and reconciles against
+  // it, so handing it a fresh array every render would re-run that reconciliation.
+  const visibleIds = useMemo(() => items.slice(0, visibleCount), [items, visibleCount]);
+
+  const handleOpenViewMore = () => {
+    void openFavoritesSideEffect.apply(undefined);
+  };
 
   const handleRemove = (widgetId: string) => {
     if (!isActivePage) return;
-    void foldersUseCase.removeIconFromFolder(widgetId);
+    void foldersUseCase.removeItemFromFolder(widgetId);
   };
 
-  const handleChangePositions = (next: FolderItemPositions) => {
+  // Item order IS the placement, so a widget drag writes the same order the
+  // Favorites SPA reads and writes. Only the visible prefix is passed; the use case
+  // reorders that subset in place, leaving overflow items untouched.
+  const handleReorderItems = (orderedItemIds: string[]) => {
     if (!isActivePage) return;
-    void foldersUseCase.setFolderItemPositions(cardId, next);
+    void foldersUseCase.reorderFolderItems(cardId, orderedItemIds);
   };
 
-  if (folderItems.length === 0) {
+  if (items.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center px-4 text-center">
-        <p className="text-body-m-regular text-fg-secondary">{t('feature.dashboard.favorites.empty')}</p>
-      </div>
+      <WidgetPlaceholder
+        message={t('feature.dashboard.favorites.emptyPlaceholder')}
+        actionLabel={t('feature.dashboard.favorites.browseApps')}
+        onAction={onBrowseApps}
+      />
     );
   }
 
   return (
-    <div className="h-full w-full overflow-y-auto">
+    <div className="h-full w-full overflow-hidden">
       <FolderGrid
         folderId={cardId}
-        items={folderItems}
-        positions={positions}
+        items={visibleIds}
+        maxVisibleItems={maxVisibleItems}
+        hasViewMore={hasViewMore}
         openMenuId={openMenuId}
         onMenuOpenChange={(menuId, open) => setOpenMenuId(prev => (open ? menuId : prev === menuId ? null : prev))}
-        onOpenWidget={openProduct}
+        onOpenWidget={handleOpen}
         onRemoveWidget={handleRemove}
-        onChangeWidgetPositions={handleChangePositions}
+        onReorderItems={handleReorderItems}
+        onOpenViewMore={handleOpenViewMore}
       />
     </div>
   );

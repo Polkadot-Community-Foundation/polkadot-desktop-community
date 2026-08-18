@@ -24,16 +24,14 @@ Given('the link-tests product is open in a tab', async ({ electronApp, linkTests
   const browser = new BrowserPage(electronApp.window, electronApp.app);
 
   // Inline the open flow: BrowserPage.openProductInNewTab waits on a tab whose
-  // data-tab-id equals the filled value, but our address bar input includes a
-  // path (`localhost:<port>/link-tests`) while the tab id is the identifier
-  // only (`localhost:<port>`).
+  // data-tab-id equals the submitted value, but our address includes a path
+  // (`localhost:<port>/link-tests`) while the tab id is the identifier only
+  // (`localhost:<port>`).
   const newTabButton = electronApp.window.getByTestId(TEST_IDS.newTabButton);
   if (await newTabButton.isVisible().catch(() => false)) {
     await newTabButton.click({ force: true });
   }
-  await browser.addressBar.click();
-  await browser.addressBar.fill(linkTestsTarget.address);
-  await browser.addressBar.press('Enter');
+  await browser.addressBar.submit(linkTestsTarget.address);
   // <Tabs> hides the [data-tab-id] chip when there's exactly one selected tab,
   // so wait on the host route instead.
   await expect
@@ -107,9 +105,7 @@ When('the user returns to the link-tests tab', async ({ electronApp, linkTestsTa
 
 When('the user types the link-tests identifier into the address bar', async ({ electronApp, linkTestsTarget }) => {
   const browser = new BrowserPage(electronApp.window, electronApp.app);
-  await browser.addressBar.click();
-  await browser.addressBar.fill(linkTestsTarget.identifier);
-  await browser.addressBar.press('Enter');
+  await browser.addressBar.submit(linkTestsTarget.identifier);
 });
 
 Then('the host route pathname ends with {string}', async ({ electronApp }, suffix: string) => {

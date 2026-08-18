@@ -19,13 +19,13 @@ Walk this for every file the diff touches. Cite the **doc and section**. Severit
 
 ## Data-access layering (`project-structure.md` § Anti-patterns, § File contracts)
 
-These are file-role rules *within* a package — ESLint's boundaries plugin works at the package level and can't see them.
+These are file-role rules _within_ a package — ESLint's boundaries plugin works at the package level and can't see them.
 
 - **major** — `hooks.ts` importing `repository.ts` or `gateway.ts` directly; persisted/wire data must reach a hook through a `resource.ts` (anti-pattern 8).
 - **major** — A `createMutation` / `useMutation` / `useResource` primitive — there is none; writes are plain functions bound via `useAction` (anti-pattern 7).
 - **major** — Inline `useRead(resource, {...})` at a feature call site; features call named domain hooks (`useProducts`), the `useRead` indirection lives in the domain's `hooks.ts` (anti-pattern 3).
 - **major** — A domain `hooks.ts` doing feature-specific shaping — if it only matters for one feature it belongs in that feature's `hooks/` (anti-pattern 4).
-- **major** — Business logic (transformation, derivation) inside a `hooks.ts` instead of a `service.ts` it should call.
+- **major** — Business logic (transformation, derivation) inside a `hooks.ts` instead of a `service.ts` it should call. Same for a **feature**: a pure non-React derivation/formatter placed in a `hooks/` file (or inline in a hook) instead of the feature-root `service.ts` — or, when it's reusable domain logic over entities, a domain `service.ts` (`project-structure.md` § Feature `hooks/` / `service.ts`).
 - **major** — `service.ts` performing I/O or importing a resource/repository/gateway — it's stateless sync helpers only.
 
 ## Feature UI (`project-structure.md` § Feature, `style.md` § React)
@@ -35,6 +35,7 @@ These are file-role rules *within* a package — ESLint's boundaries plugin work
 ## Hygiene (`style.md`)
 
 - **minor** — `immer`'s `produce` used for a flat object (nested updates only).
+- **minor** — A producer with discrete states exposing several narrow boolean callbacks (`onIdle` + `onError` + …) instead of one `onXChange(status)` over a typed union (`style.md` § JS patterns). One callback keeps a single source of truth and surfaces every state the producer owns.
 
 ---
 

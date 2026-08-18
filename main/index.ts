@@ -5,6 +5,9 @@ import { electronProtocol } from '~config';
 import { BrowserWindow, app, ipcMain, net, protocol, shell, systemPreferences, webContents } from 'electron';
 import { REACT_DEVELOPER_TOOLS, installExtension } from 'electron-devtools-installer';
 
+import { type CallWindowLaunch } from '@/shared/call-bridge';
+
+import { createCallWindow } from './factories/callWindow';
 import { setupAppCrashMonitoring, setupWindowCrashRecovery } from './factories/crash-recovery';
 import { runAppSingleInstance } from './factories/instance';
 import { setupLogExport, setupLogger } from './factories/logs';
@@ -16,16 +19,25 @@ import {
   registerDeepLinkProtocol,
   setupDeepLinkHandlers,
 } from './factories/protocol';
+import { setupNativeTheme } from './factories/theme';
 import { setAutoUpdaterMainWindow, setupAutoUpdater } from './factories/updater';
 import { createWindow } from './factories/window';
 import { setupNotifications } from './notifications';
 import { setupSandbox } from './sandbox';
+import { registerAutoUpdateSupportedSyncIpc } from './shared/auto-update';
 import { ENVIRONMENT } from './shared/constants/environment';
 import { PLATFORM } from './shared/constants/platform';
 import { getOsType } from './shared/lib/utils';
 import { type ProxyFetchRequest, type ProxyFetchResponse } from './shared/proxyFetch';
 import { initSentry } from './shared/sentry';
 import { registerUpdateChannelSyncIpc } from './shared/update-channel';
+
+// Public URL to the Polkadot Desktop app icon, served from the community mirror
+// on `main`. Sent as the `HostIcon` entry in the SSO handshake proposal so the
+// paired mobile client can render it. Permanent path (no commit SHA) so the icon
+// can be swapped centrally without shipping new desktop builds.
+const HOST_ICON_URL =
+  'https://raw.githubusercontent.com/paritytech/polkadot-desktop-community/main/src/shared/assets/images/polkadot-desktop-icon.png';
 
 // Applied before requestSingleInstanceLock — the lock is keyed on userData, so
 // isolating the userData path per e2e instance also gives each instance its own lock.
@@ -36,6 +48,7 @@ if (process.env['ELECTRON_USER_DATA']) {
 runAppSingleInstance(async () => {
   initSentry();
   registerUpdateChannelSyncIpc();
+  registerAutoUpdateSupportedSyncIpc();
   setupLogger();
   setupSandbox(() => mainWindow?.webContents ?? null);
   setupAppCrashMonitoring();
@@ -69,7 +82,12 @@ runAppSingleInstance(async () => {
 
   await app.whenReady();
 
+  setupNativeTheme();
+
   let mainWindow: BrowserWindow | null = createWindow();
+  // The single active call window (see the bridge's single-call TODO). Retained
+  // so the renderer can focus it (return-to-call bar) and learn when it closes.
+  let activeCallWindow: BrowserWindow | null = null;
   setupWindowCrashRecovery(mainWindow);
   setupPowerMonitor(mainWindow);
   setupAutoUpdater(mainWindow);
@@ -111,6 +129,45 @@ runAppSingleInstance(async () => {
   });
 
   setupLogExport();
+
+  ipcMain.handle(
+    'call:open',
+    (_event, launchParams: { launch: CallWindowLaunch; iceConfig: { turnHost?: string; turnSecret?: string } }) => {
+      if (!mainWindow) {
+        console.warn('[call] call:open received but mainWindow is null — ignoring');
+        return;
+      }
+      // A window that died without its 'closed' handler running would otherwise
+      // block every later call.
+      if (activeCallWindow?.isDestroyed()) activeCallWindow = null;
+      // Only one call at a time: the bridge owns a single MessagePort, so a second
+      // window would orphan the first — unreachable by call:focus, yet still firing
+      // call:ended for a call that is still running.
+      if (activeCallWindow) {
+        console.warn('[call] call:open while a call is active — focusing the existing window');
+        if (activeCallWindow.isMinimized()) activeCallWindow.restore();
+        activeCallWindow.show();
+        activeCallWindow.focus();
+
+        return;
+      }
+      const callWindow = createCallWindow({ ...launchParams, mainWindow });
+      activeCallWindow = callWindow;
+      // When the call window closes (user ended, peer ended + terminal dwell, or
+      // manual close), tell the renderer so it can drop the return-to-call bar.
+      callWindow.on('closed', () => {
+        if (activeCallWindow === callWindow) activeCallWindow = null;
+        mainWindow?.webContents.send('call:ended');
+      });
+    },
+  );
+
+  ipcMain.on('call:focus', () => {
+    if (!activeCallWindow) return;
+    if (activeCallWindow.isMinimized()) activeCallWindow.restore();
+    activeCallWindow.show();
+    activeCallWindow.focus();
+  });
 
   ipcMain.on('reload', () => mainWindow?.webContents.reload());
   ipcMain.on('window:close', () => mainWindow?.close());
@@ -187,9 +244,20 @@ runAppSingleInstance(async () => {
 
   ipcMain.handle(
     'getHostMetadata',
-    (): { hostName?: string; hostVersion?: string; platformType?: string; platformVersion?: string } => ({
+    (): {
+      hostName?: string;
+      hostVersion?: string;
+      hostIcon?: string;
+      platformType?: string;
+      platformVersion?: string;
+    } => ({
       hostName: 'Polkadot Desktop',
       hostVersion: appVersion,
+      // Public URL to the app icon, sent as the `HostIcon` metadata entry in the
+      // SSO handshake proposal so the mobile client can show it on the pairing
+      // screen. A URL (not base64) keeps the QR-encoded proposal small; the
+      // asset is mirrored from this repo into the public community repo.
+      hostIcon: HOST_ICON_URL,
       platformType: getOsType(),
       platformVersion: process.getSystemVersion(),
     }),

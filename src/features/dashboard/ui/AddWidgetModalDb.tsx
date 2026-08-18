@@ -2,21 +2,21 @@ import { Dialog, Input } from '@novasamatech/tr-ui';
 import { Search } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
-import { usePipeline } from '@/shared/di';
+import { useTransformer } from '@/shared/di';
+import { TEST_IDS } from '@/shared/test-ids';
 import { useTranslation } from '@/shared/translation';
 import { cnTw } from '@/shared/utils';
-import { type DashboardCard, dashboardLayoutService } from '@/domains/application';
-import { type AppListing, browseService, usePublishedWidgetListings } from '@/domains/product';
-import { type Product, useDisplayedProduct, useProductIcon } from '@/domains/product';
-import { type AddableDashboardCard, addableDashboardCardsPipeline } from '../di';
+import { type DashboardCard } from '@/domains/application';
+import { useDotNsTld } from '@/domains/product';
+import { type AddWidgetPanelContext, addWidgetPanelTransformer } from '../di';
+import { useAddableDashboardCards } from '../hooks/useAddableDashboardCards';
+import { addWidgetModalOpen, useAddWidgetCatalogSources } from '../state/addWidgetCatalog';
 
-import { AddWidgetModalNativePanel } from './add-widget/AddWidgetModalNativePanel';
-import { AddWidgetModalProductPanel } from './add-widget/AddWidgetModalProductPanel';
 import { AddWidgetSidebarCatalogLoading } from './add-widget/AddWidgetSidebarCatalogLoading';
 import { AddWidgetSidebarIcon } from './add-widget/AddWidgetSidebarIcon';
 import {
+  buildContributedSidebarEntries,
   buildNativeSidebarEntries,
-  buildPublishedSidebarEntries,
   filterSidebarEntries,
   mergeAddWidgetSidebarEntries,
 } from './add-widget/addWidgetList';
@@ -28,18 +28,6 @@ type AddWidgetModalDbProps = {
   isOpen: boolean;
   onClose: () => void;
   onNavigateToDashboardPage: (pageIndex: number) => void;
-  onSelectProduct: (product: Product, size: { w: number; h: number }) => Promise<{ ok: boolean; pageIndex?: number }>;
-  onAddNativeCard: (entry: AddableDashboardCard, size: { w: number; h: number }) => Promise<{ ok: boolean; pageIndex?: number }>;
-};
-
-// Kept separate so `useProductIcon` is unconditional: a published baseName can
-// collide with a native id (e.g. 'chat'), and reconciling a published entry to
-// a native one under the same key must not change the hook call count.
-const PublishedSidebarItemIcon = ({ listing }: { listing: AppListing }) => {
-  const icon = browseService.productPreviewFromListing(listing).icon;
-  const { data: iconUrl } = useProductIcon(icon);
-
-  return <AddWidgetSidebarIcon alt={listing.manifest.displayName} imageUrl={iconUrl} />;
 };
 
 const SidebarItemIcon = ({ entry }: { entry: AddWidgetSidebarEntry }) => {
@@ -49,7 +37,7 @@ const SidebarItemIcon = ({ entry }: { entry: AddWidgetSidebarEntry }) => {
     return <AddWidgetSidebarIcon alt={t(entry.card.displayNameKey)}>{entry.card.icon}</AddWidgetSidebarIcon>;
   }
 
-  return <PublishedSidebarItemIcon listing={entry.listing} />;
+  return <>{entry.entry.renderIcon()}</>;
 };
 
 const SidebarItem = ({
@@ -66,9 +54,10 @@ const SidebarItem = ({
   return (
     <button
       type="button"
+      data-testid={TEST_IDS.addWidgetSidebarItem}
       aria-pressed={isSelected}
       className={cnTw(
-        'flex h-8 w-full items-center rounded-[6px] px-3 py-1 text-left transition-colors',
+        'flex h-8 w-full items-center rounded-md px-3 py-1 text-start transition-colors',
         isSelected ? 'bg-bg-selection-container-hover' : 'hover:bg-bg-selection-container-hover',
       )}
       onClick={onClick}
@@ -81,42 +70,13 @@ const SidebarItem = ({
   );
 };
 
-const PublishedWidgetPanel = ({
-  baseName,
-  listing,
-  favoriteProductIds,
-  dashboardPages,
-  onSelectProduct,
-  onNavigateToDashboardPage,
-}: {
-  baseName: string;
-  listing: AppListing;
-  favoriteProductIds: ReadonlySet<string>;
-  dashboardPages: DashboardCard[][];
-  onSelectProduct: AddWidgetModalDbProps['onSelectProduct'];
-  onNavigateToDashboardPage: (pageIndex: number) => void;
-}) => {
-  const previewProduct = useMemo(() => browseService.productPreviewFromListing(listing), [listing]);
-  const { data: resolvedProduct } = useDisplayedProduct(baseName);
-  const product = useMemo(() => {
-    const base = resolvedProduct ?? previewProduct;
-    return browseService.enrichProductWithListing(base, listing);
-  }, [listing, previewProduct, resolvedProduct]);
-
-  // Folder-aware: a product already living inside a user folder counts as
-  // "on the dashboard" so the panel offers "Open" instead of "Add" — adding it
-  // again would create a duplicate top-level widget alongside the folder entry.
-  const dashboardWidgetPlacement = dashboardLayoutService.findProductDashboardPlacement(dashboardPages, product.baseName);
-
-  return (
-    <AddWidgetModalProductPanel
-      selectedProduct={product}
-      favoriteProductIds={favoriteProductIds}
-      dashboardWidgetPlacement={dashboardWidgetPlacement}
-      onSelectProduct={onSelectProduct}
-      onNavigateToDashboardPage={onNavigateToDashboardPage}
-    />
-  );
+// Resolves the panel for any selected sidebar entry through the content-agnostic
+// transformer (the dashboard host claims native entries, content providers the
+// rest). Returns `null` while no provider claims the entry (identical to the
+// prior "nothing while unresolved" behavior).
+const SelectedEntryPanel = ({ entry, context }: { entry: AddWidgetSidebarEntry; context: AddWidgetPanelContext }) => {
+  const node = useTransformer(addWidgetPanelTransformer, { entry, context });
+  return node ?? null;
 };
 
 export const AddWidgetModalDb = ({
@@ -125,15 +85,20 @@ export const AddWidgetModalDb = ({
   isOpen,
   onClose,
   onNavigateToDashboardPage,
-  onSelectProduct,
-  onAddNativeCard,
 }: AddWidgetModalDbProps) => {
   const { t } = useTranslation();
-  const addableCards = usePipeline(addableDashboardCardsPipeline, [], {});
-  const { data: publishedListings, pending: listingsPending, error: listingsError } = usePublishedWidgetListings(isOpen);
+  const { data: tld } = useDotNsTld();
+  const { cards: addableCards } = useAddableDashboardCards();
+  const catalogSources = useAddWidgetCatalogSources();
 
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Drive the shared open-state so catalog providers (e.g. published listings) only
+  // load while the modal is open, preserving the prior `usePublishedWidgetListings(isOpen)`.
+  useEffect(() => {
+    addWidgetModalOpen.set(isOpen);
+  }, [isOpen]);
 
   const handleClose = () => {
     setSelectedEntryId(null);
@@ -141,11 +106,25 @@ export const AddWidgetModalDb = ({
     onClose();
   };
 
+  // Aggregate contributed catalog slices across every provider so a single source's
+  // load drives the shared spinner / load-failed message.
+  const { contributedEntries, catalogPending, catalogError } = useMemo(() => {
+    const entries = [];
+    let pending = false;
+    let error = false;
+    for (const source of catalogSources.values()) {
+      entries.push(...source.entries);
+      pending = pending || source.pending;
+      error = error || source.error;
+    }
+    return { contributedEntries: entries, catalogPending: pending, catalogError: error };
+  }, [catalogSources]);
+
   const sidebarEntries = useMemo(() => {
     const nativeEntries = buildNativeSidebarEntries(addableCards);
-    const publishedEntries = buildPublishedSidebarEntries(publishedListings);
-    return mergeAddWidgetSidebarEntries(nativeEntries, publishedEntries, t);
-  }, [addableCards, publishedListings, t]);
+    const contributed = buildContributedSidebarEntries(contributedEntries);
+    return mergeAddWidgetSidebarEntries(nativeEntries, contributed, t);
+  }, [addableCards, contributedEntries, t]);
 
   const filteredEntries = useMemo(() => filterSidebarEntries(sidebarEntries, searchQuery, t), [sidebarEntries, searchQuery, t]);
 
@@ -168,8 +147,13 @@ export const AddWidgetModalDb = ({
 
   const getEntryLabel = (entry: AddWidgetSidebarEntry) => {
     if (entry.source === 'native') return t(entry.card.displayNameKey);
-    return entry.listing.manifest.displayName;
+    return entry.entry.label;
   };
+
+  const panelContext = useMemo<AddWidgetPanelContext>(
+    () => ({ dashboardPages, favoriteProductIds, onNavigateToDashboardPage }),
+    [dashboardPages, favoriteProductIds, onNavigateToDashboardPage],
+  );
 
   return (
     <Dialog
@@ -180,15 +164,15 @@ export const AddWidgetModalDb = ({
       }}
     >
       <Dialog.Content showCloseButton variant="default" size="xl" aria-describedby={undefined}>
-        <div className="flex h-[680px] bg-bg-surface-container">
-          <div className="flex w-[320px] shrink-0 flex-col gap-4 border-r border-border-primary bg-bg-surface-container pr-6">
+        <div className="flex h-170 bg-bg-surface-container">
+          <div className="flex w-[320px] shrink-0 flex-col gap-4 border-e border-stroke-primary bg-bg-surface-container pe-6">
             <div className="relative min-h-9">
-              <Search className="pointer-events-none absolute top-1/2 left-3 size-5 -translate-y-1/2 text-fg-secondary" />
-              <div className="[&_input]:min-h-9 [&_input]:pl-9">
+              <Search className="pointer-events-none absolute start-3 top-1/2 size-5 -translate-y-1/2 text-fg-secondary" />
+              <div className="[&_input]:min-h-9 [&_input]:ps-9" data-testid={TEST_IDS.addWidgetSearchInput}>
                 <Input
                   type="search"
                   value={searchQuery}
-                  placeholder={t('feature.dashboard.addWidget.searchPlaceholder')}
+                  placeholder={t('feature.dashboard.addWidget.searchPlaceholder', { tld })}
                   aria-label={t('feature.dashboard.addWidget.searchAriaLabel')}
                   onChange={event => setSearchQuery(event.target.value)}
                 />
@@ -196,7 +180,7 @@ export const AddWidgetModalDb = ({
             </div>
 
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-              {listingsError ? (
+              {catalogError ? (
                 <p className="px-3 py-4 text-sm text-fg-secondary">{t('feature.dashboard.addWidget.loadFailed')}</p>
               ) : (
                 <>
@@ -212,41 +196,25 @@ export const AddWidgetModalDb = ({
                         />
                       ))}
                     </div>
-                  ) : listingsPending ? null : (
-                    <p className="px-3 py-4 text-sm text-fg-secondary">
+                  ) : catalogPending ? null : (
+                    <p className="px-3 py-4 text-sm text-fg-secondary" data-testid={TEST_IDS.addWidgetNoResults}>
                       {searchQuery.trim()
                         ? t('feature.dashboard.addWidget.noSearchResults')
                         : t('feature.dashboard.addWidget.noWidgetsAvailable')}
                     </p>
                   )}
-                  {listingsPending ? <AddWidgetSidebarCatalogLoading centered={filteredEntries.length === 0} /> : null}
+                  {catalogPending ? <AddWidgetSidebarCatalogLoading centered={filteredEntries.length === 0} /> : null}
                 </>
               )}
             </div>
           </div>
 
-          {selectedEntry?.source === 'native' ? (
-            <div className="grow pl-6">
-              <AddWidgetModalNativePanel
-                entry={selectedEntry.card}
-                dashboardPages={dashboardPages}
-                onAddNativeCard={onAddNativeCard}
-                onNavigateToDashboardPage={onNavigateToDashboardPage}
-              />
-            </div>
-          ) : selectedEntry?.source === 'published' ? (
-            <div className="grow pl-6">
-              <PublishedWidgetPanel
-                baseName={selectedEntry.baseName}
-                listing={selectedEntry.listing}
-                favoriteProductIds={favoriteProductIds}
-                dashboardPages={dashboardPages}
-                onSelectProduct={onSelectProduct}
-                onNavigateToDashboardPage={onNavigateToDashboardPage}
-              />
+          {selectedEntry ? (
+            <div className="grow ps-6">
+              <SelectedEntryPanel entry={selectedEntry} context={panelContext} />
             </div>
           ) : (
-            <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center bg-bg-surface-container pl-6 text-fg-secondary">
+            <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center bg-bg-surface-container ps-6 text-fg-secondary">
               <p>{t('feature.dashboard.addWidget.selectWidget')}</p>
             </div>
           )}

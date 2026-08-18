@@ -228,6 +228,19 @@ export function resolveArchiveContent(archive: ProductArchive, url: URL): Archiv
   return { status: 404, mimeType: getMimeType('404.json'), content: JSON.stringify({ message: '404: Not found' }) };
 }
 
+// Whether an existing in-memory cache entry may be served for a domain, or the frozen
+// bytes must be read from disk instead. A disk-backed entry (non-null `cachedContenthash`)
+// carries the pinned contenthash and is kept in sync with the disk pointer by persist /
+// delete, so it is authoritative and always serves. A contenthash-blind renderer warm
+// (`null`) may serve ONLY when the domain is not persisted (`pointerContenthash === null`);
+// otherwise it would shadow a pinned product's frozen bytes, so the disk version must win.
+// This brings the app/widget serve path to parity with the worker IPC path, which already
+// enforces (identifier, contenthash).
+export function canServeCachedEntry(cachedContenthash: string | null, pointerContenthash: string | null): boolean {
+  if (cachedContenthash !== null) return true;
+  return pointerContenthash === null;
+}
+
 export function isAllowedHostNavigation(url: string, electronProtocol: string): boolean {
   if (!url) return false;
   if (url.startsWith(`${electronProtocol}://`)) return true;

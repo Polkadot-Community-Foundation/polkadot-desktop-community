@@ -29,7 +29,7 @@ export const HeaderLink = ({ ref, to, variant = 'default', children, testId = 'H
             className={cnTw(
               'flex appearance-none items-center justify-center rounded-lg text-xs select-none',
               'cursor-pointer bg-transparent transition-colors hover:bg-bg-action-secondary-hover',
-              showActive ? 'bg-general-muted font-semibold text-text-primary' : 'text-fg-secondary',
+              showActive ? 'bg-bg-surface-nested font-semibold text-fg-primary' : 'text-fg-secondary',
               variant === 'icon' && 'h-8 w-8 shrink-0',
               variant === 'default' && 'h-8 px-2',
             )}

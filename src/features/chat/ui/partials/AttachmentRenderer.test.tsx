@@ -10,12 +10,11 @@ import { type FileAttachment } from '@/domains/chat';
 import { AttachmentRenderer } from './AttachmentRenderer';
 
 // The core invariant: rendering an attachment must NEVER trigger a HOP claim on
-// desktop. We replace the whole chat domain module with a spy so any future
-// re-introduction of a download call fails this suite loudly.
-const downloadChatFileMock = vi.fn();
-vi.mock('@/domains/chat', () => ({
-  downloadChatFile: (...args: unknown[]) => downloadChatFileMock(...args),
-}));
+// desktop — the claim is one-shot, so claiming here would deny the mobile recipient.
+// The chat domain is replaced with an EMPTY module, so this component may use only
+// its types: any runtime call into the barrel resolves to undefined and throws,
+// failing this suite loudly if a fetch/claim path is ever wired back in.
+vi.mock('@/domains/chat', () => ({}));
 
 const PLACEHOLDER_TEXT = 'This message can only be viewed in the mobile app';
 
@@ -87,9 +86,8 @@ describe('AttachmentRenderer', () => {
     expect(screen.queryByTestId(TEST_IDS.chatMediaPlaceholderBlurhash)).not.toBeInTheDocument();
   });
 
-  it('never triggers a HOP download when rendering attachments', () => {
-    renderRenderer([imageAttachment, videoAttachment, fileAttachment, imageWithBlurhash], true);
-
-    expect(downloadChatFileMock).not.toHaveBeenCalled();
+  it('renders every attachment kind without reaching into the chat domain at runtime', () => {
+    // Would throw on the empty mock if the component called any chat-domain export.
+    expect(() => renderRenderer([imageAttachment, videoAttachment, fileAttachment, imageWithBlurhash], true)).not.toThrow();
   });
 });

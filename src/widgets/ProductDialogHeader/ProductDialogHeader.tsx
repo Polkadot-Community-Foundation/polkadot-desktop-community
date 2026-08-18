@@ -1,7 +1,8 @@
 import { AppIcon, ProductHeader } from '@novasamatech/tr-ui';
 import { type ReactNode } from 'react';
 
-import { type Product, type ProductHeaderViewModel, useProductHeaderProps } from '@/domains/product';
+import { type Product } from '@/domains/product';
+import { type ProductHeaderViewModel, useProductHeaderProps } from '@/widgets/ProductHeader';
 
 type Props = {
   product?: Nullable<Product>;

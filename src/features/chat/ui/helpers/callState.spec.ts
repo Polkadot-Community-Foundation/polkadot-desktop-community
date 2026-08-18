@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { type CallSignalContent, type ChatMessage } from '@/domains/chat';
 
-import { deriveCallStates, formatCallDuration } from './callState';
+import { callTitleKey, deriveCallStates } from './callState';
 
 const peer: ChatMessage['peer'] = { type: 'p2p', accountId: 'peer-acct', name: 'Peer' };
 
@@ -98,16 +98,22 @@ describe('deriveCallStates', () => {
   });
 });
 
-describe('formatCallDuration', () => {
-  it.each([
-    [0, '0:00'],
-    [9_000, '0:09'],
-    [59_000, '0:59'],
-    [60_000, '1:00'],
-    [125_000, '2:05'],
-    [3_600_000, '1:00:00'],
-    [3_725_000, '1:02:05'],
-  ])('%dms → %s', (ms, expected) => {
-    expect(formatCallDuration(ms)).toBe(expected);
+describe('callTitleKey', () => {
+  it('distinguishes outgoing from incoming while the call is still ringing', () => {
+    expect(callTitleKey({ kind: 'calling' }, true, false)).toBe('feature.chat.call.title.outgoingVoice');
+    expect(callTitleKey({ kind: 'calling' }, true, true)).toBe('feature.chat.call.title.outgoingVideo');
+    expect(callTitleKey({ kind: 'calling' }, false, false)).toBe('feature.chat.call.title.incomingVoice');
+    expect(callTitleKey({ kind: 'calling' }, false, true)).toBe('feature.chat.call.title.incomingVideo');
+  });
+
+  it('ignores direction once the call is connected, finished, missed or cancelled', () => {
+    expect(callTitleKey({ kind: 'active' }, true, false)).toBe('feature.chat.call.title.ongoingVoice');
+    expect(callTitleKey({ kind: 'active' }, false, true)).toBe('feature.chat.call.title.ongoingVideo');
+    expect(callTitleKey({ kind: 'finished', durationMs: 1000 }, true, false)).toBe('feature.chat.call.title.voice');
+    expect(callTitleKey({ kind: 'finished', durationMs: 1000 }, false, true)).toBe('feature.chat.call.title.video');
+    expect(callTitleKey({ kind: 'missed' }, false, false)).toBe('feature.chat.call.title.missedVoice');
+    expect(callTitleKey({ kind: 'missed' }, false, true)).toBe('feature.chat.call.title.missedVideo');
+    expect(callTitleKey({ kind: 'cancelled', ringDurationMs: 500 }, true, false)).toBe('feature.chat.call.title.canceledVoice');
+    expect(callTitleKey({ kind: 'cancelled', ringDurationMs: 500 }, true, true)).toBe('feature.chat.call.title.canceledVideo');
   });
 });

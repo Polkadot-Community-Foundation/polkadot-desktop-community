@@ -49,7 +49,9 @@ export class ChatBotClient {
     if (!res.ok) {
       throw new Error(`[ChatBotClient] ${method} ${path} → ${res.status}: ${text || '<empty>'}`);
     }
-    return text ? JSON.parse(text) : null;
+    // Empty body → null. Parsing the literal keeps the return `any`, so it satisfies
+    // `Promise<T>` without an `as`; the callers that can get an empty body discard the result.
+    return JSON.parse(text || 'null');
   }
 
   /**

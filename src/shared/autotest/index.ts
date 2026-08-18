@@ -106,8 +106,17 @@ export async function pairViaBotApi(
     clientId,
   });
 
-  // Store pairing info on window so e2e fixtures can retrieve it for cleanup
-  window.__botPairingInfo = { clientId, sessionId: result.sessionId, botUrl, botToken: token };
+  // Store pairing info so e2e fixtures can retrieve it for cleanup. The window
+  // property dies on any page.reload() (the e2e soft-reset and chat-state reset
+  // both reload), so it is mirrored to localStorage — scoped to the test's own
+  // userDataDir and cleared by the next test's clearAppData().
+  const pairingInfo = { clientId, sessionId: result.sessionId, botUrl, botToken: token };
+  window.__botPairingInfo = pairingInfo;
+  try {
+    localStorage.setItem('__botPairingInfo', JSON.stringify(pairingInfo));
+  } catch {
+    // Opaque origin or storage denied — the window property still covers the no-reload case.
+  }
 
   return { ...result, clientId };
 }

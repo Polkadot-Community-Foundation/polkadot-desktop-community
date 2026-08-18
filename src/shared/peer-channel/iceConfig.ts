@@ -63,15 +63,13 @@ function deriveTurnCredentials(
 export function buildIceConfig(params: IceConfigParams): RTCConfiguration {
   const iceServers: RTCIceServer[] = [{ urls: DEFAULT_STUN_URLS }];
   if (params.turnHost && params.turnSecret) {
-    // Accept both `host:port` and pre-scheme'd `turn:host:port` / `turns:host:port`.
-    // Without this guard a config-side `turn:` prefix becomes `turn:turn:host:port`,
-    // which Chromium silently drops (no relay candidate gathered) — symptom is
-    // identical to "no TURN configured".
-    const hasScheme = /^turns?:/.test(params.turnHost);
-    const url = hasScheme ? params.turnHost : `turn:${params.turnHost}`;
     const { username, credential } = deriveTurnCredentials(params.turnSecret, params.turnTtlSeconds);
     iceServers.push({
-      urls: url,
+      urls: [
+        `turn:${params.turnHost}:3478?transport=udp`,
+        `turn:${params.turnHost}:3478?transport=tcp`,
+        `turns:${params.turnHost}:5349`,
+      ],
       username,
       credential,
     });

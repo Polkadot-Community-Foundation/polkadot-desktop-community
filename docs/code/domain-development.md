@@ -1,6 +1,6 @@
 # Domain development flow
 
-How to evolve a domain when a new user scenario appears. The rules live in [project-structure.md](./project-structure.md); this doc covers the *sequence*.
+How to evolve a domain when a new user scenario appears. The rules live in [project-structure.md](./project-structure.md); this doc covers the _sequence_.
 
 ## Principle
 
@@ -13,8 +13,8 @@ Before touching a feature, make sure its user action can be expressed as an atom
 2. **Check the domain's public API.** Open `index.ts`. If an existing use case / service / hook covers the action → jump to step 6.
 
 3. **Pick the placement** using the [decision framework](./code-placement.md). Three sub-decisions:
-   - **Layer**: domain vs aggregate vs feature — answered by the framework's *Which layer?* table.
-   - **File within the domain**: service / resource / `$usecase/` / etc. — answered by the framework's *Which file (per layer)?* table and the [cut rules](./code-placement.md#cut-rules).
+   - **Layer**: domain vs aggregate vs feature — answered by the framework's _Which layer?_ table.
+   - **File within the domain**: service / resource / `$usecase/` / etc. — answered by the framework's _Which file (per layer)?_ table and the [cut rules](./code-placement.md#cut-rules).
    - **New vocabulary**: see [when to split a module](#when-to-split-a-module).
 
 4. **Extend the domain in isolation.** Add the missing files per the [file contracts](./project-structure.md#domain). Cross-domain consumption goes through the other domain's services, use cases, or hooks — never its resources or repositories. Domain → domain dependencies are allowed; the reverse is not.
@@ -45,7 +45,7 @@ Before touching a feature, make sure its user action can be expressed as an atom
 
 A module's `service.ts` is starting to mix two vocabularies. Three moves, in order of locality:
 
-1. **Nest** — new vocabulary still belongs *inside* the parent's concept (e.g. `permissions/` accumulates alias-management AND scope-evaluation; both are "permissions"). Convert the module into a container with sub-modules.
+1. **Nest** — new vocabulary still belongs _inside_ the parent's concept (e.g. `permissions/` accumulates alias-management AND scope-evaluation; both are "permissions"). Convert the module into a container with sub-modules.
 2. **Sibling module** — new vocabulary belongs to the same domain but is no longer the parent's concept. Move to a sibling under the domain root.
 3. **New domain** — new vocabulary is independent and other domains will consume it on its own terms (e.g. "chain" in `networks` drifting into "staking"). Promote; the old domain may depend on the new, never the reverse.
 
@@ -54,17 +54,35 @@ Spot the seam with [event storming](../abstract/event-storming.md). Trigger: `se
 ## Examples
 
 ```typescript
-// Resource — single-source read with caching
-export const chainResource = createQueryResource<Params>({ key: (p) => [p.first, p.second] })
+// Resource — data access with caching
+export const chainResource = createQueryResource<Params>({ key: p => [p.first, p.second] })
   .request<ResponseType>(service.fetchData)
   .retry({ delay: 500, count: 3 })
-  .cache<CacheType>({ initial: {}, staleAfter: 10_000, map: (cache, response, params) => produce(cache, draft => { /* ... */ }) })
+  .cache<CacheType>({
+    initial: {},
+    staleAfter: 10_000,
+    map: (cache, response, params) =>
+      produce(cache, draft => {
+        /* ... */
+      }),
+  })
   .build();
 
 // Stream resource
-export const eventsResource = createStreamResource<Params>({ key: (p) => p.id })
-  .subscribe<ResponseType>((p) => new Observable(subscriber => { /* ... */ }))
-  .cache<CacheType>({ initial: {}, map: (cache, message, params) => produce(cache, draft => { /* ... */ }) })
+export const eventsResource = createStreamResource<Params>({ key: p => p.id })
+  .subscribe<ResponseType>(
+    p =>
+      new Observable(subscriber => {
+        /* ... */
+      }),
+  )
+  .cache<CacheType>({
+    initial: {},
+    map: (cache, message, params) =>
+      produce(cache, draft => {
+        /* ... */
+      }),
+  })
   .build();
 
 // Mutation — plain Observable-returning function
@@ -75,11 +93,12 @@ export function sendMessage(params: SendMessageParams): Observable<void> {
 
 ```typescript
 // hooks.ts — named domain entry points
-export const useChains = (params: NullableMap<ChainParams>) => useRead(chainResource, {
-  params: nonNullableMap(params) ? params : null,
-  defaultValue: [],
-  map: (cache, p) => cache[p.version]?.[p.file],
-});
+export const useChains = (params: NullableMap<ChainParams>) =>
+  useRead(chainResource, {
+    params: nonNullableMap(params) ? params : null,
+    defaultValue: [],
+    map: (cache, p) => cache[p.version]?.[p.file],
+  });
 
 export const useSendMessage = () => useAction(sendMessage);
 ```
@@ -88,12 +107,16 @@ export const useSendMessage = () => useAction(sendMessage);
 // Feature consumes the named hooks — never useRead/useAction inline
 export const Component = () => {
   const { data: chains, pending } = useChains({ version: 1 });
-  if (pending) return <Loading/>;
-  return <Chains chains={chains}/>;
+  if (pending) return <Loading />;
+  return <Chains chains={chains} />;
 };
 
 export const SendButton = () => {
   const { run: sendMessage, pending } = useSendMessage();
-  return <Button disabled={pending} onClick={() => sendMessage({ conversationId })}>Send</Button>;
+  return (
+    <Button disabled={pending} onClick={() => sendMessage({ conversationId })}>
+      Send
+    </Button>
+  );
 };
 ```

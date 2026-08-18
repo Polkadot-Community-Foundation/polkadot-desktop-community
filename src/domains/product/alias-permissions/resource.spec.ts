@@ -29,7 +29,7 @@ describe('deleteAliasPermissionsByRequester', () => {
   });
 
   it('deletes every alias row stored under any raw variant of the requester id', async () => {
-    await deleteAliasPermissionsByRequester('app.dot');
+    await deleteAliasPermissionsByRequester('app.dot', '.dot');
 
     expect(deleteFn).toHaveBeenCalledTimes(1);
     const predicate = vi.mocked(aliasPermissionsDatabase.table.filter).mock.calls[0]![0]!;
@@ -38,7 +38,7 @@ describe('deleteAliasPermissionsByRequester', () => {
   });
 
   it('leaves alias rows of other requesters alone', async () => {
-    await deleteAliasPermissionsByRequester('app.dot');
+    await deleteAliasPermissionsByRequester('app.dot', '.dot');
 
     const predicate = vi.mocked(aliasPermissionsDatabase.table.filter).mock.calls[0]![0]!;
     expect(predicate(makeRow('other.dot'))).toBe(false);

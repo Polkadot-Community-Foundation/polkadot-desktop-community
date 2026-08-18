@@ -1,4 +1,5 @@
 export * from './formatAmount';
+export * from './formatBytes';
 export * from './functions';
 export * from './strings';
 export * from './twMerge';
@@ -12,3 +13,4 @@ export * from './strings';
 export * from './error';
 export * from './visibility';
 export * from './storage';
+export * from './avatar';

@@ -10,7 +10,7 @@ test.describe('Content Security Policy Enforcement', { tag: ['@security'] }, () 
     await allure.feature('Security');
   });
 
-  test('CSP meta tag is present with restrictive directives', async ({ electronApp }) => {
+  test('CSP meta tag is present with restrictive directives', { tag: ['@allure.id:14944'] }, async ({ electronApp }) => {
     const { window } = electronApp;
 
     const csp = await window.evaluate(() => {

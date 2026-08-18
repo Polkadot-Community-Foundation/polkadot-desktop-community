@@ -121,36 +121,38 @@ describe('RemoteModel', () => {
 describe('EncryptedRemoteModel', () => {
   it('round-trips', () => {
     const model = {
-      encryptionPubKey: new Uint8Array(65).fill(0xff),
+      encryptionPubKey: new Uint8Array(32).fill(0xff),
       encryptedData: new Uint8Array(48).fill(0x12),
     };
     expect(EncryptedRemoteModel.dec(EncryptedRemoteModel.enc(model))).toEqual(model);
   });
 
   it('handles variable-length encryptedData', () => {
-    const short = { encryptionPubKey: new Uint8Array(65), encryptedData: new Uint8Array(1) };
-    const long = { encryptionPubKey: new Uint8Array(65), encryptedData: new Uint8Array(512) };
+    const short = { encryptionPubKey: new Uint8Array(32), encryptedData: new Uint8Array(1) };
+    const long = { encryptionPubKey: new Uint8Array(32), encryptedData: new Uint8Array(512) };
     expect(EncryptedRemoteModel.dec(EncryptedRemoteModel.enc(short))).toEqual(short);
     expect(EncryptedRemoteModel.dec(EncryptedRemoteModel.enc(long))).toEqual(long);
   });
 
   it('handles empty encryptedData', () => {
-    const model = { encryptionPubKey: new Uint8Array(65).fill(0xab), encryptedData: new Uint8Array(0) };
+    const model = { encryptionPubKey: new Uint8Array(32).fill(0xab), encryptedData: new Uint8Array(0) };
     expect(EncryptedRemoteModel.dec(EncryptedRemoteModel.enc(model))).toEqual(model);
   });
 
   // iOS wire format baseline — on first run Vitest captures the bytes;
   // verify the hex matches the equivalent Swift EncryptedRemoteModel.swift output.
+  // `encryptionPubKey` is length-prefixed, so the 32-byte key carries a 0x80 compact
+  // prefix. NOT yet re-confirmed against iOS.
   it('encodes to a stable wire format (iOS compatibility baseline)', () => {
     const model = {
-      encryptionPubKey: new Uint8Array(65).fill(0x04),
+      encryptionPubKey: new Uint8Array(32).fill(0x04),
       encryptedData: new Uint8Array(16).fill(0xab),
     };
     const hex = Array.from(EncryptedRemoteModel.enc(model))
       .map(b => b.toString(16).padStart(2, '0'))
       .join('');
     expect(hex).toMatchInlineSnapshot(
-      `"0501040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040404040440abababababababababababababababab"`,
+      `"80040404040404040404040404040404040404040404040404040404040404040440abababababababababababababababab"`,
     );
   });
 });
@@ -161,7 +163,7 @@ describe('RequestContentV2', () => {
       identityAccountId: new Uint8Array(32).fill(0xa1),
       proof: new Uint8Array(32).fill(0xcc),
     },
-    deviceEncPubKey: new Uint8Array(65).fill(0x10),
+    deviceEncPubKey: new Uint8Array(32).fill(0x10),
     pushToken: undefined,
     welcomeMessage: { text: 'Hi!', attachments: undefined },
   });
@@ -183,7 +185,7 @@ describe('VersionedRequestContent', () => {
       identityAccountId: new Uint8Array(32).fill(0xa1),
       proof: new Uint8Array(32).fill(0xcc),
     },
-    deviceEncPubKey: new Uint8Array(65).fill(0x10),
+    deviceEncPubKey: new Uint8Array(32).fill(0x10),
     pushToken: undefined,
     welcomeMessage: undefined,
   });

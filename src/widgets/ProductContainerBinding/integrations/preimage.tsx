@@ -11,7 +11,7 @@ import { createDefaultRateLimiter } from '@/shared/rateLimiter';
 import { useTranslation } from '@/shared/translation';
 import { hasProperty } from '@/shared/utils';
 import { environmentUseCase, usePappProvider } from '@/domains/application';
-import { chainRegistry, ipfsGateway, ipfsService } from '@/domains/network';
+import { chainRegistry, ipfsService, ipfsUseCase } from '@/domains/network';
 import { useDisplayedProduct } from '@/domains/product';
 import { PreimageSubmitModal } from '../ui/PreimageSubmitModal';
 
@@ -153,7 +153,7 @@ export function usePreimage(container: Container, identifier: string) {
         }
 
         try {
-          const data = await ipfsGateway.fetchRaw(ipfsService.toIpfsCid(key), { timeoutMs: LOOKUP_FETCH_TIMEOUT_MS });
+          const data = await ipfsUseCase.fetchRaw(ipfsService.toIpfsCid(key), { timeoutMs: LOOKUP_FETCH_TIMEOUT_MS });
           if (data) {
             cache.current.set(key, data);
             send(data);

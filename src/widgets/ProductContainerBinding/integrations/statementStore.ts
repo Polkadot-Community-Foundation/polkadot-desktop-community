@@ -16,6 +16,8 @@ import { useLooseRef } from '@/shared/hooks';
 import { nonNullable } from '@/shared/utils';
 import { statementStoreAdapter, usePappProvider } from '@/domains/application';
 
+import { createSubscriptionScope } from './_helpers';
+
 export function useStatementStore(container: Container, identifier: string) {
   const papp = usePappProvider();
   const pappRef = useLooseRef(papp);
@@ -23,6 +25,8 @@ export function useStatementStore(container: Container, identifier: string) {
   const sessionRef = useLooseRef(session);
 
   useEffect(() => {
+    const subscriptions = createSubscriptionScope();
+
     const cleanupSubmit = container.handleStatementStoreSubmit(statement => {
       return statementStoreAdapter
         .submitStatement(mapFromHostSignedStatement(statement))
@@ -40,12 +44,15 @@ export function useStatementStore(container: Container, identifier: string) {
               matchAny: topics.value,
             };
 
-      return statementStoreAdapter.subscribeStatements(filter, ({ statements, isComplete }) => {
+      const unsubscribe = statementStoreAdapter.subscribeStatements(filter, ({ statements, isComplete }) => {
+        if (subscriptions.disposed) return;
         const mapped = statements.map(mapFromSdkStatement).filter(nonNullable);
         if (mapped.length > 0) {
           send({ statements: mapped, isComplete });
         }
       });
+
+      return subscriptions.track(unsubscribe);
     });
 
     const createProofWithSessionSecret = (statement: CodecType<typeof HostStatement>) => {
@@ -76,6 +83,7 @@ export function useStatementStore(container: Container, identifier: string) {
     );
 
     return () => {
+      subscriptions.dispose();
       cleanupSubmit();
       cleanupSubscribe();
       cleanupCreateProof();

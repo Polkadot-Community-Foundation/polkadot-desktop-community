@@ -2,6 +2,7 @@ import { DropdownMenu } from '@novasamatech/tr-ui';
 import { Check, LayoutDashboard, MoreHorizontal, Trash2 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 
+import { TEST_IDS } from '@/shared/test-ids';
 import { useTranslation } from '@/shared/translation';
 import { cnTw } from '@/shared/utils';
 import { type WidgetSizeIconVariant } from '@/domains/application';
@@ -15,7 +16,7 @@ export const widgetTopbarActionVisibilityClass = cnTw(
 );
 
 export const widgetTopbarActionButtonClass = cnTw(
-  'widget-topbar-action flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-full text-text-primary transition-colors hover:bg-bg-action-secondary-hover focus-visible:bg-bg-action-secondary-hover focus-visible:ring-[4px] focus-visible:ring-border-tertiary/35 focus-visible:ring-offset-0 focus-visible:outline-none',
+  'widget-topbar-action flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-full text-fg-primary transition-colors hover:bg-bg-action-secondary-hover focus-visible:bg-bg-action-secondary-hover focus-visible:ring-4 focus-visible:ring-stroke-tertiary/35 focus-visible:ring-offset-0 focus-visible:outline-none',
 );
 
 export const widgetTopbarActionMenuTriggerClass = cnTw(
@@ -28,6 +29,9 @@ type WidgetMenuProps = {
   currentSize: WidgetSize;
   isSizeLocked?: boolean;
   removeLabel: ReactNode;
+  // Extra menu entries contributed by the card feature (e.g. Reload), rendered
+  // just above the destructive Remove item.
+  menuItems?: ReactNode;
   onResize: (size: WidgetSize) => void;
   onRemove: VoidFunction;
   onCleanup?: VoidFunction;
@@ -40,6 +44,7 @@ export const WidgetMenu = ({
   currentSize,
   isSizeLocked = false,
   removeLabel,
+  menuItems,
   onResize,
   onRemove,
   onCleanup,
@@ -64,6 +69,7 @@ export const WidgetMenu = ({
         <DropdownMenu.Trigger asChild>
           <button
             type="button"
+            data-testid={TEST_IDS.dashboardWidgetMenuTrigger}
             className={widgetTopbarActionMenuTriggerClass}
             aria-label={t('common.action.moreDetails')}
             onMouseDown={event => event.stopPropagation()}
@@ -76,7 +82,7 @@ export const WidgetMenu = ({
         <div className="w-52.5">
           {showSizeSection ? (
             <>
-              <div className="px-2 pt-2 pb-1 text-[12px] leading-4 font-normal tracking-[0.96px] text-text-secondary uppercase">
+              <div className="px-2 pt-2 pb-1 text-body-small tracking-[0.96px] text-fg-secondary uppercase">
                 {t('feature.dashboard.widgetMenu.sizeLabel')}
               </div>
 
@@ -92,7 +98,7 @@ export const WidgetMenu = ({
                   >
                     <div className="flex h-8 w-full items-center gap-2 rounded-md">
                       <WidgetSizeIcon variant={variant} className="size-4" />
-                      <span className="flex-1 text-sm leading-5 font-medium text-text-primary">{t(labelKey)}</span>
+                      <span className="flex-1 text-sm leading-5 font-medium text-fg-primary">{t(labelKey)}</span>
                       {isActive ? <Check className="size-4" /> : null}
                     </div>
                   </DropdownMenu.Item>
@@ -108,7 +114,7 @@ export const WidgetMenu = ({
               <DropdownMenu.Item onClick={onCleanup}>
                 <div className="flex h-8 w-full items-center gap-2 rounded-md">
                   <LayoutDashboard className="size-4" />
-                  <span className="flex-1 text-sm leading-5 font-medium text-text-primary">
+                  <span className="flex-1 text-sm leading-5 font-medium text-fg-primary">
                     {t('feature.dashboard.widgetMenu.cleanup')}
                   </span>
                 </div>
@@ -118,7 +124,9 @@ export const WidgetMenu = ({
 
           <DropdownMenu.Separator />
 
-          <DropdownMenu.Item variant="destructive" onClick={onRemove}>
+          {menuItems}
+
+          <DropdownMenu.Item data-testid={TEST_IDS.dashboardWidgetMenuRemove} variant="destructive" onClick={onRemove}>
             <div className="flex h-8 w-full items-center gap-2 rounded-md">
               <Trash2 className="size-4 text-fg-error" />
               <span className="flex-1 text-sm leading-5 font-medium">{removeLabel}</span>

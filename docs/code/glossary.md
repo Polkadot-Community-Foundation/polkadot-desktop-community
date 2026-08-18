@@ -12,9 +12,16 @@ These terms recur as thresholds in the skills, hooks, and checklists. Use these 
 - crosses **≥2 layers** (e.g. touches a domain and a feature);
 - **relocates** logic between files or layers (promoting out of a feature, splitting a module);
 - adds roughly **≥30 lines of business logic** that warrants tests;
-- could **break an existing caller** of a public surface.
+- could **break an existing caller** of a public surface;
+- **adds a branch or flag to a shared path** — a second behavior braided into code other callers already use (`docs/abstract/simple-vs-easy.md`). Size is not the test here: three lines qualify. This trigger exists because that change is cheap to write, invisible in review, and paid for by every later change to the same path.
 
-**Trivial in-place edit** — the negation, and the *only* thing that may skip the `architecture` skill: a change confined to **one existing file** that adds no new file, no new public surface, and no layer crossing. Examples: fixing a typo, adjusting a constant's value, a localized bugfix inside one function, tightening a copy string. If you're unsure whether a change is trivial, it isn't — run `architecture`.
+**Trivial in-place edit** — the negation, and the _only_ thing that may skip the `architecture` skill: a change confined to **one existing file** that adds no new file, no new public surface, no layer crossing, and no new branch or flag on a path other callers share. Examples: fixing a typo, adjusting a constant's value, a localized bugfix inside one function, tightening a copy string. Counter-example: adding a `skipCache` boolean to a helper three call sites already use — one file, no new surface, still non-trivial. If you're unsure whether a change is trivial, it isn't — run `architecture`.
+
+**Blast radius** — the set of files and layers that MUST change for a change to be complete, **measured** (`findReferences` / `incomingCalls` on every symbol and public surface touched), never estimated from the description. Reported as `N files, M layers`. Large radius is a measurement of _existing_ complecting, not a property of the change itself. Measured at step 1.5 of the `architecture` skill; enumerated again in the plan.
+
+**Complecting** (Hickey) — braiding two concerns together so neither can change without touching the other. A change **adds braid** when it puts a second concern in one place (a flag on a shared path, a field on a shared type, a branch others must now know about) or spreads one concern across more places (a parameter threaded through callers that have no use for it). Orthogonal to size: a three-line diff can add braid, a 90-file rename adds none. The cost is never visible in the current diff — it is paid by every later change. See `docs/abstract/simple-vs-easy.md`.
+
+**Frame** — the change stated in **one sentence using one layer's vocabulary** (step 1 of `architecture`). A frame is a statement of the concern, **not an estimate of the cost**. When the measured blast radius contradicts the frame — one layer's vocabulary, three layers of artifact — that gap is a finding that stops for the user.
 
 ## Scope
 
@@ -32,14 +39,16 @@ These terms recur as thresholds in the skills, hooks, and checklists. Use these 
 
 Anything else touched outside the plan's stated files that is **not** a peer is **scope creep** — stop and confirm with the user.
 
-## Sources
+## Composition
 
-**Multi-source read** — a read that composes **≥2 distinct sources** (e.g. IndexedDB + chain, two gateways, DB + a use case). Only a multi-source read justifies the one carve-out where a `resource.ts` may wrap a use case (caching over genuinely-composed orchestration — `project-structure.md` anti-pattern 2).
+**Composition** — depending on **≥2 resources**. That is the threshold for `$usecase/`, and the only thing counted: gateways and repositories are a resource's internals, so a read that calls four gateway methods and merges them into one entity is still a single resource, not composition (`code-placement.md § Cut rules`).
 
-**Single-source** — one source. A single-source read does not justify a resource-over-use-case wrapper, nor a use case at all if it's a one-line passthrough (anti-pattern 1) — inline the source.
+**Data access** — obtaining or persisting a value, including retries and fallback chains ("try disk, then the network"). Always a `resource.ts`, whatever its source count. A resource may not read another resource or a use case; a value it may not fetch itself arrives as a **parameter** supplied by the use case that read it.
+
+**Business invariant** vs data access — see below. Composing two resources is a use case because of the second resource, not because a rule is being enforced; enforcing a rule makes it a use case even over one resource. A use case wrapping one resource and enforcing nothing is a passthrough (`project-structure.md` anti-pattern 1) — inline it.
 
 ## Trust boundary
 
 **Trust boundary** — where data the codebase did not itself produce enters: API/RPC responses, user input, IPC messages, on-chain payloads, persisted blobs being read back. Data crossing a trust boundary MUST be validated through `schemas.ts` (valibot or a SCALE codec). Values the codebase produced and already typed are **not** re-validated (`project-structure.md` § schemas.ts).
 
-**Business invariant** — a rule that must hold for an entity to be valid given current domain state ("a product is on the dashboard at most once", "transfer ≤ spendable balance"). Enforced in exactly **one** use case (the chokepoint), before the write — never re-checked ad hoc in features/hooks/components. Distinct from a `schemas.ts` *shape* check.
+**Business invariant** — a rule that must hold for an entity to be valid given current domain state ("a product is on the dashboard at most once", "transfer ≤ spendable balance"). Enforced in exactly **one** use case (the chokepoint), before the write — never re-checked ad hoc in features/hooks/components. Distinct from a `schemas.ts` _shape_ check.

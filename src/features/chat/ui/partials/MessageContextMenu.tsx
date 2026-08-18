@@ -1,7 +1,10 @@
+import { type LucideIcon, CheckCircle2, ChevronRight, Copy, Forward, Reply, SquarePen, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
+import { TEST_IDS } from '@/shared/test-ids';
 import { useTranslation } from '@/shared/translation';
+import { cnTw } from '@/shared/utils';
 import { type ChatMessage } from '@/domains/chat';
 
 import { EmojiPicker } from './EmojiPicker';
@@ -17,6 +20,36 @@ type MessageContextMenuProps = {
   onCopyText: (message: ChatMessage) => void;
   onViewEditHistory?: (message: ChatMessage) => void;
   onToggleReaction?: (messageId: string, emoji: string) => void;
+};
+
+type MenuItemProps = {
+  testId?: string;
+  icon: LucideIcon;
+  label: string;
+  variant?: 'default' | 'danger';
+  disabled?: boolean;
+  hasSubmenu?: boolean;
+  onClick?: VoidFunction;
+};
+
+const MenuItem = ({ testId, icon: Icon, label, variant = 'default', disabled, hasSubmenu, onClick }: MenuItemProps) => {
+  const isDanger = variant === 'danger';
+  return (
+    <button
+      data-testid={testId}
+      disabled={disabled}
+      className={cnTw(
+        'flex h-8 w-full items-center gap-2 rounded px-2 transition-colors',
+        disabled ? 'cursor-not-allowed opacity-40' : 'hover:bg-bg-selection-container-hover',
+        isDanger ? 'text-fg-error' : 'text-fg-primary',
+      )}
+      onClick={onClick}
+    >
+      <Icon className="size-4 shrink-0" />
+      <span className="min-w-0 flex-1 truncate text-start text-sm leading-5 font-normal">{label}</span>
+      {hasSubmenu ? <ChevronRight className="size-4 shrink-0 text-fg-secondary" /> : null}
+    </button>
+  );
 };
 
 export const MessageContextMenu = ({
@@ -108,60 +141,86 @@ export const MessageContextMenu = ({
   return createPortal(
     <div
       ref={containerRef}
-      className="fixed z-50 flex flex-col items-start gap-1.5"
+      className="pointer-events-none fixed z-50 flex flex-col items-start gap-1.5"
       style={{ left: position.x, top: position.y }}
     >
       {showFullPicker ? (
-        <EmojiPicker onSelect={handleSelectEmoji} onClose={onClose} />
+        <div className="pointer-events-auto">
+          <EmojiPicker onSelect={handleSelectEmoji} onClose={onClose} />
+        </div>
       ) : (
         <>
           {/* Floating reaction bar */}
-          <QuickReactionRow onSelectEmoji={handleSelectEmoji} onOpenFullPicker={() => setShowFullPicker(true)} />
+          <div className="pointer-events-auto">
+            <QuickReactionRow onSelectEmoji={handleSelectEmoji} onOpenFullPicker={() => setShowFullPicker(true)} />
+          </div>
 
           {/* Context menu */}
-          <div className="flex w-52 flex-col items-start rounded-lg border border-[#e5e5e5] bg-white shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1),0px_2px_4px_-2px_rgba(0,0,0,0.1)]">
-            <div className="flex w-full flex-col items-start px-1 pt-1">
-              <button
-                className="flex h-8 w-full items-center rounded p-2 transition-colors hover:bg-[#f5f5f5]"
+          <div
+            data-testid={TEST_IDS.chatMessageContextMenu}
+            className="pointer-events-auto flex w-52 flex-col gap-1 rounded-lg border border-stroke-primary bg-bg-surface-container p-1 shadow-[0px_4px_6px_-1px_var(--shadow-soft),0px_2px_4px_-2px_var(--shadow-soft)]"
+          >
+            <div className="flex w-full flex-col">
+              <MenuItem
+                testId={TEST_IDS.chatMessageContextMenuReply}
+                icon={Reply}
+                label={t('common.action.reply')}
                 onClick={handleReply}
-              >
-                <div className="flex min-w-0 flex-1 items-center">
-                  <span className="text-sm leading-5 font-normal text-[#0a0a0a]">{t('common.action.reply')}</span>
-                </div>
-              </button>
-              {isEditable && (
-                <button
-                  className="flex h-8 w-full items-center rounded p-2 transition-colors hover:bg-[#f5f5f5]"
-                  onClick={handleEdit}
-                >
-                  <div className="flex min-w-0 flex-1 items-center">
-                    <span className="text-sm leading-5 font-normal text-[#0a0a0a]">{t('feature.chat.editMessage')}</span>
-                  </div>
-                </button>
-              )}
-              {isEdited && (
-                <button
-                  className="flex h-8 w-full items-center rounded p-2 transition-colors hover:bg-[#f5f5f5]"
-                  onClick={handleViewEditHistory}
-                >
-                  <div className="flex min-w-0 flex-1 items-center">
-                    <span className="text-sm leading-5 font-normal text-[#0a0a0a]">{t('feature.chat.viewEditHistory')}</span>
-                  </div>
-                </button>
-              )}
+              />
+              <MenuItem
+                testId={TEST_IDS.chatMessageContextMenuCopy}
+                icon={Copy}
+                label={t('common.action.copyText')}
+                onClick={handleCopyText}
+              />
             </div>
 
-            <div className="h-2 w-full border-b border-[#e5e5e5]" />
+            <div className="h-px w-full bg-stroke-secondary" />
 
-            <div className="flex w-full flex-col items-start px-1 py-1">
-              <button
-                className="flex h-8 w-full items-center rounded p-2 transition-colors hover:bg-[#f5f5f5]"
-                onClick={handleCopyText}
-              >
-                <div className="flex min-w-0 flex-1 items-center">
-                  <span className="text-sm leading-5 font-normal text-[#0a0a0a]">{t('common.action.copyText')}</span>
-                </div>
-              </button>
+            <div className="flex w-full flex-col">
+              {isEditable ? (
+                <MenuItem
+                  testId={TEST_IDS.chatMessageContextMenuEdit}
+                  icon={SquarePen}
+                  label={t('feature.chat.editMessage')}
+                  onClick={handleEdit}
+                />
+              ) : null}
+              {isEdited ? (
+                <MenuItem
+                  testId={TEST_IDS.chatMessageContextMenuEditHistory}
+                  icon={SquarePen}
+                  label={t('feature.chat.viewEditHistory')}
+                  onClick={handleViewEditHistory}
+                />
+              ) : null}
+              {/* Forward / Select are not wired up yet — shown disabled to match the design. */}
+              <MenuItem
+                testId={TEST_IDS.chatMessageContextMenuForward}
+                icon={Forward}
+                label={t('common.action.forward')}
+                hasSubmenu
+                disabled
+              />
+              <MenuItem
+                testId={TEST_IDS.chatMessageContextMenuSelect}
+                icon={CheckCircle2}
+                label={t('common.action.select')}
+                disabled
+              />
+            </div>
+
+            <div className="h-px w-full bg-stroke-secondary" />
+
+            <div className="flex w-full flex-col">
+              {/* Delete is not wired up yet — shown disabled to match the design. */}
+              <MenuItem
+                testId={TEST_IDS.chatMessageContextMenuDelete}
+                icon={Trash2}
+                label={t('common.action.delete')}
+                variant="danger"
+                disabled
+              />
             </div>
           </div>
         </>

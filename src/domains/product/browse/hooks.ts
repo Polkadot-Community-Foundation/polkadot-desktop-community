@@ -1,19 +1,37 @@
 import { type AppListing } from '@parity/browse-sdk';
 
-import { useRead } from '@/shared/hooks';
+import { dependentRead, useRead } from '@/shared/hooks';
+import { useActiveEnvironment } from '@/domains/application';
 
-import { publishedWidgetListingsParams, publishedWidgetListingsResource } from './resource';
+import { publishedAppListingsResource, publishedWidgetListingsResource } from './resource';
 
-const EMPTY_WIDGET_LISTINGS: AppListing[] = [];
+const EMPTY_LISTINGS: AppListing[] = [];
 
 export const usePublishedWidgetListings = (enabled: boolean) => {
-  const { data: params } = useRead(publishedWidgetListingsParams, {
-    params: {},
-    defaultValue: null,
+  // Env resolution lives in the React binding, not the resource/gateway leaf.
+  const environment = useActiveEnvironment();
+  const env = environment.data;
+  const params = enabled && env ? { environmentId: env.id, genesisHash: env.dotnsChain.genesisHash } : null;
+
+  const result = useRead(publishedWidgetListingsResource, {
+    params,
+    defaultValue: EMPTY_LISTINGS,
   });
 
-  return useRead(publishedWidgetListingsResource, {
-    params: enabled ? params : null,
-    defaultValue: EMPTY_WIDGET_LISTINGS,
+  return dependentRead(result, environment, { enabled });
+};
+
+// Fullscreen-SPA catalog for the Add-to-Favorites picker — the `app`-modality
+// sibling of `usePublishedWidgetListings`.
+export const usePublishedAppListings = (enabled: boolean) => {
+  const environment = useActiveEnvironment();
+  const env = environment.data;
+  const params = enabled && env ? { environmentId: env.id, genesisHash: env.dotnsChain.genesisHash } : null;
+
+  const result = useRead(publishedAppListingsResource, {
+    params,
+    defaultValue: EMPTY_LISTINGS,
   });
+
+  return dependentRead(result, environment, { enabled });
 };

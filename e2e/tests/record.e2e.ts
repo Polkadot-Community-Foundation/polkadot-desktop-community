@@ -19,10 +19,7 @@ async function main() {
 
   const electronPath = path.join(process.cwd(), 'release/build/main.cjs');
 
-  const electronArgs =
-    process.platform === 'linux'
-      ? ['--no-sandbox', '--disable-gpu', electronPath]
-      : [electronPath];
+  const electronArgs = process.platform === 'linux' ? ['--no-sandbox', '--disable-gpu', electronPath] : [electronPath];
 
   const baseEnv = Object.fromEntries(
     Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
@@ -56,7 +53,7 @@ async function main() {
   await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
 }
 
-main().catch((err) => {
+main().catch(err => {
   console.error('Failed to launch recorder:', err);
   process.exit(1);
 });

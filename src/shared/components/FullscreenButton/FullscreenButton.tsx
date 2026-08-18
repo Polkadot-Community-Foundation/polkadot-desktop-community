@@ -14,7 +14,7 @@ export const FullscreenButton = ({
 }: FullscreenButtonProps) => {
   return (
     <button
-      className="rounded p-1 text-text-tertiary transition-colors hover:bg-neutral-100 hover:text-neutral-900"
+      className="rounded p-1 text-fg-tertiary transition-colors hover:bg-bg-action-tertiary hover:text-fg-primary"
       aria-label={ariaLabel}
       title={title}
       onClick={onClick}

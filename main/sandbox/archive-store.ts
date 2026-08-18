@@ -118,10 +118,11 @@ export function createArchiveStore(baseDir: string) {
     }
   }
 
-  async function readCurrent(domain: string): Promise<StoredArchive | null> {
-    const pointer = await readJson<CurrentPointer>(path.join(domainDir(baseDir, domain), CURRENT_FILE));
-    if (!pointer) return null;
-    return read(domain, pointer.contenthash);
+  // Read-only peek at the domain's current pointer (contenthash + origin) with no
+  // file reads — the authoritative "what version is pinned on disk" for the serve
+  // enforcement decision. Null when the domain is not persisted.
+  async function readPointer(domain: string): Promise<CurrentPointer | null> {
+    return readJson<CurrentPointer>(path.join(domainDir(baseDir, domain), CURRENT_FILE));
   }
 
   // Origin + the file path list for a serveable version — the header of a chunked
@@ -156,7 +157,7 @@ export function createArchiveStore(baseDir: string) {
     }
   }
 
-  // "Present" means "serveable", consistent with read/readCurrent: the current
+  // "Present" means "serveable", consistent with read: the current
   // pointer must name this contenthash AND its dir must exist. Checking the dir
   // alone would report true inside the persist crash-window (files renamed in,
   // current.json not yet written) — which would make reconcile skip a re-pin for
@@ -194,7 +195,7 @@ export function createArchiveStore(baseDir: string) {
       const pointer = await readJson<CurrentPointer>(path.join(dDir, CURRENT_FILE));
       if (!pointer) continue;
       const versionDir = path.join(dDir, pointer.contenthash);
-      let sizeBytes = 0;
+      let sizeBytes: number;
       try {
         sizeBytes = await dirSize(versionDir);
       } catch {
@@ -209,5 +210,5 @@ export function createArchiveStore(baseDir: string) {
     await fs.rm(baseDir, { recursive: true, force: true });
   }
 
-  return { persist, read, readCurrent, readManifest, readFile, has, delete: remove, list, clearAll };
+  return { persist, read, readPointer, readManifest, readFile, has, delete: remove, list, clearAll };
 }

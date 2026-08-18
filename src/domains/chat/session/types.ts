@@ -190,11 +190,14 @@ export type TransferContent = {
 // All four wire signals are persisted; the UI folds answer / ice / closed
 // back into the offer when deriving call state (see features/chat/ui/helpers/callState.ts).
 // `purpose` is only set on `offer`; `offerMessageId` only on the other three.
+// `sdp` carries the already-SCALE-encoded MinimalSetup / candidate bytes for
+// offer / answer / ice; absent on `closed` and backward-compatible render-only paths.
 export type CallSignalContent = {
   type: 'callSignal';
   signal: 'offer' | 'answer' | 'ice' | 'closed';
   purpose?: 'audio' | 'video';
   offerMessageId?: string;
+  sdp?: Uint8Array;
 };
 
 export type MessageContent =
@@ -250,6 +253,4 @@ export type ChatSession = {
   markAsRead(): Promise<void>;
   deleteSession(): Promise<void>;
   setBlocked?(blocked: boolean): Promise<void>;
-
-  onUserMessage(callback: (message: ChatMessage) => void): VoidFunction;
 };

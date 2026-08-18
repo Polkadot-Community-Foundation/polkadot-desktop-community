@@ -1,6 +1,6 @@
 import * as allure from 'allure-js-commons';
 
-import { expect, securityTest as test } from '../../fixtures/security';
+import { expect, probe, securityTest as test } from '../../fixtures/security';
 
 test.describe('Network Isolation', { tag: ['@security'] }, () => {
   test.beforeEach(async () => {
@@ -8,87 +8,75 @@ test.describe('Network Isolation', { tag: ['@security'] }, () => {
     await allure.feature('Security');
   });
 
-  test('blocks fetch to HTTPS endpoints', async ({ probeResults }) => {
-    const result = probeResults['net.fetch.https'];
-    expect(result).toBeDefined();
-    expect(result?.passed).toBe(true);
-    expect(result?.actual).toContain('blocked');
+  test('blocks fetch to HTTPS endpoints', { tag: ['@allure.id:14942'] }, ({ probeResults }) => {
+    const result = probe(probeResults, 'net.fetch.https');
+    expect(result.passed).toBe(true);
+    expect(result.actual).toContain('blocked');
   });
 
-  test('blocks fetch to HTTP endpoints', async ({ probeResults }) => {
-    const result = probeResults['net.fetch.http'];
-    expect(result).toBeDefined();
-    expect(result?.passed).toBe(true);
-    expect(result?.actual).toContain('blocked');
+  test('blocks fetch to HTTP endpoints', ({ probeResults }) => {
+    const result = probe(probeResults, 'net.fetch.http');
+    expect(result.passed).toBe(true);
+    expect(result.actual).toContain('blocked');
   });
 
-  test('blocks XMLHttpRequest to external URLs', async ({ probeResults }) => {
-    const result = probeResults['net.xhr'];
-    expect(result).toBeDefined();
-    expect(result?.passed).toBe(true);
-    expect(result?.actual).toContain('blocked');
+  test('blocks XMLHttpRequest to external URLs', ({ probeResults }) => {
+    const result = probe(probeResults, 'net.xhr');
+    expect(result.passed).toBe(true);
+    expect(result.actual).toContain('blocked');
   });
 
-  test('blocks WebSocket wss connections', async ({ probeResults }) => {
-    const result = probeResults['net.websocket'];
-    expect(result).toBeDefined();
-    expect(result?.passed).toBe(true);
-    expect(result?.actual).toContain('blocked');
+  test('blocks WebSocket wss connections', ({ probeResults }) => {
+    const result = probe(probeResults, 'net.websocket');
+    expect(result.passed).toBe(true);
+    expect(result.actual).toContain('blocked');
   });
 
-  test('blocks WebSocket ws (plain) connections', async ({ probeResults }) => {
-    const result = probeResults['net.websocket.ws'];
-    expect(result).toBeDefined();
-    expect(result?.passed).toBe(true);
-    expect(result?.actual).toContain('blocked');
+  test('blocks WebSocket ws (plain) connections', ({ probeResults }) => {
+    const result = probe(probeResults, 'net.websocket.ws');
+    expect(result.passed).toBe(true);
+    expect(result.actual).toContain('blocked');
   });
 
-  test('blocks EventSource connections', async ({ probeResults }) => {
-    const result = probeResults['net.eventsource'];
-    expect(result).toBeDefined();
-    expect(result?.passed).toBe(true);
-    expect(result?.actual).toContain('blocked');
+  test('blocks EventSource connections', ({ probeResults }) => {
+    const result = probe(probeResults, 'net.eventsource');
+    expect(result.passed).toBe(true);
+    expect(result.actual).toContain('blocked');
   });
 
-  test('blocks dynamic script tags from external URLs', async ({ probeResults }) => {
-    const result = probeResults['net.script'];
-    expect(result).toBeDefined();
-    expect(result?.passed).toBe(true);
-    expect(result?.actual).toContain('blocked');
+  test('blocks dynamic script tags from external URLs', ({ probeResults }) => {
+    const result = probe(probeResults, 'net.script');
+    expect(result.passed).toBe(true);
+    expect(result.actual).toContain('blocked');
   });
 
-  test('blocks dynamic img tags from external URLs', async ({ probeResults }) => {
-    const result = probeResults['net.img'];
-    expect(result).toBeDefined();
-    expect(result?.passed).toBe(true);
-    expect(result?.actual).toContain('blocked');
+  test('blocks dynamic img tags from external URLs', ({ probeResults }) => {
+    const result = probe(probeResults, 'net.img');
+    expect(result.passed).toBe(true);
+    expect(result.actual).toContain('blocked');
   });
 
-  test('blocks dynamic link tags from external URLs', async ({ probeResults }) => {
-    const result = probeResults['net.link'];
-    expect(result).toBeDefined();
-    expect(result?.passed).toBe(true);
-    expect(result?.actual).toContain('blocked');
+  test('blocks dynamic link tags from external URLs', ({ probeResults }) => {
+    const result = probe(probeResults, 'net.link');
+    expect(result.passed).toBe(true);
+    expect(result.actual).toContain('blocked');
   });
 
-  test('blocks navigator.sendBeacon', async ({ probeResults }) => {
-    const result = probeResults['net.beacon'];
-    expect(result).toBeDefined();
-    expect(result?.passed).toBe(true);
-    expect(result?.actual).toContain('blocked');
+  test('blocks navigator.sendBeacon', ({ probeResults }) => {
+    const result = probe(probeResults, 'net.beacon');
+    expect(result.passed).toBe(true);
+    expect(result.actual).toContain('blocked');
   });
 
-  test('blocks Worker from external URL', async ({ probeResults }) => {
-    const result = probeResults['net.worker'];
-    expect(result).toBeDefined();
-    expect(result?.passed).toBe(true);
-    expect(result?.actual).toContain('blocked');
+  test('blocks Worker from external URL', ({ probeResults }) => {
+    const result = probe(probeResults, 'net.worker');
+    expect(result.passed).toBe(true);
+    expect(result.actual).toContain('blocked');
   });
 
-  test('allows fetch to polkadot:// scheme (sanity check)', async ({ probeResults }) => {
-    const result = probeResults['net.fetch.product'];
-    expect(result).toBeDefined();
-    expect(result?.passed).toBe(true);
-    expect(result?.actual).toContain('allowed');
+  test('allows fetch to polkadot:// scheme (sanity check)', ({ probeResults }) => {
+    const result = probe(probeResults, 'net.fetch.product');
+    expect(result.passed).toBe(true);
+    expect(result.actual).toContain('allowed');
   });
 });

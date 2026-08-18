@@ -10,22 +10,34 @@ export type {
   P2PPeer,
   TransferContent,
 } from './session/types';
+export { useMessageSearch } from './$usecase/search.hooks';
+export type { MessageSearchHit } from './$usecase/search';
 export { useTotalUnreadCount } from './session/hooks';
 export { chatMessageService } from './session/service';
-export { chatCustomRendererService } from './custom-renderer/service';
-export type { ActionHandler } from './custom-renderer/service';
-
 export {
-  useCreateProductRoom,
-  useCurrentUserPeer,
-  useDeclaredProductRooms,
-  useProductRooms,
-  useProductSessions,
-  useUserProductRooms,
-} from './product/hooks';
-export { clearDeclaredProductRooms, declaredProductRooms$, registerDeclaredProductRoom } from './product/declared-rooms';
+  type CallDirection,
+  type CallPurpose,
+  type CallSessionEffect,
+  type CallSessionEvent,
+  type CallSessionState,
+  type MainToWindowMessage,
+  type OfferIdMap,
+  type PendingUpgrade,
+  type WindowToMainMessage,
+  callService,
+  callSessionService,
+  parseMainToWindow,
+  parseWindowToMain,
+} from './calls';
+
+export { fileTransferUseCase } from './$usecase/fileTransfer';
+export { productRoomUseCase } from './$usecase/productRoom';
+export { useCurrentUserPeer, useProductRooms, useProductSessions, useUserProductRooms } from './product/hooks';
 export { productChatService } from './product/service';
-export { createMessageInProductRoom, createProductRoom, deleteProductRoom, markProductMessagesAsRead } from './product/resource';
+export { createMessageInProductRoom, deleteProductRoom, markProductMessagesAsRead } from './product/resource';
+// DEBT: on the public surface for `application/$usecase/session.ts` (sign-out teardown).
+// Fix: expose it as a chat use case that session.ts composes.
+// eslint-disable-next-line local-rules/enforce-import-restrictions
 export { clearAllProductChatStorage } from './product/repository';
 
 export {
@@ -34,11 +46,11 @@ export {
   clearAllP2PChatStorage,
   createP2PChatManagerV2,
   createP2PChatSession,
-  downloadChatFile,
   isMessageTooLargeError,
+  listBlockedPeerIds,
+  p2pService,
   subscriptionRegistry,
   trackedSubscribeStatements,
-  uploadChatFile,
   useNotificationService,
   useP2PRequests,
   useP2PRooms,
@@ -47,3 +59,5 @@ export type { P2PChatManager, P2PChatRequest, P2PRoom, SearchResult } from './p2
 
 export type { ReactionAggregate, ReactorInfo } from './reaction/types';
 export { useMessageReactions, useToggleReaction } from './reaction/hooks';
+
+export { useHideRequestsByDefault, useSetHideRequestsByDefault } from './request-preferences/hooks';

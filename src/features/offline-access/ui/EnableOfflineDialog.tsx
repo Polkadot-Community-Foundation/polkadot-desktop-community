@@ -34,16 +34,31 @@ export const EnableOfflineDialog = ({ productId, onClose }: Props) => {
     >
       <Dialog.Content aria-describedby={undefined} variant="default">
         <ProductDialogHeader product={product} />
-        <div className="flex flex-col gap-2 py-6">
-          <span className="text-sm text-fg-secondary">{t('feature.offlineAccess.enableDescription')}</span>
+        <div className="flex flex-col gap-2">
+          <span className="text-2xl leading-8 font-semibold text-fg-primary">
+            {t('feature.offlineAccess.enableDialog.title')}
+          </span>
+          <span className="text-base leading-6 text-fg-secondary">{t('feature.offlineAccess.enableDialog.description')}</span>
         </div>
         <Dialog.Footer>
-          <Button variant="secondary" onClick={onClose}>
-            {t('common.cancel')}
-          </Button>
-          <Button data-testid={TEST_IDS.offlineAccessEnableConfirm} variant="default" disabled={pending} onClick={handleConfirm}>
-            {t('feature.offlineAccess.enableConfirm')}
-          </Button>
+          <div className="flex w-full gap-2">
+            <div className="flex-1">
+              <Button data-testid={TEST_IDS.offlineAccessDialogCancel} variant="outline" fullWidth onClick={onClose}>
+                {t('common.cancel')}
+              </Button>
+            </div>
+            <div className="flex-1">
+              <Button
+                data-testid={TEST_IDS.offlineAccessEnableConfirm}
+                variant="default"
+                fullWidth
+                disabled={pending}
+                onClick={handleConfirm}
+              >
+                {t('feature.offlineAccess.enableDialog.confirm')}
+              </Button>
+            </div>
+          </div>
         </Dialog.Footer>
       </Dialog.Content>
     </Dialog>

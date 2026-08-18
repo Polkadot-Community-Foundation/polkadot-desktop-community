@@ -1,4 +1,5 @@
 import { EXECUTABLE_KINDS } from './manifest/constants';
+import { type Executable, type LiveExecutable } from './manifest/types';
 import { type Product } from './types';
 
 // Stateless predicates on a loaded Product. Display-name / label formatting is
@@ -31,9 +32,19 @@ function refreshTargetIdentifiers(productId: string, product: Nullable<Product>)
   return new Set([productId, ...executableIds]);
 }
 
+// A frozen executable has drifted when its live on-chain resolution exists and
+// carries a different contenthash — i.e. a newer deployment is available for that
+// kind. A null `live` (kind absent on chain, or not yet resolved) is never drift.
+// Type guard: on `true` the live resolution is present, so callers can read its
+// fresh version without re-checking for null.
+function hasExecutableDrift(frozen: Executable, live: Nullable<LiveExecutable>): live is LiveExecutable {
+  return live != null && live.contenthash !== frozen.contenthash;
+}
+
 export const productService = {
   hasWidget,
   hasApp,
   matchesQuery,
   refreshTargetIdentifiers,
+  hasExecutableDrift,
 };

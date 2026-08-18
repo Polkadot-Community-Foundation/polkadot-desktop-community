@@ -25,10 +25,9 @@ import { contactRepository } from '@/domains/contact/identity/repository';
 import { type Contact } from '@/domains/contact/identity/types';
 /* eslint-enable boundaries/dependencies */
 
-import { type ChatMessageStatementCodec, type LocalMessageCodec, type LocalStatusCodec, type SyncEntityCodec } from './codec';
-import { encodeAccountIdSs58 } from './ss58';
+import { type ChatMessageStatementCodec, type LocalMessageCodec, type LocalStatusCodec, encodeAccountIdSs58 } from './schemas';
+import { type TimestampedEntity } from './service';
 
-type SyncEntity = CodecType<typeof SyncEntityCodec>;
 type LocalMessage = CodecType<typeof LocalMessageCodec>;
 type LocalStatus = CodecType<typeof LocalStatusCodec>;
 type ChatMessageStatement = CodecType<typeof ChatMessageStatementCodec>;
@@ -164,7 +163,9 @@ function statusToWire(status: ChatMessageStatus): LocalStatus {
 }
 
 export type CollectedChanges = {
-  entities: SyncEntity[];
+  /** Each entity with the newest source timestamp it covers; see `TimestampedEntity`. */
+  entities: TimestampedEntity[];
+  /** Wall clock captured at the start of the round — the checkpoint a fully delivered round reaches. */
   timePoint: number;
 };
 
@@ -183,7 +184,8 @@ async function isContactSyncable(contact: Contact): Promise<boolean> {
 }
 
 export async function collectChangesSince(since: number): Promise<CollectedChanges> {
-  const entities: SyncEntity[] = [];
+  const entities: TimestampedEntity[] = [];
+  const newest = (values: number[]): number => values.reduce((max, v) => (v > max ? v : max), 0);
 
   // Match Android's `runSyncRound` semantics: capture wall-clock once at the
   // start of the round and use it as the new checkpoint after a successful
@@ -204,7 +206,10 @@ export async function collectChangesSince(since: number): Promise<CollectedChang
         tag: 'Contact' as const,
         value: encodeAccountIdSs58(c.accountId),
       }));
-      entities.push({ tag: 'ChatsAdded', value: chatIds });
+      entities.push({
+        entity: { tag: 'ChatsAdded', value: chatIds },
+        maxTimestamp: newest(syncableContacts.map(c => c.lastUpdate)),
+      });
     }
   }
 
@@ -214,7 +219,10 @@ export async function collectChangesSince(since: number): Promise<CollectedChang
       tag: 'Contact' as const,
       value: encodeAccountIdSs58(t.accountId),
     }));
-    entities.push({ tag: 'ChatsRemoved', value: chatIds });
+    entities.push({
+      entity: { tag: 'ChatsRemoved', value: chatIds },
+      maxTimestamp: newest(removedContacts.map(t => t.removedAt)),
+    });
   }
 
   const changedMessages = await listMessagesChangedSince(since);
@@ -259,8 +267,20 @@ export async function collectChangesSince(since: number): Promise<CollectedChang
       const defaultEndpoint = (await environmentUseCase.getActive()).bulletinHopEndpoints?.[0] ?? '';
       const wireContent = mapContentToWire(m.content, defaultEndpoint);
       if (!wireContent) continue;
+      // The `deviceChatAccepted` carrier is stored locally under a
+      // `device-chat-accepted:{requestId}` id, but the acceptance it represents
+      // is keyed per-request as `req-accepted:{requestId}` on the visible
+      // `contactAdded` row. Desktop siblings ignore this wire id and re-derive
+      // `req-accepted:{requestId}` from the content on apply (see applier.ts),
+      // so the wire id is inert for us. Android/iOS, however, PRESERVE the wire
+      // id verbatim and render the carrier itself as the "accepted" bubble — so
+      // shipping our local `device-chat-accepted:*` id there produces a second,
+      // un-dedupable bubble alongside their own `req-accepted:*` row. Emit the
+      // canonical per-request id so cross-platform siblings collapse both into
+      // one row.
+      const wireMessageId = m.content.type === 'deviceChatAccepted' ? `req-accepted:${m.content.requestId}` : m.messageId;
       const remote: ChatMessageStatement = {
-        messageId: m.messageId,
+        messageId: wireMessageId,
         timestamp: BigInt(m.timestamp),
         versioned: { tag: 'v1', value: wireContent },
       };
@@ -271,7 +291,12 @@ export async function collectChangesSince(since: number): Promise<CollectedChang
         order: BigInt(m.timestamp),
       });
     }
-    if (localMessages.length > 0) entities.push({ tag: 'Messages', value: localMessages });
+    if (localMessages.length > 0) {
+      entities.push({
+        entity: { tag: 'Messages', value: localMessages },
+        maxTimestamp: newest(localMessages.map(m => Number(m.order))),
+      });
+    }
   }
 
   return { entities, timePoint };

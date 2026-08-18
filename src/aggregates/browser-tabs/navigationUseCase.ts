@@ -1,11 +1,13 @@
 import { pathnameMatchesSegment } from '@/shared/utils';
 
+import { CHAT, FAVORITES } from './constants';
 import { browserTabs } from './state/tabs';
 
 import { router } from '@/router';
 
-const SYSTEM_TAB_ROUTES: Record<string, '/chat/{-$chatId}' | '/settings' | '/dashboard'> = {
-  chat: '/chat/{-$chatId}',
+const SYSTEM_TAB_ROUTES: Record<string, '/chat/{-$chatId}' | '/settings' | '/dashboard' | '/favorites'> = {
+  [CHAT]: '/chat/{-$chatId}',
+  [FAVORITES]: '/favorites',
   settings: '/settings',
   dashboard: '/dashboard',
 };

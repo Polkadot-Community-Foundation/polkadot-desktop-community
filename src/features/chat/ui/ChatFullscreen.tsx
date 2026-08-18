@@ -1,29 +1,59 @@
-import { Button, DropdownMenu } from '@novasamatech/tr-ui';
-import { ChevronLeft, Ellipsis, MessageSquare, MessagesSquare, Plus, Search, Timer, Trash2, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toastInfo } from '@novasamatech/tr-ui';
+import { ChevronLeft, MessagesSquare, Trash2 } from 'lucide-react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FormattedMessage } from 'react-intl';
 
 import LastChatsIcon from '@/shared/assets/images/header/last-chats.svg?jsx';
 import { widgetSpanWidthCss } from '@/shared/components';
 import { TEST_IDS } from '@/shared/test-ids';
 import { useTranslation } from '@/shared/translation';
-import { cnTw } from '@/shared/utils';
-import { type P2PChatRequest, useP2PRequests, useProductSessions } from '@/domains/chat';
+import {
+  type ChatMessage,
+  type ChatSession,
+  type P2PChatRequest,
+  useHideRequestsByDefault,
+  useMessageSearch,
+  useP2PRequests,
+  useProductSessions,
+} from '@/domains/chat';
 import {
   useAcceptRequest,
   useCancelOutgoingRequest,
   useDeclineRequest,
   useP2PChatManager,
   useP2PSessions,
+  useRevealRequest,
+  useSendChatRequest,
 } from '@/aggregates/p2p-chat';
+import { useAnnounceProductRoomOpen } from '../hooks/useAnnounceProductRoomOpen';
+import { useContactSearch } from '../hooks/useContactSearch';
+import { useSortedChatList } from '../hooks/useSortedChatList';
+import { useSortedSessions } from '../hooks/useSortedSessions';
+import { chatService } from '../service';
 
-import { ContactSearch } from './ContactSearch';
-import { Avatar } from './partials/Avatar';
+import { SyncStatusBanner } from './SyncStatusBanner';
+import { ChatItem } from './partials/ChatItem';
 import { ChatItemSkeleton } from './partials/ChatItemSkeleton';
+import { ChatListSearchBar } from './partials/ChatListSearchBar';
 import { DeclineDialog } from './partials/DeclineDialog';
-import { MessageInput } from './partials/MessageInput';
+import { DraftInvitationRoom } from './partials/DraftInvitationRoom';
+import { IncomingRequestRoom } from './partials/IncomingRequestRoom';
+import { DateSeparator } from './partials/MessageBubble';
+import { NewRequestsItem } from './partials/NewRequestsItem';
 import { NoData } from './partials/NoData';
+import { OutgoingRequestItem } from './partials/OutgoingRequestItem';
+import { RecentContactsRow } from './partials/RecentContactsRow';
+import { RequestItem } from './partials/RequestItem';
+import { RequestRoomHeader } from './partials/RequestRoomHeader';
 import { Room } from './partials/Room';
 import { RoomList } from './partials/RoomList';
+import { SearchResultsPanel } from './partials/SearchResultsPanel';
+
+// How many recent-chat avatar chips to surface above the recents list on focus.
+const RECENT_CHIP_COUNT = 12;
+
+type JumpTarget = { sessionId: string; messageId: string; query: string };
+type InviteTarget = { accountId: string; username: string };
 
 type Props = {
   selected: string | null;
@@ -34,6 +64,8 @@ type Props = {
 // Match the chat list to a single widget column so it lines up with the settings side menu.
 const sideMenuStyle = { width: widgetSpanWidthCss(1) };
 
+const boldText = (chunks: ReactNode) => <span className="font-semibold text-fg-primary">{chunks}</span>;
+
 export const ChatFullscreen = ({ selected, onSelect, onDeselect }: Props) => {
   const { t } = useTranslation();
   const { data: productSessions, pending: pendingProduct } = useProductSessions();
@@ -42,25 +74,148 @@ export const ChatFullscreen = ({ selected, onSelect, onDeselect }: Props) => {
   const manager = useP2PChatManager();
   const acceptRequest = useAcceptRequest();
   const declineRequest = useDeclineRequest();
+  const revealRequest = useRevealRequest();
   const cancelOutgoingRequest = useCancelOutgoingRequest();
-  const [showSearch, setShowSearch] = useState(false);
+  const sendChatRequest = useSendChatRequest();
+  const { data: hideRequestsByDefault } = useHideRequestsByDefault();
+  const { search, results: contactResults, pending: contactsPending, searchError } = useContactSearch();
+  const [query, setQuery] = useState('');
+  const { data: messageResults, pending: messagesPending } = useMessageSearch(query);
+  const [searchActive, setSearchActive] = useState(false);
+  // The peer chosen in search opens `draftInvitation`: the draft room where the single invitation
+  // message is typed. Sending it creates the outgoing pending request.
+  const [draftInvitation, setDraftInvitation] = useState<InviteTarget | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [jumpTarget, setJumpTarget] = useState<JumpTarget | null>(null);
   const [showRequests, setShowRequests] = useState(false);
   const [declineTarget, setDeclineTarget] = useState<P2PChatRequest | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const leftPanelRef = useRef<HTMLDivElement>(null);
+
+  useAnnounceProductRoomOpen(selected);
 
   const pending = pendingProduct || pendingP2P;
-  const pendingPeerIds = useMemo(
-    () => new Set([...outgoingRequests.map(r => r.peerId), ...pendingRequests.map(r => r.peerId)]),
-    [outgoingRequests, pendingRequests],
-  );
   const sessions = useMemo(
-    () => [...productSessions, ...p2pSessions].filter(s => !pendingPeerIds.has(s.sessionId)),
-    [productSessions, p2pSessions, pendingPeerIds],
+    () => chatService.excludePendingSessions([...productSessions, ...p2pSessions], outgoingRequests, pendingRequests),
+    [productSessions, p2pSessions, outgoingRequests, pendingRequests],
   );
   const selectedSession = useMemo(() => sessions.find(c => c.sessionId === selected) ?? null, [sessions, selected]);
   const selectedOutgoingRequest = useMemo(
     () => outgoingRequests.find(r => r.peerId === selected) ?? null,
     [outgoingRequests, selected],
   );
+  const selectedIncomingRequest = useMemo(
+    () => pendingRequests.find(r => r.peerId === selected) ?? null,
+    [pendingRequests, selected],
+  );
+  const requesterNames = useMemo(() => chatService.formatRequesterNames(pendingRequests), [pendingRequests]);
+  const connectedIds = useMemo(() => new Set(sessions.map(s => s.sessionId)), [sessions]);
+  const chatListEntries = useSortedChatList(sessions, outgoingRequests, pendingRequests);
+
+  const closeSearch = useCallback(() => {
+    setSearchActive(false);
+    setQuery('');
+    search('');
+    // Drop focus too: a retained focus with searchActive=false would swallow
+    // further typing (onFocus wouldn't re-fire to reactivate the panel).
+    searchInputRef.current?.blur();
+  }, [search]);
+
+  // Close on click outside the chat list column; inside clicks are safe since result rows close it themselves.
+  useEffect(() => {
+    if (!searchActive) return;
+    const handleMouseDown = (event: globalThis.MouseEvent) => {
+      if (leftPanelRef.current && event.target instanceof Node && !leftPanelRef.current.contains(event.target)) {
+        closeSearch();
+      }
+    };
+    document.addEventListener('mousedown', handleMouseDown);
+
+    return () => document.removeEventListener('mousedown', handleMouseDown);
+  }, [searchActive, closeSearch]);
+
+  const handleQueryChange = useCallback(
+    (value: string) => {
+      setQuery(value);
+      search(value);
+    },
+    [search],
+  );
+
+  const handleClearSearch = useCallback(() => {
+    if (query.trim().length > 0) {
+      setQuery('');
+      search('');
+      searchInputRef.current?.focus();
+
+      return;
+    }
+    closeSearch();
+  }, [query, search, closeSearch]);
+
+  const handleSelectSession = useCallback(
+    (session: ChatSession) => {
+      setJumpTarget(null);
+      onSelect(session.sessionId);
+      closeSearch();
+    },
+    [onSelect, closeSearch],
+  );
+
+  const handleSelectMessage = useCallback(
+    (message: ChatMessage) => {
+      setJumpTarget({ sessionId: message.sessionId, messageId: message.messageId, query });
+      onSelect(message.sessionId);
+      closeSearch();
+    },
+    [onSelect, closeSearch, query],
+  );
+
+  const handleSelectContact = useCallback(
+    (accountId: string, username: string) => {
+      setDraftInvitation({ accountId, username });
+      setInviteError(null);
+      closeSearch();
+      onDeselect?.();
+    },
+    [closeSearch, onDeselect],
+  );
+
+  const handleSendInvitation = useCallback(
+    async (text: string) => {
+      if (!draftInvitation) return;
+      const { accountId, username } = draftInvitation;
+      setInviteError(null);
+      // The single invitation message is the request's welcome message; sending it creates the
+      // outgoing pending request, after which the draft closes and the pending room opens.
+      try {
+        await sendChatRequest(accountId, username, text.trim() || undefined);
+      } catch (e) {
+        console.error('[chat] Failed to send chat request:', e);
+        setInviteError(t('feature.chat.request.inviteFailed'));
+        // Rethrow so MessageInput keeps the draft (it clears only on success).
+        throw e;
+      }
+      setDraftInvitation(null);
+      onSelect(accountId);
+    },
+    [draftInvitation, sendChatRequest, onSelect, t],
+  );
+
+  const handleCancelDraft = useCallback(() => {
+    setDraftInvitation(null);
+    setInviteError(null);
+    onDeselect?.();
+  }, [onDeselect]);
+
+  const roomInitialSearch = useMemo(
+    () =>
+      jumpTarget && jumpTarget.sessionId === selected ? { query: jumpTarget.query, messageId: jumpTarget.messageId } : undefined,
+    [jumpTarget, selected],
+  );
+
+  const showResults = searchActive && query.trim().length > 0;
+  const showRecents = searchActive && query.trim().length === 0;
 
   const handleAcceptRequest = useCallback(
     async (request: P2PChatRequest) => {
@@ -75,15 +230,30 @@ export const ChatFullscreen = ({ selected, onSelect, onDeselect }: Props) => {
     [acceptRequest, onSelect],
   );
 
+  const handleRevealRequest = useCallback(
+    async (request: P2PChatRequest) => {
+      try {
+        await revealRequest(request.requestId);
+      } catch (e) {
+        console.error('[chat] Failed to reveal request:', e);
+      }
+    },
+    [revealRequest],
+  );
+
   const handleDeclineConfirm = useCallback(async () => {
     if (!declineTarget) return;
+    const name = chatService.formatPeerName(declineTarget.peerUsername, declineTarget.peerId);
+    const wasSelected = declineTarget.peerId === selected;
     try {
       await declineRequest(declineTarget.requestId);
+      toastInfo({ title: t('feature.chat.request.declinedToast', { name }) });
+      if (wasSelected) onDeselect?.();
     } catch (e) {
       console.error('[chat] Failed to decline request:', e);
     }
     setDeclineTarget(null);
-  }, [declineRequest, declineTarget]);
+  }, [declineRequest, declineTarget, selected, onDeselect, t]);
 
   const handleRemoveOutgoingRequest = useCallback(
     async (request: P2PChatRequest) => {
@@ -100,50 +270,93 @@ export const ChatFullscreen = ({ selected, onSelect, onDeselect }: Props) => {
   return (
     <div className="relative flex size-full gap-2 bg-bg-surface-main p-2">
       <div
+        ref={leftPanelRef}
         style={sideMenuStyle}
-        className="flex shrink-0 flex-col overflow-hidden rounded-xl border border-border-primary bg-bg-surface-container"
+        className="flex shrink-0 flex-col overflow-hidden rounded-xl border border-stroke-primary bg-bg-surface-container"
       >
         {showRequests ? (
           <RequestsListView
             requests={pendingRequests}
-            disabled={!manager}
+            selected={selected}
+            hideByDefault={hideRequestsByDefault}
             onBack={() => setShowRequests(false)}
-            onAccept={handleAcceptRequest}
+            onSelect={onSelect}
             onDecline={setDeclineTarget}
           />
         ) : (
           <>
-            <ListHeader showSearch={showSearch} onNewChat={() => setShowSearch(s => !s)} />
-            {showSearch ? (
-              <ContactSearch
-                onClose={() => setShowSearch(false)}
-                onRequestSent={peerId => {
-                  setShowSearch(false);
-                  onSelect(peerId);
-                }}
+            <ListHeader />
+            <ChatListSearchBar
+              query={query}
+              active={searchActive}
+              inputRef={searchInputRef}
+              onQueryChange={handleQueryChange}
+              onFocus={() => setSearchActive(true)}
+              onClear={handleClearSearch}
+              onEscape={closeSearch}
+            />
+            {showResults ? (
+              <SearchResultsPanel
+                query={query}
+                sessions={sessions}
+                contactResults={contactResults}
+                messageResults={messageResults}
+                connectedIds={connectedIds}
+                contactsDisabled={!manager}
+                pending={contactsPending || messagesPending}
+                searchError={searchError}
+                onSelectSession={handleSelectSession}
+                onSelectContact={handleSelectContact}
+                onSelectMessage={handleSelectMessage}
               />
+            ) : showRecents ? (
+              <RecentsView sessions={sessions} selectedSession={selectedSession} onSelect={handleSelectSession} />
             ) : (
-              <div data-testid={TEST_IDS.chatRoomList} className="flex-1 overflow-y-auto">
-                {pendingRequests.length > 0 && (
-                  <NewRequestsItem count={pendingRequests.length} onClick={() => setShowRequests(true)} />
-                )}
-                {outgoingRequests.map(req => (
-                  <OutgoingRequestItem
-                    key={req.requestId}
-                    request={req}
-                    selected={selected === req.peerId}
-                    onClick={() => onSelect(req.peerId)}
-                  />
-                ))}
+              <div data-testid={TEST_IDS.chatRoomList} className="flex flex-1 flex-col overflow-y-auto">
+                <SyncStatusBanner />
                 {pending ? (
                   skeleton
+                ) : chatListEntries.length === 0 ? (
+                  <div className="flex h-full items-center justify-center">
+                    <NoData
+                      icon={MessagesSquare}
+                      title={t('feature.chat.noChatsYet')}
+                      description={t('feature.chat.yourChatsWillAppear')}
+                    />
+                  </div>
                 ) : (
-                  <RoomList
-                    sessions={sessions}
-                    selected={selectedSession}
-                    hideEmpty={outgoingRequests.length > 0 || pendingRequests.length > 0}
-                    onSelect={s => onSelect(s.sessionId)}
-                  />
+                  chatListEntries.map((entry, index) => {
+                    if (entry.kind === 'incoming') {
+                      return (
+                        <NewRequestsItem
+                          key="incoming-requests"
+                          count={entry.requests.length}
+                          subtitle={requesterNames}
+                          onClick={() => setShowRequests(true)}
+                        />
+                      );
+                    }
+                    if (entry.kind === 'outgoing') {
+                      return (
+                        <OutgoingRequestItem
+                          key={entry.request.requestId}
+                          request={entry.request}
+                          selected={selected === entry.request.peerId}
+                          onClick={() => onSelect(entry.request.peerId)}
+                        />
+                      );
+                    }
+
+                    return (
+                      <ChatItem
+                        key={entry.session.sessionId}
+                        session={entry.session}
+                        isLast={index === chatListEntries.length - 1}
+                        isSelected={selectedSession?.sessionId === entry.session.sessionId}
+                        onClick={() => onSelect(entry.session.sessionId)}
+                      />
+                    );
+                  })
                 )}
               </div>
             )}
@@ -151,13 +364,29 @@ export const ChatFullscreen = ({ selected, onSelect, onDeselect }: Props) => {
         )}
       </div>
 
-      {selectedOutgoingRequest ? (
+      {draftInvitation ? (
+        <DraftInvitationRoom
+          name={draftInvitation.username}
+          sendError={inviteError}
+          onSend={handleSendInvitation}
+          onCancel={handleCancelDraft}
+        />
+      ) : selectedOutgoingRequest ? (
         <OutgoingPendingRoom
           request={selectedOutgoingRequest}
           onRemove={() => handleRemoveOutgoingRequest(selectedOutgoingRequest)}
         />
+      ) : selectedIncomingRequest ? (
+        <IncomingRequestRoom
+          request={selectedIncomingRequest}
+          hideByDefault={hideRequestsByDefault}
+          disabled={!manager}
+          onAccept={() => handleAcceptRequest(selectedIncomingRequest)}
+          onDecline={() => setDeclineTarget(selectedIncomingRequest)}
+          onReveal={handleRevealRequest}
+        />
       ) : selectedSession ? (
-        <Room session={selectedSession} onDeleted={onDeselect} />
+        <Room session={selectedSession} initialSearch={roomInitialSearch} onDeleted={onDeselect} />
       ) : (
         <NoData icon={MessagesSquare} title={t('feature.chat.noChatSelected')} description={t('feature.chat.selectChatToView')} />
       )}
@@ -172,61 +401,53 @@ export const ChatFullscreen = ({ selected, onSelect, onDeselect }: Props) => {
   );
 };
 
-const ListHeader = ({ onNewChat, showSearch }: { onNewChat: VoidFunction; showSearch: boolean }) => {
+const ListHeader = () => {
   const { t } = useTranslation();
 
   return (
     <div className="shrink-0 bg-bg-surface-container p-2">
       <div className="flex w-full items-center gap-2">
-        <div className="flex flex-1 items-center gap-2">
-          <LastChatsIcon className="size-6 shrink-0" aria-hidden />
-          <span className="shrink-0 text-sm leading-5 font-semibold text-fg-primary">{t('feature.chat.widgetTitle')}</span>
-        </div>
-        <button
-          data-testid={TEST_IDS.chatSearchToggleButton}
-          className="flex size-7 items-center justify-center rounded-full transition-colors hover:bg-bg-selection-container-hover"
-          onMouseDown={showSearch ? e => e.stopPropagation() : undefined}
-          onClick={onNewChat}
-        >
-          {showSearch ? <X className="size-4 text-fg-secondary" /> : <Plus className="size-4 text-fg-secondary" />}
-        </button>
+        <LastChatsIcon className="size-6 shrink-0 dark:invert" aria-hidden />
+        <span className="text-sm leading-5 font-semibold text-fg-primary">{t('feature.chat.fullscreenTitle')}</span>
       </div>
     </div>
   );
 };
 
-const NewRequestsItem = ({ count, onClick }: { count: number; onClick: VoidFunction }) => {
+type RecentsViewProps = {
+  sessions: ChatSession[];
+  selectedSession: ChatSession | null;
+  onSelect(session: ChatSession): void;
+};
+
+// Sorting lives here, not the parent, so the `lastMessage` subscription only runs while recents are on screen.
+const RecentsView = ({ sessions, selectedSession, onSelect }: RecentsViewProps) => {
+  const { t } = useTranslation();
+  const recentSessions = useSortedSessions(sessions);
+
   return (
-    <div
-      data-testid={TEST_IDS.chatNewRequestsItem}
-      className="relative flex h-22 w-full cursor-pointer items-center gap-3 p-3 transition-colors after:absolute after:right-3 after:bottom-0 after:left-22 after:h-px after:bg-border-divider hover:bg-bg-selection-container-hover"
-      onClick={onClick}
-    >
-      <div className="flex size-16 shrink-0 items-center justify-center rounded-full bg-bg-illustration-dark">
-        <MessageSquare className="size-7 text-fg-primary-inverted" />
+    <div className="flex flex-1 flex-col overflow-y-auto">
+      <RecentContactsRow sessions={recentSessions.slice(0, RECENT_CHIP_COUNT)} onSelect={onSelect} />
+      <div className="shrink-0 px-4 pt-1 pb-1">
+        <span className="text-sm leading-5 font-medium text-fg-secondary">{t('feature.chat.recent')}</span>
       </div>
-      <div className="flex min-w-0 flex-1 items-center gap-2">
-        {/* eslint-disable-next-line formatjs/no-literal-string-in-jsx */}
-        <span className="min-w-0 flex-1 truncate text-base leading-6 font-semibold text-fg-primary">New Requests</span>
-        <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-bg-illustration-dark px-1">
-          <span className="text-center text-xs leading-4 font-semibold tracking-[1px] text-fg-primary-inverted uppercase">
-            {count}
-          </span>
-        </span>
-      </div>
+      <RoomList sessions={sessions} selected={selectedSession} onSelect={onSelect} />
     </div>
   );
 };
 
 type RequestsListViewProps = {
   requests: P2PChatRequest[];
-  disabled: boolean;
+  selected: string | null;
+  hideByDefault: boolean;
   onBack: VoidFunction;
-  onAccept: (request: P2PChatRequest) => void;
+  onSelect: (peerId: string) => void;
   onDecline: (request: P2PChatRequest) => void;
 };
 
-const RequestsListView = ({ requests, disabled, onBack, onAccept, onDecline }: RequestsListViewProps) => {
+const RequestsListView = ({ requests, selected, hideByDefault, onBack, onSelect, onDecline }: RequestsListViewProps) => {
+  const { t } = useTranslation();
+
   return (
     <>
       <div className="shrink-0 bg-bg-surface-container p-2">
@@ -237,27 +458,24 @@ const RequestsListView = ({ requests, disabled, onBack, onAccept, onDecline }: R
           >
             <ChevronLeft className="size-4 text-fg-secondary" />
           </button>
-          <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-bg-illustration-dark">
-            <MessageSquare className="size-3.5 text-fg-primary-inverted" />
-          </div>
-          {/* eslint-disable-next-line formatjs/no-literal-string-in-jsx */}
-          <span className="min-w-0 flex-1 truncate text-sm leading-5 font-semibold text-fg-primary">Message Requests</span>
-          <button className="flex size-7 items-center justify-center rounded-full transition-colors hover:bg-bg-selection-container-hover">
-            <Search className="size-4 text-fg-secondary" />
-          </button>
+          <span className="min-w-0 flex-1 truncate text-sm leading-5 font-semibold text-fg-primary">
+            {t('feature.chat.request.entryTitle')}
+          </span>
         </div>
       </div>
-      {/* eslint-disable-next-line formatjs/no-literal-string-in-jsx */}
-      <div className="px-4 pt-3 pb-2 text-center text-sm leading-[18px] text-fg-secondary">
-        Message requests from people who aren&apos;t in your contact list appear here
+      <div className="px-2 pt-2 pb-1">
+        <div className="rounded-lg bg-bg-surface-nested px-4 py-3 text-center text-sm leading-4.5 text-fg-secondary">
+          {t('feature.chat.request.listHint')}
+        </div>
       </div>
       <div className="flex-1 overflow-y-auto">
         {requests.map(req => (
           <RequestItem
             key={req.requestId}
             request={req}
-            disabled={disabled}
-            onAccept={() => onAccept(req)}
+            selected={selected === req.peerId}
+            hideByDefault={hideByDefault}
+            onSelect={() => onSelect(req.peerId)}
             onDecline={() => onDecline(req)}
           />
         ))}
@@ -266,134 +484,44 @@ const RequestsListView = ({ requests, disabled, onBack, onAccept, onDecline }: R
   );
 };
 
-type RequestItemProps = {
-  request: P2PChatRequest;
-  disabled: boolean;
-  onAccept: VoidFunction;
-  onDecline: VoidFunction;
-};
-
-const RequestItem = ({ request, disabled, onAccept, onDecline }: RequestItemProps) => {
-  const name = request.peerUsername ?? request.peerId.slice(0, 12) + '...';
+const OutgoingPendingRoom = ({ request, onRemove }: { request: P2PChatRequest; onRemove: VoidFunction }) => {
+  const { t } = useTranslation();
+  const name = chatService.formatPeerName(request.peerUsername, request.peerId);
+  const sentAt = new Date(request.timestamp);
+  const dayLabel =
+    sentAt.toDateString() === new Date().toDateString()
+      ? t('feature.chat.request.today')
+      : sentAt.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
 
   return (
-    <div className="relative flex w-full items-start gap-3 p-3 after:absolute after:right-3 after:bottom-0 after:left-22 after:h-px after:bg-border-divider">
-      <Avatar name={name} size="chat-list" />
-      <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
-        <div className="flex w-full items-end gap-2">
-          <span className="min-w-0 flex-1 truncate text-base leading-6 font-semibold text-fg-primary">{name}</span>
-          <span className="shrink-0 text-sm leading-5 font-medium text-fg-tertiary">
-            {new Date(request.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+    <div className="flex min-w-111 flex-1 flex-col overflow-hidden rounded-xl border border-stroke-primary bg-bg-surface-container">
+      <RequestRoomHeader
+        name={name}
+        actionIcon={<Trash2 className="me-2 size-4" />}
+        actionLabel={t('feature.chat.leaveChat')}
+        onAction={onRemove}
+      />
+
+      <div className="flex flex-1 flex-col gap-1 overflow-y-auto px-4 py-4">
+        <DateSeparator text={dayLabel} />
+        <div className="flex w-full items-center justify-center py-2">
+          <span className="text-center text-sm leading-5 font-medium text-fg-secondary">
+            <FormattedMessage id="feature.chat.request.youSent" values={{ b: boldText }} />
           </span>
         </div>
-        <div className="flex w-full items-center gap-2">
-          {/* eslint-disable-next-line formatjs/no-literal-string-in-jsx */}
-          <span className="min-w-0 flex-1 truncate text-sm leading-[18px] text-fg-secondary">Message Request</span>
-          {/* eslint-disable-next-line formatjs/no-literal-string-in-jsx */}
-          <Button variant="secondary" size="sm" disabled={disabled} onClick={onDecline}>
-            Decline
-          </Button>
-          <div data-testid={TEST_IDS.chatRequestAcceptButton}>
-            {/* eslint-disable-next-line formatjs/no-literal-string-in-jsx */}
-            <Button size="sm" disabled={disabled} onClick={onAccept}>
-              Accept
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-type OutgoingRequestItemProps = {
-  request: P2PChatRequest;
-  selected: boolean;
-  onClick: VoidFunction;
-};
-
-const OutgoingRequestItem = ({ request, selected, onClick }: OutgoingRequestItemProps) => {
-  const name = request.peerUsername ?? `${request.peerId.slice(0, 12)}...`;
-  const time = new Date(request.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-
-  return (
-    <div
-      className={cnTw(
-        'relative flex h-22 w-full cursor-pointer items-start gap-3 p-3 transition-colors after:absolute after:right-3 after:bottom-0 after:left-22 after:h-px after:bg-border-divider',
-        selected ? 'bg-bg-selection-container-active' : 'hover:bg-bg-selection-container-hover',
-      )}
-      onClick={onClick}
-    >
-      <Avatar name={name} size="chat-list" />
-      <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
-        <div className="flex w-full items-end gap-2">
-          <span className="max-w-full min-w-0 truncate text-base leading-6 font-semibold text-fg-primary">{name}</span>
-          <Timer className="size-4 shrink-0 text-fg-tertiary" />
-          <span className="ml-auto shrink-0 text-sm leading-5 font-medium text-fg-tertiary">{time}</span>
-        </div>
-        <span className="min-w-0 truncate text-sm leading-[18px] text-fg-secondary">{request.welcomeMessage ?? ''}</span>
-      </div>
-    </div>
-  );
-};
-
-const OutgoingPendingRoom = ({ request, onRemove }: { request: P2PChatRequest; onRemove: VoidFunction }) => {
-  const inputRef = useRef<HTMLTextAreaElement>(null);
-  const name = request.peerUsername ?? `${request.peerId.slice(0, 12)}...`;
-
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, [request.peerId]);
-
-  return (
-    <div className="flex min-w-111 flex-1 flex-col overflow-hidden rounded-xl border border-border-primary bg-bg-surface-container">
-      <div className="h-14 shrink-0 border-b border-border-primary">
-        <div className="flex h-full items-center gap-2 py-2 pr-0 pl-4">
-          <Avatar name={name} size="chat-header" />
-          <div className="flex min-w-0 flex-1 items-center gap-2 pr-4">
-            <div className="flex min-w-0 flex-1 flex-col items-start justify-center">
-              <span className="w-full min-w-0 truncate text-base leading-6 font-semibold text-fg-primary">{name}</span>
-            </div>
-            <div className="flex shrink-0 items-center">
-              <DropdownMenu>
-                <DropdownMenu.Trigger asChild>
-                  <Button variant="ghost" size="icon-sm">
-                    <Ellipsis strokeWidth={1.75} className="size-5" />
-                  </Button>
-                </DropdownMenu.Trigger>
-                <DropdownMenu.Content align="end">
-                  <DropdownMenu.Item variant="destructive" onClick={onRemove}>
-                    <Trash2 className="mr-2 size-4" />
-                    Remove chat
-                  </DropdownMenu.Item>
-                </DropdownMenu.Content>
-              </DropdownMenu>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-4 py-4">
         {request.welcomeMessage && (
           <div className="flex w-full flex-col items-end">
-            <div className="max-w-[520px] rounded-2xl bg-bg-surface-container-inverted px-3 pt-2 pb-3">
+            <div className="max-w-130 rounded-2xl bg-bg-surface-container-inverted px-3 pt-2 pb-3">
               <p className="text-base leading-5 text-fg-primary-inverted">{request.welcomeMessage}</p>
             </div>
           </div>
         )}
-
-        <div className="flex w-full items-center justify-center gap-2 px-4 py-2">
-          <Timer className="size-4 shrink-0 text-fg-tertiary" />
-          <span className="text-sm leading-[18px] text-fg-secondary">
-            {/* eslint-disable-next-line formatjs/no-literal-string-in-jsx */}
-            {`Chat request sent to ${name}. Waiting for them to accept.`}
-          </span>
-        </div>
       </div>
 
-      <div className="shrink-0 border-t border-border-primary">
-        <div className="flex flex-col gap-2 p-2">
-          <MessageInput ref={inputRef} submitAction={async () => {}} />
-        </div>
+      <div className="shrink-0 border-t border-stroke-primary px-4 py-3">
+        <p className="text-sm leading-4.5 text-fg-secondary">
+          <FormattedMessage id="feature.chat.request.waitForAccept" values={{ name, b: boldText }} />
+        </p>
       </div>
     </div>
   );
