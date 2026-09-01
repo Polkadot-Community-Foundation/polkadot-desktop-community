@@ -1,4 +1,5 @@
 import { join } from 'path';
+import { pathToFileURL } from 'url';
 
 import { main, renderer, title } from '~config';
 import { BrowserWindow, Menu, session, shell } from 'electron';
@@ -51,7 +52,11 @@ export function createWindow(): BrowserWindow {
   if (ENVIRONMENT.RENDERER_SOURCE === 'localhost') {
     window.loadURL(`${renderer.server.protocol}${renderer.server.host}:${renderer.server.port}`);
   } else {
-    window.loadURL('file://' + __dirname + '/index.html');
+    // Build the file URL via pathToFileURL — hand-concatenating 'file://' + __dirname
+    // yields a valid file:///… on POSIX but a malformed file://C:\…\index.html on
+    // Windows (the drive letter is parsed as a host and backslashes are not escaped),
+    // which corrupts the renderer's base URL used to resolve lazily-loaded assets.
+    window.loadURL(pathToFileURL(join(__dirname, 'index.html')).toString());
   }
 
   // DevTools available via menu: Developer → Toggle Developer Tools (CmdOrCtrl+Shift+I)

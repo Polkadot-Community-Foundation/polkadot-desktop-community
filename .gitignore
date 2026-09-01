@@ -44,6 +44,12 @@ src/dev-dist
 .claude/worktrees
 .worktrees
 .env
+# Every per-environment variant too (.env.paseo, .env.summit, …). Upstream ignores only
+# bare `.env` and the four `*.local` names above, which would let a `.env.paseo` holding
+# real Firebase/TURN values be committed. Build-time values are injected by CI from repo
+# variables/secrets (see .github/workflows/release.yaml); `.env.example` stays tracked.
+.env.*
+!.env.example
 docs/superpowers
 docs/_reviews
 docs/_plans

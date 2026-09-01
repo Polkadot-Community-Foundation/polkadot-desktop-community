@@ -1,0 +1,350 @@
+name: Release (Paseo / DEV)
+
+# Builds Polkadot Desktop installers for the public DEV distribution — a single network
+# channel that targets the public DEVNET (its catalog id "paseo" is incidental) — and
+# publishes them on a v* tag. The network wiring is
+# delivered at runtime from Firebase Remote Config (chains_v2 / dot_ns_config /
+# ipfs_gateway_url / identity_backend_url) — this workflow only bakes the env-only values
+# and the public Firebase client ids, then packages per-OS via electron-builder.
+# BUILD_TYPE=dev selects the `*_DEVELOP` application identity
+# (com.polkadot.desktop.dev / "Polkadot Desktop Dev") so the installers land side-by-side
+# with the prod/summit build. The identity itself is supplied by the job `env:` block
+# below, because config/index.js now reads it from process.env and refuses to package
+# without it (`assertPackagingIdentity`).
+#
+# NOTE — this workflow, not upstream's `release-pipeline.yml`, owns the v* tag. That
+# pipeline's tag trigger is disabled in this fork (it defaults BUILD_TYPE=dev → builds
+# with `--mode development` → `isProductionBuild()` false → the network chooser and the
+# onboarding Skip button would render in a published installer). See the comment there.
+#
+# CONFIG SOURCE — repo Variables & Secrets, NOT a committed file. No .env* is ever
+# committed to this repo (.gitignore blocks it). The runner writes an ephemeral .env
+# from the values below, then `scripts/validate-release-env.mjs` fails the build if the
+# result would ship more than one network channel (which would expose the network
+# chooser to end users) or is missing the Firebase ids Remote Config needs.
+#
+# Required repo VARIABLES (non-secret — network + public web-app config):
+#   VITE_ENVIRONMENTS               single-channel Paseo catalog JSON (default+shared+
+#                                   channels:{paseo}); >1 channel FAILS the guard
+#   VITE_FIREBASE_API_KEY, VITE_FIREBASE_PROJECT_ID, VITE_FIREBASE_APP_ID
+#   VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_STORAGE_BUCKET,
+#   VITE_FIREBASE_MESSAGING_SENDER_ID   (written to .env; read by nothing in src/ or
+#                                        main/ — kept for parity with the web config)
+#   VITE_WEBRTC_TURN_HOST, VITE_WEBRTC_TURN_TTL
+#   SANDBOX_IPFS_ALLOWLIST, SANDBOX_RELAY_ALLOWLIST
+# Optional repo VARIABLES (all have a working fallback in the `env:` block below):
+#   BUILD_TYPE (dev|production)
+#   APP_ID, PRODUCT_NAME, APP_NAME                 base packaging identity
+#   APP_ID_DEVELOP, PRODUCT_NAME_DEVELOP, APP_NAME_DEVELOP   BUILD_TYPE=dev identity
+#   UPDATE_REPO_OWNER, UPDATE_REPO_NAME            GitHub auto-update feed
+#   AUTO_UPDATE_URL                 switch the feed to a plain static (S3) feed instead
+#                                   of GitHub Releases. BUILD_SOURCE was REMOVED upstream
+#                                   (replaced by the feed shape above) and is now a no-op.
+# Required SECRETS:
+#   VITE_WEBRTC_TURN_SECRET         TURN static-auth-secret (NOTE: baked into the
+#                                   renderer bundle → present in the shipped binary;
+#                                   held as a secret to keep it out of git, not truly
+#                                   confidential once a build ships)
+# Optional SECRETS:
+#   macOS SIGNING (Developer ID cert): CERTIFICATE_OSX_APPLICATION (base64 .p12),
+#     CERTIFICATE_PASSWORD
+#   macOS NOTARIZATION (App Store Connect API key / notarytool):
+#     APPLE_API_KEY_P8_BASE64 (base64 of the AuthKey_*.p8), APPLE_API_KEY_ID,
+#     APPLE_API_ISSUER, APPLE_TEAM_ID
+#     (CERTIFICATE_OSX_APPLICATION present → signed+notarized dmg; unset → unsigned
+#      build, Tier A handout, with the Gatekeeper quarantine workaround in the notes)
+#   SENTRY_DSN (optional crash reporting)
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Never let two releases for the same ref race on the GitHub Release / uploaded assets.
+# Do NOT cancel an in-progress run — a half-published release should finish, not abort.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Resolve, once, whether an Apple signing cert is configured. Secrets can't be read in a
+  # job-level `if:` on the release job, so we surface it as an output both jobs consume:
+  # the build gates its mac sign+notarize path on it, and the release tailors its notes
+  # (unsigned builds get the Gatekeeper quarantine workaround).
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      signed: ${{ steps.detect.outputs.signed }}
+    steps:
+      - id: detect
+        shell: bash
+        env:
+          HAS_APPLE: ${{ secrets.CERTIFICATE_OSX_APPLICATION != '' }}
+        run: echo "signed=${HAS_APPLE}" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      # ── Packaged application identity ────────────────────────────────────────────
+      # Distinct electron identity for the public DEV distribution:
+      # com.polkadot.desktop.dev / "Polkadot Desktop Dev", installable beside the
+      # prod/summit build.
+      #
+      # This used to be a `BUILD_CHANNEL: dev` branch over literals inside
+      # config/index.js. Upstream removed that mechanism (BUILD_CHANNEL has zero hits
+      # in their tree) and made identity pure configuration: config/index.js now reads
+      # APP_ID / PRODUCT_NAME / APP_NAME from process.env, picks the `_DEVELOP` variant
+      # whenever BUILD_TYPE != 'production', and `assertPackagingIdentity()` THROWS at
+      # electron-builder config load if any of the three resolves empty. So the literals
+      # move here — the identity is still pinned by this repository, just at the layer
+      # upstream now reads it from.
+      #
+      # Each falls back to the value that shipped in 0.1.2 when the matching repo
+      # Variable is unset, so packaging cannot hard-fail on a missing Variable and an
+      # existing install slot / userData directory is never orphaned by a typo. Set the
+      # repo Variables to override.
+      BUILD_TYPE: ${{ vars.BUILD_TYPE || 'dev' }}
+      APP_ID_DEVELOP: ${{ vars.APP_ID_DEVELOP || 'com.polkadot.desktop.dev' }}
+      PRODUCT_NAME_DEVELOP: ${{ vars.PRODUCT_NAME_DEVELOP || 'Polkadot Desktop Dev' }}
+      APP_NAME_DEVELOP: ${{ vars.APP_NAME_DEVELOP || 'polkadot-desktop-dev' }}
+      # Base identity, used when BUILD_TYPE=production. Same fallbacks as the pre-sync
+      # non-dev branch of config/index.js.
+      APP_ID: ${{ vars.APP_ID || 'com.polkadot.desktop' }}
+      PRODUCT_NAME: ${{ vars.PRODUCT_NAME || 'Polkadot Desktop' }}
+      APP_NAME: ${{ vars.APP_NAME || 'polkadot-desktop' }}
+      # ── Auto-update feed ─────────────────────────────────────────────────────────
+      # config/index.js defaults the GitHub update feed to paritytech/polkadot-desktop-
+      # community. Left unset, an installed PCF build would poll Parity's release feed
+      # and be offered Parity's builds. Pin it to whichever repository actually published
+      # this run; the repo Variables override.
+      UPDATE_REPO_OWNER: ${{ vars.UPDATE_REPO_OWNER || github.repository_owner }}
+      UPDATE_REPO_NAME: ${{ vars.UPDATE_REPO_NAME || github.event.repository.name }}
+      # NOTE: the VITE_* values are intentionally NOT declared here at job scope. Vite
+      # gives process-env vars precedence over the .env file, so a job-level VITE_X set to
+      # "" (which is what `${{ vars.X }}` expands to when a variable is unset) would BLANK
+      # OUT the value we just wrote to .env at build time. They are therefore scoped to the
+      # "Generate .env" step below, which only writes each key when it is non-empty.
+      # AUTO_UPDATE_URL / BUILD_SOURCE are safe at job scope: config/index.js reads
+      # AUTO_UPDATE_URL from process.env at electron-builder time to wire the update feed.
+      AUTO_UPDATE_URL: ${{ vars.AUTO_UPDATE_URL }}
+      BUILD_SOURCE: ${{ vars.BUILD_SOURCE }}
+      SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+      # true only when an Apple signing cert is configured — gates the mac sign+notarize path
+      HAS_APPLE: ${{ needs.prepare.outputs.signed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Node
+        uses: ./.github/actions/setup-node
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Write the ephemeral .env for this build from repo Variables/Secrets. No .env is
+      # ever committed; this file exists only on the runner and is discarded with it.
+      # umask 077 keeps it non-world-readable. Each key is written only when non-empty so
+      # an unset optional variable never lands an empty override. Values are read from the
+      # environment (never interpolated into the script body) so a value containing quotes
+      # or shell metacharacters — e.g. the VITE_ENVIRONMENTS JSON — cannot break parsing
+      # or be executed.
+      - name: Generate .env
+        shell: bash
+        env:
+          VITE_ENVIRONMENTS: ${{ vars.VITE_ENVIRONMENTS }}
+          VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ vars.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
+          VITE_WEBRTC_TURN_HOST: ${{ vars.VITE_WEBRTC_TURN_HOST }}
+          VITE_WEBRTC_TURN_TTL: ${{ vars.VITE_WEBRTC_TURN_TTL }}
+          SANDBOX_IPFS_ALLOWLIST: ${{ vars.SANDBOX_IPFS_ALLOWLIST }}
+          SANDBOX_RELAY_ALLOWLIST: ${{ vars.SANDBOX_RELAY_ALLOWLIST }}
+          # Secrets — kept out of git; GitHub masks them in logs.
+          VITE_WEBRTC_TURN_SECRET: ${{ secrets.VITE_WEBRTC_TURN_SECRET }}
+        run: |
+          set -euo pipefail
+          umask 077
+          : > .env
+          # write KEY from an env var of the same name, only if non-empty; never echoes
+          # the value (avoids leaking secrets into the step log).
+          write() {
+            local val="${!1-}"
+            [ -n "${val}" ] && printf '%s=%s\n' "$1" "${val}" >> .env || true
+          }
+          write VITE_ENVIRONMENTS
+          write VITE_FIREBASE_API_KEY
+          write VITE_FIREBASE_AUTH_DOMAIN
+          write VITE_FIREBASE_PROJECT_ID
+          write VITE_FIREBASE_STORAGE_BUCKET
+          write VITE_FIREBASE_MESSAGING_SENDER_ID
+          write VITE_FIREBASE_APP_ID
+          write VITE_WEBRTC_TURN_HOST
+          write VITE_WEBRTC_TURN_TTL
+          write VITE_WEBRTC_TURN_SECRET
+          write SANDBOX_IPFS_ALLOWLIST
+          write SANDBOX_RELAY_ALLOWLIST
+          write AUTO_UPDATE_URL
+          write BUILD_SOURCE
+          echo "Wrote .env with $(grep -c '=' .env) keys."
+
+      # Fail BEFORE building/packaging if the config is unsafe: >1 network channel would
+      # expose the network chooser to end users, or missing Firebase ids would break the
+      # Remote Config bootstrap. Deterministic backstop, independent of --mode production.
+      - name: Validate release config
+        shell: bash
+        run: node scripts/validate-release-env.mjs .env
+
+      # ── macOS: import the Developer ID cert only when configured ──────────────────
+      - name: Import signing certificate (macOS, signed path)
+        if: ${{ matrix.os == 'macos-latest' && env.HAS_APPLE == 'true' }}
+        env:
+          CERTIFICATE_OSX_APPLICATION: ${{ secrets.CERTIFICATE_OSX_APPLICATION }}
+          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
+        run: sh .github/add_cert_in_keychain.sh
+
+      - name: Build renderer + main
+        run: npm run build && npm run postbuild
+
+      # ── Package ──────────────────────────────────────────────────────────────────
+      # Signing uses the Developer ID cert imported above; notarization uses an App Store
+      # Connect API key (notarytool). electron-builder reads APPLE_API_KEY (path to the
+      # .p8), APPLE_API_KEY_ID and APPLE_API_ISSUER from the environment. The .p8 is
+      # reconstructed from a base64 secret into RUNNER_TEMP (umask 077) and deleted after.
+      - name: Package (macOS, signed + notarized)
+        if: ${{ matrix.os == 'macos-latest' && env.HAS_APPLE == 'true' }}
+        env:
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+          NODE_ENV: production
+        run: |
+          set -euo pipefail
+          umask 077
+          KEY_PATH="${RUNNER_TEMP}/AuthKey_${APPLE_API_KEY_ID}.p8"
+          printf '%s' "${APPLE_API_KEY_P8_BASE64}" | base64 --decode > "${KEY_PATH}"
+          export APPLE_API_KEY="${KEY_PATH}"
+          trap 'rm -f "${KEY_PATH}"' EXIT
+          npx electron-builder --config electron-builder.js -p never
+
+      - name: Package (macOS, unsigned — Tier A)
+        if: ${{ matrix.os == 'macos-latest' && env.HAS_APPLE != 'true' }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          NODE_ENV: production
+        run: npx electron-builder --config electron-builder.js -p never -c.mac.notarize=false
+
+      # Linux packages via npx under the default bash shell — works and produces the
+      # AppImage. NODE_ENV is set via the step env block (dropping cross-env, which on
+      # Windows exited 0 without running electron-builder — a silent no-op).
+      - name: Package (Linux)
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        env:
+          NODE_ENV: production
+        run: npx electron-builder --config electron-builder.js -p never
+
+      # Windows: the `npx electron-builder` indirection returns exit 0 WITHOUT packaging
+      # on the windows runner (the job stayed green while no installer was produced — the
+      # real root cause behind the missing windows artifact, which the cross-env drop did
+      # not address). Invoke the electron-builder CLI directly via node so it actually
+      # runs, then assert an .exe was produced so a future silent no-op fails the job.
+      - name: Package (Windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        shell: pwsh
+        env:
+          NODE_ENV: production
+        run: |
+          node node_modules\electron-builder\cli.js --config electron-builder.js -p never
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $exe = Get-ChildItem release\dist -Filter *.exe -ErrorAction SilentlyContinue
+          if (-not $exe) { Write-Error "electron-builder produced no .exe in release/dist"; exit 1 }
+          Get-ChildItem release\dist | Format-Table Name,Length
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: polkadot-desktop-dev-${{ matrix.os }}
+          path: |
+            release/dist/*.dmg
+            release/dist/*.zip
+            release/dist/*.AppImage
+            release/dist/*.exe
+            release/dist/latest*.yml
+          if-no-files-found: warn
+
+  # Publish once, after ALL platforms have built. `needs: build` gates on every matrix
+  # leg succeeding, so a failed platform skips the release instead of shipping a partial
+  # set — and a single publisher avoids three matrix legs racing on the same Release.
+  release:
+    needs: [prepare, build]
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    runs-on: ubuntu-latest
+    steps:
+      # Needed for `.github/release-notes-macos-unsigned.md` — the release job does not
+      # build, but the "Compose release notes" step reads a committed template.
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download all installers
+        uses: actions/download-artifact@v4
+        with:
+          pattern: polkadot-desktop-dev-*
+          merge-multiple: true
+          path: dist
+
+      - name: Generate SHA256 checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          # checksum the user-facing installers so downloads can be verified
+          shopt -s nullglob
+          files=(*.dmg *.zip *.AppImage *.exe)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No installers found to publish" >&2
+            exit 1
+          fi
+          sha256sum "${files[@]}" | tee SHA256SUMS.txt
+
+      # When the mac build is NOT signed+notarized, Gatekeeper blocks it ("Apple could not
+      # verify … is free of malware"). Prepend the quarantine workaround (a committed
+      # template) so users can self-remediate; omit it entirely once signing is configured.
+      - name: Compose release notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > NOTES.md
+          if [ "${{ needs.prepare.outputs.signed }}" != "true" ]; then
+            cat .github/release-notes-macos-unsigned.md >> NOTES.md
+          fi
+
+      - name: Publish to GitHub Release
+        # Third-party action pinned to a commit SHA (supply-chain hardening) — v2.
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
+        with:
+          name: ${{ github.ref_name }}
+          body_path: NOTES.md
+          # latest*.yml only exists when an auto-update feed is configured (publish
+          # block in electron-builder.js). Don't fail the release when it's absent —
+          # installer presence is already guaranteed by the SHA256 checksum step,
+          # which exits non-zero if no installers were downloaded.
+          fail_on_unmatched_files: false
+          files: |
+            dist/*.dmg
+            dist/*.zip
+            dist/*.AppImage
+            dist/*.exe
+            dist/latest*.yml
+            dist/SHA256SUMS.txt
+          generate_release_notes: true

@@ -23,9 +23,21 @@ on:
         type: string
         description: ALLURE_USERNAME service parameter. Leave blank.
         required: false
-  push:
-    tags:
-      - 'v*'
+# FORK PATCH — upstream also triggers this pipeline on `push: tags: ['v*']`. This fork
+# already owns that tag with `.github/workflows/release.yaml`, so keeping both would run
+# two release jobs against the same tag, each creating a GitHub Release for it.
+#
+# Which one wins matters, not just that they race: `env.BUILD_TYPE` below defaults to
+# `dev` (there are no `github.event.inputs` on a tag push), `.github/actions/build-app`
+# maps build_type=dev to `npm run build:dev` → `vite --mode development` → BUILD_MODE
+# `development` → `isProductionBuild()` false. That un-hides the onboarding network
+# chooser (src/features/onboarding/ui/OnboardingScreen.tsx:179) and the onboarding Skip
+# button (:222, gated on isProductionBuild() ALONE — no channel-count term, so the
+# single-channel guard in scripts/validate-release-env.mjs does not cover it) in a
+# published installer.
+#
+# Left reachable via workflow_dispatch so the pipeline can still be exercised
+# deliberately. Reconciling the two release paths is deferred to its own change.
 
 
 # Least privilege at the top; the one job that needs more (`release`, which creates the GitHub

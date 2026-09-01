@@ -101,6 +101,64 @@ async function listShippableSiblings(
   });
 }
 
+/**
+ * Decode a persisted hex key, or `undefined` if it is not a usable X25519 public key.
+ *
+ * The `contact` IndexedDB sits at version 3 with an identical version ladder on both
+ * sides of the P-256 → X25519 change, so no Dexie upgrade callback ever runs on it and
+ * rows written by an earlier build survive verbatim — carrying a 65-byte uncompressed
+ * SEC1 P-256 key (`0x04 || X || Y`, 132 hex chars) where a 32-byte X25519 key is now
+ * expected. `x25519.getSharedSecret` throws on the length ("uCoordinate" expected
+ * Uint8Array of length 32), and every read below happens inside `manager.initialize()`,
+ * whose rejection is swallowed by a bare `console.error` in `p2pChatUseCase`. The result
+ * is a permanently empty chat list with no error UI — worse than a visible failure,
+ * because nothing tells the user to reset.
+ *
+ * Persisted contact rows cross the same trust boundary as the device-sync rows this
+ * module already purges (`orchestrator.ts`) and the Dexie rows `resource.ts` already
+ * filters; `contact` was the one store left unguarded. Skip and warn rather than throw:
+ * the rest of initialization completes, and a re-pair or an inbound request rewrites the
+ * row through `upsertContactWithDevice`, which validates before persisting.
+ */
+const readEncryptionKey = (hex: string | undefined): Uint8Array | undefined => {
+  if (!hex) return undefined;
+  let bytes: Uint8Array;
+  try {
+    bytes = fromHex(hex);
+  } catch {
+    return undefined;
+  }
+
+  return deviceIdentityService.isValidEncryptionPublicKey(bytes) ? bytes : undefined;
+};
+
+/** A peer's identity chat key, or `undefined` (with a warning) when the row cannot serve ECDH. */
+const peerIdentityChatKey = (contact: Contact | undefined, peerSs58: string): Uint8Array | undefined => {
+  if (!contact?.identityChatPublicKey) return undefined;
+  const key = readEncryptionKey(contact.identityChatPublicKey);
+  if (!key) {
+    console.warn(
+      '[p2p-managerV2] contact %s: identityChatPublicKey is not a valid X25519 key (row written by a pre-X25519 build) — skipping identity channel',
+      peerSs58,
+    );
+  }
+
+  return key;
+};
+
+/** The subset of a persisted roster whose device keys can still be used for key agreement. */
+const usablePeerDevices = (contact: Contact, peerSs58: string): Device[] =>
+  contact.devices.filter(device => {
+    if (readEncryptionKey(device.encryptionPublicKey)) return true;
+    console.warn(
+      '[p2p-managerV2] contact %s: dropping persisted device=%s — encryptionPublicKey is not a valid X25519 key',
+      peerSs58,
+      device.statementAccountId,
+    );
+
+    return false;
+  });
+
 export const createP2PChatManagerV2 = async (params: P2PChatManagerV2Params): Promise<P2PChatManager> => {
   const { statementStore, identity, userId, device, userIdentity } = params;
   const contactRepository = params.contactRepository ?? defaultContactRepository;
@@ -330,7 +388,7 @@ export const createP2PChatManagerV2 = async (params: P2PChatManagerV2Params): Pr
     const contact = await contactRepository.get(peerSs58);
     if (!contact) return;
     roster.set(
-      contact.devices.map(d => ({
+      usablePeerDevices(contact, peerSs58).map(d => ({
         statementAccountId: fromHex(d.statementAccountId),
         encryptionPublicKey: fromHex(d.encryptionPublicKey),
       })),
@@ -873,12 +931,26 @@ export const createP2PChatManagerV2 = async (params: P2PChatManagerV2Params): Pr
         );
       }
 
-      let contact = await contactRepository.get(peerId);
-      if (!contact) {
+      const storedContact = await contactRepository.get(peerId);
+      if (!storedContact) {
         throw new Error(`[p2p-managerV2] cannot start session: contact ${peerId} not in roster yet`);
       }
+      // Sanitize at the read, not at each use: a device row an earlier build wrote holds a
+      // 65-byte P-256 key, and one of those in the roster breaks every outgoing
+      // MultiRequest to this contact. Dropping them here makes such a contact look
+      // device-less, which routes it into the self-heal path below.
+      let contact: Contact = { ...storedContact, devices: usablePeerDevices(storedContact, peerId) };
       if (!contact.identityChatPublicKey) {
         throw new Error(`[p2p-managerV2] cannot start session: contact ${peerId} has no identityChatPublicKey`);
+      }
+      // Throws rather than skips: `startSession` already signals every other unusable
+      // roster state this way, and its callers all catch. Skipping would instead build a
+      // session against a key `computeSharedSecret` is about to reject.
+      const peerIdentityChatPubKey = peerIdentityChatKey(contact, peerId);
+      if (!peerIdentityChatPubKey) {
+        throw new Error(
+          `[p2p-managerV2] cannot start session: contact ${peerId} identityChatPublicKey is not a valid X25519 key — re-pair to rewrite the row`,
+        );
       }
       if (contact.devices.length === 0) {
         // Self-heal a device-less roster from a local incoming request row. The
@@ -903,7 +975,8 @@ export const createP2PChatManagerV2 = async (params: P2PChatManagerV2Params): Pr
             withDevice.senderDevicePubKey,
             withDevice.senderDeviceStatementAccountId,
           ).catch(() => {});
-          contact = (await contactRepository.get(peerId)) ?? contact;
+          const rewritten = await contactRepository.get(peerId);
+          if (rewritten) contact = { ...rewritten, devices: usablePeerDevices(rewritten, peerId) };
         }
       }
       if (contact.devices.length === 0) {
@@ -913,7 +986,6 @@ export const createP2PChatManagerV2 = async (params: P2PChatManagerV2Params): Pr
       }
 
       const peerAccountIdBytes = AccountIdCodec().enc(peerId);
-      const peerIdentityChatPubKey = fromHex(contact.identityChatPublicKey);
       const peerRoster = createPeerRoster(
         contact.devices.map(d => ({
           statementAccountId: fromHex(d.statementAccountId),
@@ -1564,8 +1636,9 @@ export const createP2PChatManagerV2 = async (params: P2PChatManagerV2Params): Pr
       // to restore beyond transport.
       blockedPeers.delete(peerId);
       const contact = await contactRepository.get(peerId);
-      if (contact?.identityChatPublicKey) {
-        startIdentityChannelListener(peerId, AccountIdCodec().enc(peerId), fromHex(contact.identityChatPublicKey));
+      const peerChatKey = peerIdentityChatKey(contact, peerId);
+      if (peerChatKey) {
+        startIdentityChannelListener(peerId, AccountIdCodec().enc(peerId), peerChatKey);
       }
       await manager.startSession(peerId, room.peerUsername ?? peerId).catch(err => {
         console.warn('[p2p-managerV2] setBlocked: failed to restart session for %s: %s', peerId, err);
@@ -1600,11 +1673,12 @@ export const createP2PChatManagerV2 = async (params: P2PChatManagerV2Params): Pr
       const pendingOutgoing = existingRequests.filter(r => r.direction === 'outgoing' && r.status === 'pending');
       for (const req of pendingOutgoing) {
         const contact = await contactRepository.get(req.peerId);
-        if (!contact?.identityChatPublicKey) continue;
+        const peerChatKey = peerIdentityChatKey(contact, req.peerId);
+        if (!peerChatKey) continue;
         watchForAcceptSignalV2(
           req.requestId,
           AccountIdCodec().enc(req.peerId),
-          fromHex(contact.identityChatPublicKey),
+          peerChatKey,
           req.peerId,
           req.peerUsername ?? req.peerId,
           req.welcomeMessage,
@@ -1620,8 +1694,9 @@ export const createP2PChatManagerV2 = async (params: P2PChatManagerV2Params): Pr
         // No session, so no `onMessage` — nothing to mirror for a room that starts blocked.
         if (room.isBlocked) continue;
         const contact = await contactRepository.get(room.peerId);
-        if (contact?.identityChatPublicKey) {
-          startIdentityChannelListener(room.peerId, AccountIdCodec().enc(room.peerId), fromHex(contact.identityChatPublicKey));
+        const peerChatKey = peerIdentityChatKey(contact, room.peerId);
+        if (peerChatKey) {
+          startIdentityChannelListener(room.peerId, AccountIdCodec().enc(room.peerId), peerChatKey);
         }
         if (activeSessions.has(room.peerId)) continue;
         await manager.startSession(room.peerId, room.peerUsername ?? room.peerId).catch(() => {});
