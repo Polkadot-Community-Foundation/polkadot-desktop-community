@@ -12,10 +12,30 @@ name: Release (Paseo / DEV)
 # below, because config/index.js now reads it from process.env and refuses to package
 # without it (`assertPackagingIdentity`).
 #
-# NOTE — this workflow, not upstream's `release-pipeline.yml`, owns the v* tag. That
-# pipeline's tag trigger is disabled in this fork (it defaults BUILD_TYPE=dev → builds
-# with `--mode development` → `isProductionBuild()` false → the network chooser and the
-# onboarding Skip button would render in a published installer). See the comment there.
+# NOTE — this workflow is the ONLY release path in this fork, and it owns the v* tag.
+# Upstream ships two more that also end in a published GitHub Release; both are deleted
+# here rather than carried:
+#
+#   .github/workflows/release-pipeline.yml — also triggered on `push: tags: ['v*']`, so
+#     it would race this workflow to create a Release for the same tag. Worse, it wins
+#     wrongly: with no `github.event.inputs` on a tag push its `env.BUILD_TYPE` falls
+#     through to `dev`, `.github/actions/build-app` maps that to `npm run build:dev` →
+#     `vite --mode development` → `BUILD_MODE=development` → `isProductionBuild()` false,
+#     which renders the onboarding network chooser
+#     (src/features/onboarding/ui/OnboardingScreen.tsx:179) and the onboarding Skip button
+#     (:222 — gated on isProductionBuild() ALONE, so scripts/validate-release-env.mjs's
+#     single-channel guard does not cover it) in a published installer. It also never
+#     invokes that guard at all, and it reads the Firebase/TURN/sandbox config from
+#     `secrets.*` while this repository holds them as repo *Variables*.
+#
+#   .github/workflows/create-release-tag.yml — `schedule: cron '0 16 * * 1-5'`. This
+#     repository is a standalone repo, not a GitHub fork (`"fork": false`), so GitHub does
+#     NOT auto-disable scheduled workflows in it: merged to main, that cron would push a
+#     new v* tag every weekday and publish a GitHub Release off it unattended, and then
+#     `gh workflow run release-pipeline.yml` on top.
+#
+# Releases in this fork are cut by pushing a v* tag by hand. If upstream's pipeline is
+# ever wanted here, reconcile the two paths deliberately — do not restore the files.
 #
 # CONFIG SOURCE — repo Variables & Secrets, NOT a committed file. No .env* is ever
 # committed to this repo (.gitignore blocks it). The runner writes an ephemeral .env
