@@ -87,14 +87,14 @@ jobs:
           # button, network picker) are present — production builds hide them via isProductionBuild().
           build_type: dev
           environments: ${{ vars.VITE_ENVIRONMENTS }}
-          firebase_api_key: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          firebase_project_id: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-          firebase_app_id: ${{ secrets.VITE_FIREBASE_APP_ID }}
-          webrtc_turn_host: ${{ secrets.VITE_WEBRTC_TURN_HOST }}
+          firebase_api_key: ${{ vars.VITE_FIREBASE_API_KEY }}
+          firebase_project_id: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
+          firebase_app_id: ${{ vars.VITE_FIREBASE_APP_ID }}
+          webrtc_turn_host: ${{ vars.VITE_WEBRTC_TURN_HOST }}
           webrtc_turn_secret: ${{ secrets.VITE_WEBRTC_TURN_SECRET }}
-          webrtc_turn_ttl: ${{ secrets.VITE_WEBRTC_TURN_TTL }}
-          sandbox_ipfs_allowlist: ${{ secrets.SANDBOX_IPFS_ALLOWLIST }}
-          sandbox_relay_allowlist: ${{ secrets.SANDBOX_RELAY_ALLOWLIST }}
+          webrtc_turn_ttl: ${{ vars.VITE_WEBRTC_TURN_TTL }}
+          sandbox_ipfs_allowlist: ${{ vars.SANDBOX_IPFS_ALLOWLIST }}
+          sandbox_relay_allowlist: ${{ vars.SANDBOX_RELAY_ALLOWLIST }}
           update_repo_owner: ${{ vars.UPDATE_REPO_OWNER }}
           update_repo_name: ${{ vars.UPDATE_REPO_NAME }}
 
