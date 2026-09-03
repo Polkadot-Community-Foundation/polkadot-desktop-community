@@ -90,7 +90,7 @@ const Content = memo(({ tab, visible }: { tab: Tab; visible: boolean }) => {
       className={cnTw('overflow-hidden p-2', visible ? 'relative h-full w-full' : 'invisible absolute inset-0')}
       aria-hidden={!visible}
     >
-      <div className="relative flex h-full w-full flex-col overflow-hidden rounded-xl border-[0.905px] border-general-border bg-card shadow-sm">
+      <div className="relative flex h-full w-full flex-col overflow-hidden rounded-xl border border-stroke-primary bg-bg-surface-container shadow-sm">
         {content}
         {isElectron() && visible && <FindOverlay tabId={tab.id} />}
         {isElectron() && visible && <ZoomIndicator tabId={tab.id} />}

@@ -10,10 +10,10 @@ test.describe('Archive Injection Protection', { tag: ['@security'] }, () => {
     await allure.feature('Security');
   });
 
-  test('rejects archive with empty string domain', async ({ electronApp }) => {
+  test('rejects archive with empty string domain', { tag: ['@allure.id:14947'] }, async ({ electronApp }) => {
     const { window } = electronApp;
 
-    const result = await window.evaluate(async () => {
+    const result = await window.evaluate(() => {
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return (globalThis as any).App.saveArchive({
         domain: '',
@@ -29,7 +29,7 @@ test.describe('Archive Injection Protection', { tag: ['@security'] }, () => {
   test('rejects archive with null byte in domain', async ({ electronApp }) => {
     const { window } = electronApp;
 
-    const result = await window.evaluate(async () => {
+    const result = await window.evaluate(() => {
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return (globalThis as any).App.saveArchive({
         domain: 'evil\x00.test',
@@ -45,7 +45,7 @@ test.describe('Archive Injection Protection', { tag: ['@security'] }, () => {
   test('rejects archive with slashes in domain', async ({ electronApp }) => {
     const { window } = electronApp;
 
-    const result = await window.evaluate(async () => {
+    const result = await window.evaluate(() => {
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return (globalThis as any).App.saveArchive({
         domain: '../../../etc/passwd',
@@ -61,7 +61,7 @@ test.describe('Archive Injection Protection', { tag: ['@security'] }, () => {
   test('rejects archive with path traversal in file keys', async ({ electronApp }) => {
     const { window } = electronApp;
 
-    const result = await window.evaluate(async () => {
+    const result = await window.evaluate(() => {
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return (globalThis as any).App.saveArchive({
         domain: 'legit-product.test',
@@ -77,7 +77,7 @@ test.describe('Archive Injection Protection', { tag: ['@security'] }, () => {
   test('rejects archive with absolute file path', async ({ electronApp }) => {
     const { window } = electronApp;
 
-    const result = await window.evaluate(async () => {
+    const result = await window.evaluate(() => {
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return (globalThis as any).App.saveArchive({
         domain: 'legit-product.test',
@@ -93,7 +93,7 @@ test.describe('Archive Injection Protection', { tag: ['@security'] }, () => {
   test('accepts valid archive with legitimate domain and paths', async ({ electronApp }) => {
     const { window } = electronApp;
 
-    const result = await window.evaluate(async () => {
+    const result = await window.evaluate(() => {
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return (globalThis as any).App.saveArchive({
         domain: 'valid-product.test',

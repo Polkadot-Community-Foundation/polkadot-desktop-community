@@ -4,7 +4,8 @@ import { type Observable, BehaviorSubject, finalize, firstValueFrom, from, of, s
 import { createAsyncTaskPool, createCache } from '@/shared/utils';
 
 import { createDefaultCacheMapper, createDefaultInitial, wrapKeyFactory } from './generic';
-import { type DefaultCache, type KeyFn, type MapCacheFn, type Resource, type ResourceKey } from './types';
+import { onOverride } from './overrides';
+import { type DefaultCache, type KeyFn, type MapCacheFn, type Overridable, type Resource, type ResourceKey } from './types';
 
 type RequestFn<Params, Response> = (params: Params) => Response | Promise<Response>;
 
@@ -31,7 +32,10 @@ function build<Params, Response, Cache>({
   timeout,
   retry,
   cache,
-}: QueryParams<Params, Response, Cache>): Resource<Params, Response, Cache> {
+}: QueryParams<Params, Response, Cache>): Resource<Params, Response, Cache> & Overridable<RequestFn<Params, Response>> {
+  // The request is read through this at call time rather than captured, so
+  // `instead` can swap it. Holds the real implementation outside tests.
+  let activeFn = fn;
   const events = createNanoEvents<{ read: Parameters<Resource<Params, Response, Cache>['onRead']>[0] }>();
 
   const createKey = wrapKeyFactory(key);
@@ -68,7 +72,7 @@ function build<Params, Response, Cache>({
 
   function makeRequest(params: Params, key: ResourceKey) {
     const request$ = from(
-      requestPool.call(() => fn(params), {
+      requestPool.call(() => activeFn(params), {
         pool: key,
         signal: timeout ? AbortSignal.timeout(timeout) : undefined,
       }),
@@ -120,6 +124,16 @@ function build<Params, Response, Cache>({
     },
     invalidate,
     invalidateAll,
+    instead(next) {
+      activeFn = next;
+      // Without this the next read is served from the cache the real
+      // implementation filled, and the override silently does nothing.
+      invalidateAll();
+      onOverride(() => {
+        activeFn = fn;
+        invalidateAll();
+      });
+    },
     snapshot() {
       return cache$.value;
     },
@@ -127,17 +141,27 @@ function build<Params, Response, Cache>({
 }
 
 export const createQueryResource = <Params>({ key }: { key: KeyFn<Params> }) => {
-  const internal = <Response = never, Cache = never>(params: Partial<QueryParams<Params, Response, Cache>> = {}) => {
+  type QueryResourceBuilder<Response, Cache> = {
+    request<Response>(fn: RequestFn<Params, Response>): QueryResourceBuilder<Response, Cache>;
+    timeout(timeout: number): QueryResourceBuilder<Response, Cache>;
+    retry(retry: NonNullable<QueryParams<Params, Response, Cache>>['retry']): QueryResourceBuilder<Response, Cache>;
+    cache<Cache>(cache: NonNullable<QueryParams<Params, Response, Cache>['cache']>): QueryResourceBuilder<Response, Cache>;
+    build(): Resource<Params, Response, CacheOrDefault<Cache, Response>> & Overridable<RequestFn<Params, Response>>;
+  };
+
+  const internal = <Response = never, Cache = never>(
+    params: Partial<QueryParams<Params, Response, Cache>> = {},
+  ): QueryResourceBuilder<Response, Cache> => {
     return {
       request<Response>(fn: RequestFn<Params, Response>) {
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         return internal<Response, Cache>({ ...params, fn, key } as Partial<QueryParams<Params, Response, Cache>>);
       },
-      timeout(timeout: number) {
+      timeout(timeout) {
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         return internal<Response, Cache>({ ...params, timeout } as Partial<QueryParams<Params, Response, Cache>>);
       },
-      retry(retry: NonNullable<QueryParams<Params, Response, Cache>>['retry']) {
+      retry(retry) {
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         return internal<Response, Cache>({ ...params, retry } as Partial<QueryParams<Params, Response, Cache>>);
       },
@@ -145,7 +169,7 @@ export const createQueryResource = <Params>({ key }: { key: KeyFn<Params> }) => 
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         return internal<Response, Cache>({ ...params, cache } as Partial<QueryParams<Params, Response, Cache>>);
       },
-      build(): Resource<Params, Response, CacheOrDefault<Cache, Response>> {
+      build() {
         if (!params.fn) {
           throw new Error('Missing request function');
         }
@@ -158,7 +182,7 @@ export const createQueryResource = <Params>({ key }: { key: KeyFn<Params> }) => 
             retry: params.retry,
             timeout: params.timeout,
             fn: params.fn,
-          }) as Resource<Params, Response, CacheOrDefault<Cache, Response>>;
+          }) as Resource<Params, Response, CacheOrDefault<Cache, Response>> & Overridable<RequestFn<Params, Response>>;
         } else {
           const initial = createDefaultInitial<Response>();
           const cacheMapper = createDefaultCacheMapper<Params, Response>(wrapKeyFactory(key));
@@ -173,7 +197,7 @@ export const createQueryResource = <Params>({ key }: { key: KeyFn<Params> }) => 
             retry: params.retry,
             timeout: params.timeout,
             fn: params.fn,
-          }) as Resource<Params, Response, CacheOrDefault<Cache, Response>>;
+          }) as Resource<Params, Response, CacheOrDefault<Cache, Response>> & Overridable<RequestFn<Params, Response>>;
         }
       },
     };

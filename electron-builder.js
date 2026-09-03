@@ -1,12 +1,19 @@
-import { appId, author, electronProtocol, folders, isDevChannel, title, updateServerUrl } from './config/index.js';
+import {
+  appId,
+  assertPackagingIdentity,
+  author,
+  autoUpdateUrl,
+  electronProtocol,
+  folders,
+  title,
+  updateFeed,
+} from './config/index.js';
+
+// Packaging is the moment an identity starts to mean something to an operating system, so it is
+// also the moment a missing one has to stop the build.
+assertPackagingIdentity();
 
 const CURRENT_YEAR = new Date().getFullYear();
-
-// The DEV distribution installs side-by-side with prod (own appId and title), so it
-// needs its own dock/taskbar/installer icon or the two are indistinguishable once
-// installed. White tile = test network, per the app icon design language.
-const iconPng = `${folders.resources}/icons/${isDevChannel ? 'icon.dev.png' : 'icon.png'}`;
-const iconIco = `${folders.resources}/icons/${isDevChannel ? 'icon.dev.ico' : 'icon.ico'}`;
 
 /**
  * @type {import('electron-builder').Configuration}
@@ -16,7 +23,7 @@ const iconIco = `${folders.resources}/icons/${isDevChannel ? 'icon.dev.ico' : 'i
 export default {
   appId: appId,
   productName: title,
-  copyright: `Copyright © ${CURRENT_YEAR} — ${author.name}`,
+  copyright: `Copyright © ${CURRENT_YEAR} — ${author}`,
 
   directories: {
     app: folders.devBuild,
@@ -31,7 +38,7 @@ export default {
   mac: {
     category: 'public.app-category.finance',
     hardenedRuntime: true,
-    icon: iconPng,
+    icon: `${folders.resources}/icons/icon-mac.png`,
     entitlements: `${folders.resources}/entitlements/entitlements.mac.plist`,
     entitlementsInherit: `${folders.resources}/entitlements/entitlements.mac.plist`,
     target: [
@@ -48,7 +55,7 @@ export default {
   },
 
   linux: {
-    icon: iconPng,
+    icon: `${folders.resources}/icons/icon.png`,
     category: 'Finance',
     target: ['AppImage'],
     mimeTypes: [`x-scheme-handler/${electronProtocol}`],
@@ -60,15 +67,23 @@ export default {
   },
 
   win: {
-    icon: iconIco,
+    icon: `${folders.resources}/icons/icon.ico`,
     target: ['nsis'],
   },
 
-  publish: updateServerUrl ? { provider: 'generic', url: updateServerUrl } : null,
+  publish: updateFeed,
 
   generateUpdatesFilesForAllChannels: false,
   detectUpdateChannel: false,
 
   compression: 'normal',
-  artifactName: '${productName}-${version}-${arch}.${ext}',
+  // `${name}` (`polkadot-desktop`), not `${productName}` ("Polkadot Desktop"): a GitHub release
+  // asset's name must not contain spaces. GitHub rewrites a space to `.`, while electron-updater
+  // rewrites it to `-` when building the download URL from the metadata, so a spaced name is
+  // uploaded and requested under two different filenames and every download 404s.
+  //
+  // A static feed has no such rewriting and its publishing steps address artifacts by the spaced
+  // name, so that deployment keeps `${productName}` — changing it would rename every object in the
+  // bucket for no benefit.
+  artifactName: autoUpdateUrl ? '${productName}-${version}-${arch}.${ext}' : '${name}-${version}-${arch}.${ext}',
 };

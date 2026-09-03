@@ -1,12 +1,15 @@
-import { type Observable, catchError, combineLatest, debounceTime, map, of, startWith } from 'rxjs';
+import { type Observable, catchError, combineLatest, debounceTime, from, map, of, startWith } from 'rxjs';
 
 import { allAliasPermissionsResource } from '../alias-permissions/resource';
 import { type AliasPermission } from '../alias-permissions/types';
+import { DEFAULT_DOTNS_TLD } from '../dotns/constants';
 import { dotNsService } from '../dotns/service';
 import { allProductPermissionsResource } from '../permissions/resource';
 import { type ProductPermissions } from '../permissions/types';
 import { productsResource } from '../product/resource';
 import { type Product } from '../product/types';
+
+import { dotNsUseCase } from './dotns';
 
 // Use-case-local composition type (multi-module: product + permissions + alias-permissions).
 // A discriminated union per interacted product: committed entries carry the
@@ -32,12 +35,13 @@ function collectPermissionOnlyIds(
   products: Product[],
   permissions: ProductPermissions[],
   aliasPermissions: AliasPermission[],
+  tld: string,
 ): string[] {
-  const committed = new Set(products.map(product => dotNsService.baseNameOf(product.baseName)));
+  const committed = new Set(products.map(product => dotNsService.baseNameOf(product.baseName, tld)));
   const idByBaseName = new Map<string, string>();
 
   function add(rawId: string) {
-    const baseName = dotNsService.baseNameOf(rawId);
+    const baseName = dotNsService.baseNameOf(rawId, tld);
     if (committed.has(baseName)) return;
     if (!idByBaseName.has(baseName)) idByBaseName.set(baseName, rawId);
   }
@@ -71,15 +75,23 @@ function watchInteractedProducts(): Observable<InteractedProduct[]> {
     productsResource.read$({}),
     supplementary(allProductPermissionsResource.read$({})),
     supplementary(allAliasPermissionsResource.read$({})),
+    // Same contract as `supplementary` above, for a promise source: seeded so the
+    // list is not held back by a chain round trip, and caught so a failed read
+    // cannot error the combined stream. The seed is only ever visible for the
+    // first frame, and only affects id normalization, never what is emitted.
+    from(dotNsUseCase.getActiveTld()).pipe(
+      startWith(DEFAULT_DOTNS_TLD),
+      catchError(() => of(DEFAULT_DOTNS_TLD)),
+    ),
   ]).pipe(
     // Coalesce the synchronous seed/value burst (combineLatest glitch frames)
     // into one emission carrying every source's settled value.
     debounceTime(0),
-    map(([products, permissions, aliasPermissions]) => {
+    map(([products, permissions, aliasPermissions, tld]) => {
       // Committed entries first, then the sorted permission-only ids — a stable
       // order so consumers can render the union as-is without re-sorting.
       const committed = products.map((product): InteractedProduct => ({ kind: 'committed', product }));
-      const permissionOnly = collectPermissionOnlyIds(products, permissions, aliasPermissions).map(
+      const permissionOnly = collectPermissionOnlyIds(products, permissions, aliasPermissions, tld).map(
         (productId): InteractedProduct => ({ kind: 'permissionOnly', productId }),
       );
 

@@ -1,48 +1,42 @@
 import { useMemo } from 'react';
 
-import { useRead } from '@/shared/hooks';
+import { dependentRead, useRead } from '@/shared/hooks';
 import { nonNullable } from '@/shared/utils';
-import { dotNsService } from '../dotns/service';
+import { useActiveEnvironment } from '@/domains/application';
+import { useDotNsTld } from '../dotns/hooks';
 
-import { useProductIcon } from './manifest/hooks';
-import { chainResolveResource, productsResource } from './resource';
+import { chainResolveCacheKey, chainResolveResource, productsResource } from './resource';
 import { type Product } from './types';
-
-export type ProductHeaderViewModel = {
-  name: string;
-  description?: string;
-  iconSrc?: string;
-};
-
-export function useProductHeaderProps(options: {
-  product: Nullable<Product>;
-  fallbackName?: string;
-  fallbackDomain?: string;
-}): ProductHeaderViewModel {
-  const { product, fallbackName = '', fallbackDomain = fallbackName } = options;
-  const { data: iconUrl } = useProductIcon(product?.icon ?? null);
-  const name = product?.displayName ?? fallbackName;
-  const domain = product?.baseName ?? fallbackDomain;
-
-  return {
-    name,
-    // `ProductHeader` renders `description` only when it's non-empty and differs
-    // from `name`, so no need to pre-filter the equal/empty case here.
-    description: domain,
-    iconSrc: iconUrl ?? undefined,
-  };
-}
 
 // Internal: resolve an identifier purely from the chain into memory (no DB).
 // `useDisplayedProduct` is the public entry point; this is its fallback for
 // identifiers with no committed row.
+//
+// The environment is resolved here, in the React binding, and passed into the
+// resource as a parameter — the resource reads gateways only, never a use case.
 function useChainResolvedProduct(identifier: Nullable<string>) {
-  return useRead(chainResolveResource, {
-    params: identifier ? { identifier } : null,
+  const { data: environment } = useActiveEnvironment();
+  // Gated on the settled TLD, not just a usable one: a resolve fired under the
+  // `.dot` fallback namehashes the wrong root on any other network, and caches
+  // the miss under a key nothing revisits. A failed read gates the same way — it
+  // leaves that same fallback in `data`. This read also carries the environment's
+  // own wait and failure, so it is the single dependency below.
+  const tld = useDotNsTld();
+  const tldSettled = !tld.pending && tld.error === null;
+
+  const result = useRead(chainResolveResource, {
+    params: identifier && environment && tldSettled ? { identifier, environment, tld: tld.data } : null,
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- narrowing null to typed defaultValue
     defaultValue: null as Product | null,
-    map: (cache, params) => (params ? (cache[dotNsService.baseNameOf(params.identifier)] ?? null) : null),
+    map: (cache, params) =>
+      params ? (cache[chainResolveCacheKey(params.environment, params.identifier, params.tld)] ?? null) : null,
   });
+
+  // `enabled` is what the caller asked for: with `identifier === null` there is
+  // nothing to wait on, and claiming pending would stall `useDisplayedProduct` for
+  // a product already served from the DB — or, worse, report the TLD's failure
+  // against a localhost webview that needs no dotNS at all.
+  return dependentRead(result, tld, { enabled: nonNullable(identifier) });
 }
 
 // Every row in `products` is a committed (installed) product, so "all products"

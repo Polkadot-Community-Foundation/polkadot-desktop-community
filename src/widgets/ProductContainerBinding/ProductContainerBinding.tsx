@@ -10,8 +10,8 @@ import { type RateLimiter, createDefaultRateLimiter } from '@/shared/rateLimiter
 import { useTranslation } from '@/shared/translation';
 import { type HexString } from '@/shared/types';
 import { chainRegistry, genesisHash, useAllChainsMap } from '@/domains/network';
-import { type PermissionModality, usePersistedProductById } from '@/domains/product';
-import { dotNsService } from '@/domains/product';
+import { type PermissionModality, remoteAccessUseCase, usePersistedProductById } from '@/domains/product';
+import { dotNsService, dotNsUseCase } from '@/domains/product';
 
 import { createOnRateLimited } from './integrations/_helpers';
 import { useAccounts } from './integrations/accounts';
@@ -43,6 +43,7 @@ export const ProductContainerBinding = memo(({ container, identifier, modality }
 
   const { data: product } = usePersistedProductById(identifier);
   const productRef = useLooseRef(product);
+  const modalityRef = useLooseRef(modality);
 
   const lastProductChainGenesisRef = useRef<HexString | null>(null);
 
@@ -99,25 +100,43 @@ export const ProductContainerBinding = memo(({ container, identifier, modality }
 
     const cleanupNavigateTo = container.handleNavigateTo((url, { ok }) =>
       rateLimiterNavigation.schedule(() => {
-        const dotNsUrl = dotNsService.parseDotNsDomain(url);
-        if (dotNsUrl && dotNsService.isDotDomain(dotNsUrl.identifier)) {
-          if (url.startsWith('polkadot://')) {
-            const crossProductLink = dotNsService.parseDotNsDomain(dotNsUrl.pathname);
-            if (crossProductLink && dotNsService.isDotDomain(crossProductLink.identifier)) {
-              navigateRef()({
-                to: '/product/$id/{-$route}',
-                params: { id: crossProductLink.identifier, route: crossProductLink.pathname },
-              });
-            }
-          } else {
-            navigateRef()({ to: '/product/$id/{-$route}', params: { id: dotNsUrl.identifier, route: dotNsUrl.pathname } });
-          }
-        } else {
-          window.open(url, '_blank');
-        }
+        // The settled TLD, not the fallback, and resolved per call rather than held
+        // in a ref: misjudging the namespace here sends an internal product link to
+        // the external browser. `ok` still answers synchronously.
+        void routeNavigateTo(url).catch(() =>
+          console.warn('[product] navigateTo could not read the network TLD; link not opened:', url),
+        );
         return ok(undefined);
       }),
     );
+
+    async function routeNavigateTo(url: string) {
+      const tld = await dotNsUseCase.getActiveTld();
+
+      const dotNsUrl = dotNsService.parseDotNsDomain(url, tld);
+      if (dotNsUrl && dotNsService.isDotDomain(dotNsUrl.identifier, tld)) {
+        if (url.startsWith('polkadot://')) {
+          const crossProductLink = dotNsService.parseDotNsDomain(dotNsUrl.pathname, tld);
+          if (crossProductLink && dotNsService.isDotDomain(crossProductLink.identifier, tld)) {
+            navigateRef()({
+              to: '/product/$id/{-$route}',
+              params: { id: crossProductLink.identifier, route: crossProductLink.pathname },
+            });
+          }
+        } else {
+          navigateRef()({ to: '/product/$id/{-$route}', params: { id: dotNsUrl.identifier, route: dotNsUrl.pathname } });
+        }
+      } else {
+        void remoteAccessUseCase
+          .resolveRemoteUrlAccess({ productId: identifier, url, modality: modalityRef() })
+          .then(status => {
+            if (status === 'granted') window.open(url, '_blank');
+          })
+          // Fail closed: a permission-layer error leaves the link unopened instead of
+          // surfacing an unhandled rejection.
+          .catch(() => console.warn('[product] navigateTo permission check failed; link not opened:', url));
+      }
+    }
 
     return () => {
       cleanupFeatureSupported();

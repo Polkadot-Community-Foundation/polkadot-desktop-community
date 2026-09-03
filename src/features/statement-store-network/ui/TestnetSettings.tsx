@@ -6,7 +6,7 @@ import { SettingsList, SettingsSection } from '@/shared/components';
 import { reloadApp } from '@/shared/env';
 import { useRxState } from '@/shared/rxstate';
 import { useTranslation } from '@/shared/translation';
-import { type EnvironmentId, environmentService, performUserLogout } from '@/domains/application';
+import { type EnvironmentId, environmentService } from '@/domains/application';
 import { networkSettings } from '@/aggregates/network-settings';
 
 import { NetworkChangeLogoutDialog } from './NetworkChangeLogoutDialog';
@@ -26,13 +26,11 @@ export const TestnetSettings = memo(() => {
       return;
     }
 
-    // On success the session-teardown watcher runs the full logout + reload,
-    // which boots into the just-persisted environment. host-papp only removes the
-    // session when the `Disconnected` send succeeds, so if it fails (offline) the
-    // watcher never fires — tear down locally anyway so the switch always reloads.
+    // host-papp drops the SDK session whether or not the peer could be notified,
+    // so the session-teardown watcher always runs the full logout + reload, which
+    // boots into the just-persisted environment.
     auth.disconnect(session).catch((error: unknown) => {
-      console.warn('[sso] network-switch disconnect failed; tearing down locally anyway', error);
-      void performUserLogout();
+      console.error('[sso] network-switch disconnect failed', error);
     });
   };
 

@@ -1,6 +1,6 @@
 import { type ProductArchive } from '@/domains/product';
 
-type Entry = { archive: ProductArchive; bytes: number; diskBacked: boolean };
+type Entry = { archive: ProductArchive; bytes: number; diskBacked: boolean; contenthash: string | null };
 
 function archiveBytes(archive: ProductArchive): number {
   let total = 0;
@@ -48,14 +48,24 @@ export function createArchiveMemoryCache(maxBytes: number) {
     return entry.archive;
   }
 
-  function set(domain: string, archive: ProductArchive, diskBacked: boolean): void {
+  function set(domain: string, archive: ProductArchive, diskBacked: boolean, contenthash: string | null = null): void {
     const existing = map.get(domain);
     if (existing) totalBytes -= existing.bytes;
     map.delete(domain);
     const bytes = archiveBytes(archive);
-    map.set(domain, { archive, bytes, diskBacked });
+    map.set(domain, { archive, bytes, diskBacked, contenthash });
     totalBytes += bytes;
     evictDiskBackedUntilUnderCap();
+  }
+
+  // Non-mutating read of an entry's contenthash tag — does NOT bump LRU recency
+  // (unlike `get`, which re-inserts). The polkadot:// handler reads the tag to decide
+  // whether a cached entry is the pinned/frozen version before serving it. Returns
+  // `undefined` for a miss and `{ contenthash: null }` for a hash-blind renderer warm.
+  function peek(domain: string): { contenthash: string | null } | undefined {
+    const entry = map.get(domain);
+    if (!entry) return undefined;
+    return { contenthash: entry.contenthash };
   }
 
   function remove(domain: string): void {
@@ -74,5 +84,5 @@ export function createArchiveMemoryCache(maxBytes: number) {
     return { size: map.size, totalBytes };
   }
 
-  return { get, set, delete: remove, clear, stats };
+  return { get, set, peek, delete: remove, clear, stats };
 }

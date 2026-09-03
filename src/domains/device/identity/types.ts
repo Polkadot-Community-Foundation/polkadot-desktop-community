@@ -10,9 +10,9 @@
  *   `statementAccountPublicKey` is the corresponding sr25519 public key (32 bytes)
  *   — this is the device's accountId in the multi-device protocol.
  *
- *   `encryptionPrivateKey` is the device's P-256 private key (32 bytes). Used for
+ *   `encryptionPrivateKey` is the device's X25519 private key (32 bytes). Used for
  *   ECDH key wrapping in MultiDeviceRequest envelopes.
- *   `encryptionPublicKey` is the corresponding P-256 public key in 65-byte
+ *   `encryptionPublicKey` is the corresponding X25519 public key in 32-byte
  *   uncompressed form, matching the encoding used in `Contact.devices`.
  */
 export type DeviceIdentity = {
@@ -27,11 +27,11 @@ export type DeviceIdentity = {
  * SSO V2 handshake with PApp completes successfully.
  *
  *   `identityChatPublicKey` is the user's identity chat encryption public key
- *   (65-byte uncompressed P-256). Shared across all of the user's devices.
+ *   (32-byte X25519). Shared across all of the user's devices.
  *   Derived locally from `identityChatPrivateKey` on handshake success. Used
  *   as the `B` input in V2 topic derivation and for pushId derivation.
  *
- *   `identityChatPrivateKey` is the matching 32-byte raw P-256 scalar,
+ *   `identityChatPrivateKey` is the matching 32-byte raw X25519 scalar,
  *   delivered to this device via the multi-device SSO V2 handshake. Required
  *   to decrypt incoming V2 chat requests addressed to the user identity.
  *
@@ -47,7 +47,7 @@ export type DeviceIdentity = {
  *   each side hands a dapp the same address.
  *
  *   `peerDeviceEncPubKey` is the encryption public key of the authorising
- *   PApp device (65 bytes, P-256 uncompressed), read from the SDK session's
+ *   PApp device (32 bytes, X25519), read from the SDK session's
  *   `deviceEncPubKey`. Used to ECDH-address the device-sync channel back to
  *   the authorising device. Always present for a V2 session — the handshake
  *   response carries it (sessions persisted before the SDK stored the field
@@ -61,7 +61,7 @@ export type DeviceIdentity = {
  *   seed `deviceSyncRepository` with PApp as the first device-sync peer.
  *
  *   `ssoEncPubKey` is `papp_encr_pub` from Mobile SSO spec v0.2.2 — the
- *   P-256 public key of PApp's SSO session encryption keypair. It marks a
+ *   X25519 public key of PApp's SSO session encryption keypair. It marks a
  *   v0.2.2-capable peer; nullable because pre-v0.2.2 PApp builds don't ship
  *   the field on the wire. SSO signing/VRF/transaction now run on host-papp's
  *   own `UserSession`, so this field is no longer consumed by the host beyond

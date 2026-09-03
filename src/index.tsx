@@ -1,6 +1,6 @@
 import './index.css';
 
-import { ThemeProvider, Toaster, defaultTheme } from '@novasamatech/tr-ui';
+import { ThemeProvider, Toaster, berlinTheme, themes } from '@novasamatech/tr-ui';
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ErrorBoundary } from 'react-error-boundary';
@@ -8,12 +8,15 @@ import { ErrorBoundary } from 'react-error-boundary';
 import { ElectronSplashScreen, FallbackScreen, WebSplashScreen } from '@/shared/components';
 import { isElectron, isProductionBuild, reloadApp } from '@/shared/env';
 import { resetFeatureStatuses, updateFeatureStatus } from '@/shared/feature-config';
-import { useBrowserTheme } from '@/shared/hooks';
+import { readThemeName, useBrowserTheme } from '@/shared/hooks';
 import { silenceDebugConsole } from '@/shared/logger';
 import { Sentry, initSentry } from '@/shared/sentry';
-import { TranslationProvider } from '@/shared/translation';
+import { TranslationProvider, useLocalePreference } from '@/shared/translation';
 import { delay } from '@/shared/utils';
-import { ThemeSyncer } from '@/features/theme-toggle';
+// Eager import: registers the call window's `__callInit` MessagePort listener
+// before the preload posts the port on did-finish-load (no-op in the main app).
+import { isCallWindowLocation } from '@/features/call/runtime/callInitPort';
+import { NativeThemeSyncer, ThemeNameSyncer, ThemeSyncer } from '@/features/theme-toggle';
 
 import { LoadingDelay, controlledLazy } from './DelayedSuspense';
 
@@ -46,6 +49,12 @@ window.__browser_config = {
 
 const CLEAR_LOADING_TIMEOUT = 700;
 const DIRTY_LOADING_TIMEOUT = 2000;
+
+// The A/V call window loads this same bundle at the `#/call` route in its own
+// BrowserWindow. It is dark-only by design (its Figma is built against dark
+// tokens), so pin it to dark and skip the theme syncers below — the app's
+// light/dark preference must not leak into it.
+const isCallWindow = isCallWindowLocation();
 
 const App = controlledLazy(() => import('./App').then(m => m.App));
 
@@ -139,11 +148,20 @@ const Root = () => {
   const splashScreen = renderSplashScreen ? isElectron() ? <ElectronSplashScreen /> : <WebSplashScreen /> : null;
 
   const browserTheme = useBrowserTheme();
+  const locale = useLocalePreference();
+  const initialTheme = themes[readThemeName()] ?? berlinTheme;
+  const mode = isCallWindow ? 'dark' : browserTheme;
 
   return (
-    <TranslationProvider>
-      <ThemeProvider theme={defaultTheme} defaultMode={browserTheme}>
-        <ThemeSyncer />
+    <TranslationProvider locale={locale}>
+      <ThemeProvider theme={initialTheme} defaultMode={mode}>
+        {!isCallWindow && (
+          <>
+            <ThemeSyncer />
+            <ThemeNameSyncer />
+            <NativeThemeSyncer />
+          </>
+        )}
         <ErrorBoundary
           FallbackComponent={FallbackScreen}
           onError={(error, errorInfo) => {

@@ -11,13 +11,12 @@ import { contactDatabase, contactRepository } from '@/domains/contact/identity/r
 /* eslint-enable boundaries/dependencies */
 
 import { type ApplierContext, applySyncEntities } from './applier';
-import { type SyncEntityCodec } from './codec';
-import { encodeAccountIdSs58 } from './ss58';
+import { type SyncEntityCodec, encodeAccountIdSs58 } from './schemas';
 
 type SyncEntity = CodecType<typeof SyncEntityCodec>;
 
 const TEST_PEER_SS58 = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
-const TEST_CHAT_KEY = new Uint8Array(65).fill(0x9a);
+const TEST_CHAT_KEY = new Uint8Array(32).fill(0x9a);
 
 const TEST_OWN_USER_ID = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty';
 
@@ -65,7 +64,6 @@ describe('applySyncEntities', () => {
     expect(room?.peerId).toBe(TEST_PEER_SS58);
     expect(room?.userId).toBe(TEST_OWN_USER_ID);
     expect(room?.peerUsername).toBe('alice');
-    expect(room?.peerP256PublicKey).toMatch(/^0x9a9a/);
   });
 
   it('does not overwrite an existing P2PRoom when ChatsAdded re-applies', async () => {
@@ -73,7 +71,6 @@ describe('applySyncEntities', () => {
       sessionId: TEST_PEER_SS58,
       peerId: TEST_PEER_SS58,
       peerUsername: 'pre-existing',
-      peerP256PublicKey: '0xdead',
       userId: TEST_OWN_USER_ID,
       createdAt: 1,
       lastUpdate: 1,
@@ -92,7 +89,7 @@ describe('applySyncEntities', () => {
 
     const room = await p2pChatDatabase.rooms.get(TEST_PEER_SS58);
     expect(room?.peerUsername).toBe('pre-existing');
-    expect(room?.peerP256PublicKey).toBe('0xdead');
+    expect(room?.createdAt).toBe(1);
   });
 
   it('skips ChatsAdded contact when ConsumerInfo lookup returns null', async () => {
@@ -162,7 +159,6 @@ describe('applySyncEntities', () => {
       sessionId: TEST_PEER_SS58,
       peerId: TEST_PEER_SS58,
       peerUsername: 'alice',
-      peerP256PublicKey: '0xaa',
       userId: TEST_OWN_USER_ID,
       createdAt: 1,
       lastUpdate: 1,
@@ -193,7 +189,6 @@ describe('applySyncEntities', () => {
         sessionId: TEST_PEER_SS58,
         peerId: TEST_PEER_SS58,
         peerUsername: 'alice',
-        peerP256PublicKey: '0xaa',
         userId: TEST_OWN_USER_ID,
         createdAt: 1,
         lastUpdate: 1,
@@ -281,6 +276,80 @@ describe('applySyncEntities', () => {
 
       const unchanged = await p2pChatDatabase.messages.get(TEST_MESSAGE_ID);
       expect(unchanged?.status).toEqual({ direction: 'outgoing', state: 'sent' });
+    });
+  });
+
+  describe('Messages — blocked peer', () => {
+    const seedRoom = async (isBlocked: boolean) => {
+      await p2pChatDatabase.rooms.put({
+        sessionId: TEST_PEER_SS58,
+        peerId: TEST_PEER_SS58,
+        peerUsername: 'alice',
+        userId: TEST_OWN_USER_ID,
+        createdAt: 1,
+        isBlocked,
+        lastUpdate: 1,
+      });
+    };
+
+    const INCOMING_NEW = { tag: 'Incoming', value: { tag: 'NEW', value: undefined } } as const;
+    const OUTGOING_SENT = { tag: 'Outgoing', value: { tag: 'SENT', value: undefined } } as const;
+
+    const messageFromPeer = (messageId: string, status: typeof INCOMING_NEW | typeof OUTGOING_SENT): SyncEntity => ({
+      tag: 'Messages',
+      value: [
+        {
+          remote: {
+            messageId,
+            timestamp: 2_000n,
+            versioned: { tag: 'v1', value: { tag: 'text', value: 'sent while blocked' } },
+          },
+          peerId: encodeAccountIdSs58(TEST_PEER_SS58),
+          status,
+          order: 2_000n,
+        },
+      ],
+    });
+
+    it('drops an incoming message replicated by a sibling when the peer is blocked here', async () => {
+      await seedRoom(true);
+
+      await applySyncEntities([messageFromPeer('blocked-inbound', INCOMING_NEW)], stubCtx());
+
+      expect(await p2pChatDatabase.messages.get('blocked-inbound')).toBeUndefined();
+    });
+
+    it('still applies our own outgoing copy for a blocked peer — block is device-local', async () => {
+      await seedRoom(true);
+
+      await applySyncEntities([messageFromPeer('blocked-outbound', OUTGOING_SENT)], stubCtx());
+
+      expect(await p2pChatDatabase.messages.get('blocked-outbound')).toBeDefined();
+    });
+
+    it('applies an incoming message when the peer is not blocked', async () => {
+      await seedRoom(false);
+
+      await applySyncEntities([messageFromPeer('allowed-inbound', INCOMING_NEW)], stubCtx());
+
+      expect(await p2pChatDatabase.messages.get('allowed-inbound')).toBeDefined();
+    });
+
+    it('ignores a block recorded under a different user', async () => {
+      await seedRoom(false);
+      await p2pChatDatabase.rooms.put({
+        sessionId: `other-user:${TEST_PEER_SS58}`,
+        peerId: TEST_PEER_SS58,
+        peerUsername: 'alice',
+        userId: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY',
+        createdAt: 1,
+        isBlocked: true,
+        lastUpdate: 1,
+      });
+
+      await applySyncEntities([messageFromPeer('other-user-block', INCOMING_NEW)], stubCtx());
+
+      expect(await p2pChatDatabase.messages.get('other-user-block')).toBeDefined();
     });
   });
 });

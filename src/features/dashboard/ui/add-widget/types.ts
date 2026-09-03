@@ -1,9 +1,8 @@
-import { type AppListing } from '@/domains/product';
-import { type AddableDashboardCard } from '../../di';
+import { type AddWidgetContributedEntry, type AddableDashboardCard } from '../../di';
 
 export type AddWidgetSidebarEntry =
   | { source: 'native'; id: string; card: AddableDashboardCard }
-  | { source: 'published'; id: string; listing: AppListing; baseName: string };
+  | { source: 'contributed'; id: string; entry: AddWidgetContributedEntry };
 
 export type AddWidgetModalCardCopy = {
   title: string;

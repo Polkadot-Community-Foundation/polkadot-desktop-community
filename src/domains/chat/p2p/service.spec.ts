@@ -1,4 +1,4 @@
-import { p256 } from '@noble/curves/nist.js';
+import { x25519 } from '@noble/curves/ed25519.js';
 import { describe, expect, it } from 'vitest';
 
 import { p2pService } from './service';
@@ -10,7 +10,7 @@ const SECRET_C = new Uint8Array(32).fill(0x03);
 
 const keypair = (secret: Uint8Array) => ({
   privateKey: secret,
-  publicKey: p256.getPublicKey(secret, false),
+  publicKey: x25519.getPublicKey(secret),
 });
 
 describe('computeSharedSecret', () => {
@@ -69,5 +69,29 @@ describe('isPendingOutgoingRequest', () => {
     expect(p2pService.isPendingOutgoingRequest(request('outgoing', 'pending'))).toBe(true);
     expect(p2pService.isPendingOutgoingRequest(request('outgoing', 'declined'))).toBe(false);
     expect(p2pService.isPendingOutgoingRequest(request('incoming', 'pending'))).toBe(false);
+  });
+});
+
+describe('isRequestMessageHidden', () => {
+  const withMessage = (overrides: Partial<P2PChatRequest> = {}): P2PChatRequest => ({
+    ...request('incoming', 'pending'),
+    welcomeMessage: 'Hi!',
+    ...overrides,
+  });
+
+  it('hides a message when hiding is on and it is not revealed', () => {
+    expect(p2pService.isRequestMessageHidden(withMessage(), true)).toBe(true);
+  });
+
+  it('does not hide once revealed', () => {
+    expect(p2pService.isRequestMessageHidden(withMessage({ revealed: true }), true)).toBe(false);
+  });
+
+  it('does not hide when hiding is off', () => {
+    expect(p2pService.isRequestMessageHidden(withMessage(), false)).toBe(false);
+  });
+
+  it('does not hide when there is no message', () => {
+    expect(p2pService.isRequestMessageHidden(withMessage({ welcomeMessage: undefined }), true)).toBe(false);
   });
 });

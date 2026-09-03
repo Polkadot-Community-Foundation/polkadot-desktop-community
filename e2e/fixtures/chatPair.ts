@@ -6,13 +6,12 @@ import { type TestInfo } from '@playwright/test';
 import { test as bddTest } from 'playwright-bdd';
 
 import { e2eConfig } from '../config';
-import { shutdownElectronApp } from '../helpers/artifacts';
+import { attachFailureConsole, recordRendererConsole, shutdownElectronApp } from '../helpers/artifacts';
 import { BotUserSession, generateBotUsername } from '../helpers/bot-user';
 import { clearAppData } from '../helpers/cleanup';
 import { type ElectronAppContext, launchElectronApp } from '../helpers/electron';
 import { type E2eEnvironmentId, envToBotNetwork } from '../helpers/environment';
-import { errorMessage } from '../helpers/errors';
-import { VERY_LONG_TIMEOUT } from '../helpers/timeouts';
+import { waitForDashboardOrStuck, withSignInRetries } from '../helpers/sign-in';
 import { waitForIdle } from '../helpers/wait';
 import { OnboardingPage } from '../page-objects/OnboardingPage';
 import { readPool } from '../setup/bot-user-pool';
@@ -24,11 +23,19 @@ const CHAT_PAIR_BOT_NETWORK = envToBotNetwork(CHAT_PAIR_ENVIRONMENT_ID);
 
 /**
  * A paired identity — one authenticated Electron instance plus its bot username
- * (the username another user needs in order to start a chat via the contact search).
+ * and the registered lite username.
+ *
+ * `botUsername` is the bot-API handle; `liteUsername` is the on-chain
+ * registration WITH the backend-assigned numeric index ("testbot….15") — the
+ * exact string the app's contact search renders. UI lookups must use
+ * `liteUsername`: the bare bot username is a substring of every registration
+ * of that name, so it stops being a unique match the moment the backend holds
+ * a duplicate registration.
  */
 export type PairIdentity = {
   app: ElectronAppContext;
   botUsername: string;
+  liteUsername: string;
 };
 
 type PairAssignment = { alice: string; bob: string };
@@ -75,7 +82,7 @@ async function signInOnce(opts: { userDataDir: string; botUsername: string; botU
     await onboarding.selectEnvironment(CHAT_PAIR_ENVIRONMENT_ID);
     await onboarding.waitForQrCode();
     await onboarding.connectViaBot(opts.botUrl, opts.botUsername);
-    await context.window.waitForURL(/dashboard/, { timeout: VERY_LONG_TIMEOUT });
+    await waitForDashboardOrStuck(context.window);
     await waitForIdle(context.window);
     return context;
   } catch (err) {
@@ -87,10 +94,13 @@ async function signInOnce(opts: { userDataDir: string; botUsername: string; botU
 }
 
 /**
- * Sign in with one retry. The bot occasionally reports `attested: true` before
- * on-chain finality has propagated; the next `waitForURL(/dashboard/)` then
- * times out because the bot can't sign with a non-finalized identity. A full
- * Electron relaunch after a short settle delay gives the chain time to catch up.
+ * Sign in with retries. The bot occasionally reports `attested: true` before
+ * on-chain finality has propagated; the next dashboard wait then wedges on
+ * "Completing pairing…" because the bot can't sign with a non-finalized
+ * identity. Each attempt launches a fresh Electron (`signInOnce`), so the retry
+ * is a full relaunch after a short settle delay — a single retry isn't always
+ * enough when nightly is lagging. See `helpers/sign-in.ts` for the shared
+ * policy (also used by the `authenticated` fixture).
  */
 async function signIn(opts: {
   userDataDir: string;
@@ -98,13 +108,7 @@ async function signIn(opts: {
   botUrl: string;
   label: string;
 }): Promise<ElectronAppContext> {
-  try {
-    return await signInOnce(opts);
-  } catch (err) {
-    console.warn(`[${opts.label}] sign-in attempt 1 failed (${errorMessage(err)}); retrying in 10s…`);
-    await new Promise(resolve => setTimeout(resolve, 10_000));
-    return signInOnce(opts);
-  }
+  return withSignInRetries(() => signInOnce(opts), { label: opts.label });
 }
 
 async function buildPairContext(opts: { label: string; userDataDir: string; botUsername: string }): Promise<PairIdentity> {
@@ -115,15 +119,16 @@ async function buildPairContext(opts: { label: string; userDataDir: string; botU
   const session = new BotUserSession(opts.botUsername, e2eConfig.botUrl, botToken);
   console.info(`🔐 [${opts.label}] Ensuring bot user "${opts.botUsername}"@${CHAT_PAIR_BOT_NETWORK}...`);
   await session.ensure(CHAT_PAIR_BOT_NETWORK);
-  console.info(`🔐 [${opts.label}] Launching & signing in as "${opts.botUsername}"...`);
+  const liteUsername = await session.resolveLiteUsername(CHAT_PAIR_BOT_NETWORK);
+  console.info(`🔐 [${opts.label}] Launching & signing in as "${opts.botUsername}" (lite: "${liteUsername}")...`);
   const app = await signIn({
     userDataDir: opts.userDataDir,
     botUsername: opts.botUsername,
     botUrl: e2eConfig.botUrl,
     label: opts.label,
   });
-  console.info(`✅ [${opts.label}] Ready. username = "${opts.botUsername}"`);
-  return { app, botUsername: opts.botUsername };
+  console.info(`✅ [${opts.label}] Ready. username = "${opts.botUsername}", lite = "${liteUsername}"`);
+  return { app, botUsername: opts.botUsername, liteUsername };
 }
 
 async function attachPairScreenshot(identity: PairIdentity, testInfo: TestInfo, label: string): Promise<void> {
@@ -215,15 +220,21 @@ export const chatPairTest = bddTest.extend<ChatPairTestFixtures, ChatPairWorkerF
     await shutdownElectronApp(identity.app);
   },
 
+  // Console recording starts here rather than in `buildPairContext` so the
+  // buffer covers exactly the test body — sign-in chatter would bury it.
   alice: async ({ aliceContext }, use, testInfo) => {
     await setupPlatformParameter();
+    const readConsole = recordRendererConsole(aliceContext.app);
     await use(aliceContext);
     await attachPairScreenshot(aliceContext, testInfo, 'alice');
+    await attachFailureConsole(readConsole, testInfo, 'alice');
   },
 
   bob: async ({ bobContext }, use, testInfo) => {
+    const readConsole = recordRendererConsole(bobContext.app);
     await use(bobContext);
     await attachPairScreenshot(bobContext, testInfo, 'bob');
+    await attachFailureConsole(readConsole, testInfo, 'bob');
   },
 });
 

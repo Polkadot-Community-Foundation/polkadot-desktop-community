@@ -12,7 +12,7 @@ Layer dependency rule (read up-the-graph): `shared` ← `domains` / `aggregates`
 ## Decision table
 
 | What you have                                                                  | Where it goes                   |
-|--------------------------------------------------------------------------------|---------------------------------|
+| ------------------------------------------------------------------------------ | ------------------------------- |
 | Persistent, entity-shaped data; stateless rules over an entity                 | `src/domains/{domain}/`         |
 | Cross-feature runtime state (active selection, in-progress flow, user context) | `src/aggregates/{aggregate}/`   |
 | Single-feature transient state (wizard step, draft, focus, dropdown)           | `src/features/{feature}/state/` |

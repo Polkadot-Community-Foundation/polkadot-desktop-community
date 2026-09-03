@@ -27,6 +27,35 @@ export class OnboardingPage {
     return this.page.getByTestId(TEST_IDS.signingBotPanel);
   }
 
+  /**
+   * The "Completing pairing…" spinner shown while the handshake is mid-flight
+   * (`handshakeState.tag === 'Pending'`). When nightly attestation lags, the
+   * pairing wedges here indefinitely instead of redirecting to `/dashboard`;
+   * the sign-in helper watches this to abort a stuck attempt early.
+   */
+  get completingPairing() {
+    return this.page.getByTestId(TEST_IDS.onboardingCompletingPairing);
+  }
+
+  /**
+   * The pairing-failed panel (`handshakeState.tag === 'Failed'`). Carries a
+   * `data-error-kind` attribute: `noFreeSlots` is the "Limit Reached" case —
+   * the peer reported no free allowance slots (the bot user's daily
+   * device-registration budget is exhausted); everything else is `generic`.
+   */
+  get pairingError() {
+    return this.page.getByTestId(TEST_IDS.onboardingPairingError);
+  }
+
+  /**
+   * The "Limit Reached" flavor of {@link pairingError}. No same-identity retry
+   * can clear it within a run — the sign-in helper watches this to fail fast
+   * with `PairingLimitError` instead of burning the full navigation timeout.
+   */
+  get pairingLimitReachedError() {
+    return this.page.locator(`[data-testid="${TEST_IDS.onboardingPairingError}"][data-error-kind="noFreeSlots"]`);
+  }
+
   get signingBotUrlInput() {
     return this.page.getByTestId(TEST_IDS.signingBotUrlInput);
   }
@@ -49,6 +78,37 @@ export class OnboardingPage {
 
   get signingBotReachable() {
     return this.page.getByTestId(TEST_IDS.signingBotReachable);
+  }
+
+  get signingBotUnreachable() {
+    return this.page.getByTestId(TEST_IDS.signingBotUnreachable);
+  }
+
+  /** The actual <button> inside the connect-action wrapper div. */
+  get signingBotConnectInnerButton() {
+    return this.signingBotConnectButton.locator('button');
+  }
+
+  /** Fill the bot URL field (used to drive the health-check indicator). */
+  async fillBotUrl(botUrl: string) {
+    await expect(this.signingBotPanel).toBeVisible({ timeout: DEFAULT_TIMEOUT });
+    await this.signingBotUrlInput.fill(botUrl);
+  }
+
+  async expectBotReachable() {
+    await expect(this.signingBotReachable).toBeVisible({ timeout: DEFAULT_TIMEOUT });
+  }
+
+  async expectBotUnreachable() {
+    await expect(this.signingBotUnreachable).toBeVisible({ timeout: DEFAULT_TIMEOUT });
+  }
+
+  async expectConnectDisabled() {
+    await expect(this.signingBotConnectInnerButton).toBeDisabled({ timeout: DEFAULT_TIMEOUT });
+  }
+
+  async expectConnectEnabled() {
+    await expect(this.signingBotConnectInnerButton).toBeEnabled({ timeout: DEFAULT_TIMEOUT });
   }
 
   async waitForQrCode() {
@@ -95,6 +155,72 @@ export class OnboardingPage {
   async skipOnboarding() {
     await this.skipButton.locator('button').click({ timeout: DEFAULT_TIMEOUT });
     await this.page.waitForURL(/dashboard/, { timeout: DEFAULT_TIMEOUT });
+  }
+
+  networkButton(environmentId: E2eEnvironmentId) {
+    return this.page.getByTestId(`${TEST_IDS.networkButton}-${environmentId}`);
+  }
+
+  /**
+   * Assert the onboarding network selector has `environmentId` selected, and that
+   * it is the ONLY selected segment. The active segment carries `aria-pressed=true`
+   * (driven by `settings.environmentId === env.id` in OnboardingScreen).
+   */
+  async expectSelectedEnvironment(environmentId: E2eEnvironmentId) {
+    await expect(this.networkButton(environmentId)).toHaveAttribute('aria-pressed', 'true', {
+      timeout: DEFAULT_TIMEOUT,
+    });
+    const selected = this.page.locator(`[data-testid^="${TEST_IDS.networkButton}-"][aria-pressed="true"]`);
+    await expect(selected).toHaveCount(1, { timeout: DEFAULT_TIMEOUT });
+  }
+
+  /** All environment ids the onboarding picker currently offers (from the `network-button-<id>` testids). */
+  async availableEnvironmentIds(): Promise<string[]> {
+    const prefix = `${TEST_IDS.networkButton}-`;
+    const buttons = this.page.locator(`[data-testid^="${prefix}"]`);
+    await expect(buttons.first()).toBeVisible({ timeout: DEFAULT_TIMEOUT });
+    const ids: string[] = [];
+    const count = await buttons.count();
+    for (let i = 0; i < count; i++) {
+      const testId = await buttons.nth(i).getAttribute('data-testid');
+      if (testId?.startsWith(prefix)) ids.push(testId.slice(prefix.length));
+    }
+    return ids;
+  }
+
+  /** The currently selected environment id, or null if none is pressed. */
+  async selectedEnvironmentId(): Promise<string | null> {
+    const prefix = `${TEST_IDS.networkButton}-`;
+    const pressed = this.page.locator(`[data-testid^="${prefix}"][aria-pressed="true"]`);
+    if ((await pressed.count()) === 0) return null;
+    const testId = await pressed.first().getAttribute('data-testid');
+    return testId ? testId.slice(prefix.length) : null;
+  }
+
+  /**
+   * Switch to any environment other than the currently selected one and return its id.
+   * Triggers a reload, so callers must re-wait for the QR afterwards. Assumes ≥2
+   * environments are configured (callers should skip otherwise — CI builds may ship one).
+   */
+  async switchToDifferentEnvironment(): Promise<string> {
+    const ids = await this.availableEnvironmentIds();
+    const current = await this.selectedEnvironmentId();
+    const target = ids.find(id => id !== current);
+    if (!target) throw new Error(`No alternative environment to switch to (available: ${ids.join(', ')})`);
+    await this.page.getByTestId(`${TEST_IDS.networkButton}-${target}`).click();
+    await this.page.waitForLoadState('domcontentloaded');
+    await expect(this.page.locator('body')).toBeVisible({ timeout: DEFAULT_TIMEOUT });
+    return target;
+  }
+
+  /** Assert exactly one environment is selected and it is NOT `environmentId`. */
+  async expectSelectedEnvironmentChangedFrom(environmentId: E2eEnvironmentId) {
+    const prefix = `${TEST_IDS.networkButton}-`;
+    const selected = this.page.locator(`[data-testid^="${prefix}"][aria-pressed="true"]`);
+    await expect(selected).toHaveCount(1, { timeout: DEFAULT_TIMEOUT });
+    await expect(this.networkButton(environmentId)).not.toHaveAttribute('aria-pressed', 'true', {
+      timeout: DEFAULT_TIMEOUT,
+    });
   }
 
   /**

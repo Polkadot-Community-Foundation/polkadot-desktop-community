@@ -33,14 +33,20 @@ mutation — passes through here.
   first use.
 - **SubmitErrorInfo** — Normalized error shape surfaced to features after a submission attempt; `useSubmitError` is the
   React binding.
+- **Local allowance** — the current-period `Resources.StatementStoreAllowances` slot authorising _this device's_ statement
+  account (`DeviceIdentity.statementAccountPublicKey`) to submit statements. Granted and renewed only by the paired mobile
+  client; the desktop can only read it. Say "local allowance" for this device's grant and "product allowance" for the
+  per-product slot-account grant owned by `domains/product` — never just "the allowance".
+- **Slot period** — the daily bucket a local allowance is keyed by: `floor(epochSeconds / 86400)`, device clock.
+- **`localAllowanceUseCase.readLocalAllowance`** — the uncached read of the above. Returns `null` for "cannot tell" (storage
+  item absent / read failed), which callers must never collapse into `false`. The _renewal flow_ that reacts to a `false` is
+  not owned here — it is runtime state, and lives in the `allowance-renewal` aggregate.
 
 ### Papp provider
 
 - **PAPP** (Polkadot Application) — A third-party host expecting a stable surface from the shell: host metadata, a lazy
   chain client, the statement-store, and per-product localStorage. `usePappProvider` mounts that surface for the
   consuming feature.
-- **Legacy SSO migration** — `migrateLegacySsoSessions` walks pre-Papp persisted SSO blobs forward into the current shape.
-  One-shot, runs at boot.
 
 ### Web3 Summit gate
 
@@ -55,8 +61,10 @@ mutation — passes through here.
 
 - **DashboardLayout** — Persistent record describing what cards (products, folders) appear on the home dashboard, their
   positions, and per-widget sizes. Backed by Dexie (`dashboardLayoutDb`).
-- **DashboardCard** / **FolderCardPayload** — The card-payload union the layout stores. Folders are first-class cards that
-  contain child positions (`FolderItemPositions`).
+- **DashboardCard** / **FolderCardPayload** — The card-payload union the layout stores. Folders are first-class cards whose
+  `items` array is the single placement for their children: index _n_ is cell _n_. There is no per-child coordinate, so a
+  child can only be moved relative to its siblings, and every surface rendering the folder (the dashboard widget, the
+  fullscreen SPA) reads and writes that one order via `foldersUseCase.reorderFolderItems`.
 - **Widget size** — A `(width, height)` pair from the constrained grid (`MAX_WIDGET_WIDTH`, `MAX_GRID_ROWS`,
   `ALLOWED_WIDGET_HEIGHTS`). Variants like `WidgetSizeIconVariant` drive icon-only fallbacks at small sizes.
 - **Widget size hints** (`WidgetSizeHints`) — the set of sizes a widget declares it supports, as `{ height, width? }`.
@@ -64,7 +72,7 @@ mutation — passes through here.
   resize bounds. This is the dashboard's own input contract — the product manifest happens to produce a compatible shape, but
   the `manifest` concept itself stays in `@/domains/product`; features bridge the two.
 - **Cards / folders use cases** — Cross-source flows in `$usecase/cards.ts` and `$usecase/folders.ts` (add, resize,
-  remove, favorite, reposition) — they compose the layout repository and the dashboard-layout service.
+  remove, favorite, reorder) — they compose the layout repository and the dashboard-layout service.
 
 ## Scope
 

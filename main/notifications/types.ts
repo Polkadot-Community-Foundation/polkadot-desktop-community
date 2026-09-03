@@ -21,8 +21,7 @@ export type QueueEntry = {
 };
 
 export type ScheduleResult =
-  | { ok: true; id: NotificationId }
-  | { ok: false; error: 'ScheduleLimitReached' | 'Unknown'; reason?: string };
+  { ok: true; id: NotificationId } | { ok: false; error: 'ScheduleLimitReached' | 'Unknown'; reason?: string };
 
 export type NotificationActivatedEvent = {
   productId: string;

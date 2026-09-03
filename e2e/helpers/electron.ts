@@ -215,6 +215,25 @@ export async function setFullScreen(app: ElectronApplication, fullscreen: boolea
 }
 
 /**
+ * Resize the main window to a fixed content size. Returns the original bounds so
+ * a test can restore them afterwards. Width clamps to the window's `minWidth`
+ * (800px, see `config/index.js`), which is still below the dashboard grid's
+ * 1366px min-width — so a small target reliably forces horizontal overflow.
+ */
+export async function setWindowSize(
+  app: ElectronApplication,
+  size: { width: number; height: number },
+): Promise<{ width: number; height: number }> {
+  return app.evaluate(({ BrowserWindow }, target) => {
+    const win = BrowserWindow.getAllWindows()[0];
+    if (!win) throw new Error('No window found');
+    const { width, height } = win.getBounds();
+    win.setSize(target.width, target.height);
+    return { width, height };
+  }, size);
+}
+
+/**
  * Simulate app menu click
  */
 export async function clickMenuItem(app: ElectronApplication, ...menuPath: string[]): Promise<void> {

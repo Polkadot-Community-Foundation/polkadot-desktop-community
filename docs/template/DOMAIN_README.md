@@ -170,5 +170,5 @@ Pointers for going deeper. Two kinds, both welcome:
 Every external link a maintainer needs lives here, not scattered through the body.
 -->
 
-- [<spec / package>](<url>) — <what it is / what this domain uses it for>.
-- [`<in-repo path>`](<relative-link>) — <what it is>.
+- [<spec / package>](url) — <what it is / what this domain uses it for>.
+- [`<in-repo path>`](relative-link) — <what it is>.

@@ -1,6 +1,16 @@
 import '@testing-library/jest-dom/vitest';
 
-import { vi } from 'vitest';
+import { afterEach, vi } from 'vitest';
+
+import { resetResourceOverrides } from '@/shared/resource';
+
+// `resource.instead(fn)` swaps a request implementation in place. Resources are
+// module singletons shared by every spec in a file, so an override has to be
+// undone or it leaks into the next test. Doing it here means a spec never has to
+// remember — and the reset also drops whatever the override cached.
+afterEach(() => {
+  resetResourceOverrides();
+});
 
 // Config is sourced entirely from Firebase Remote Config (no bundled fallback),
 // so unit tests — which have no live RC — must supply a deterministic snapshot,

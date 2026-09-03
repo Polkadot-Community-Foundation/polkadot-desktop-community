@@ -12,7 +12,12 @@ const { useDisplayedProductMock, useProductIconMock } = vi.hoisted(() => ({
 vi.mock('@/domains/product', () => ({
   useDisplayedProduct: () => useDisplayedProductMock(),
   useProductIcon: () => useProductIconMock(),
-  dotNsService: { toDisplayName: (name: string) => name.replace(/\.dot$/, '') },
+  dotNsService: { toDisplayName: (name: string, tld: string) => (name.endsWith(tld) ? name.slice(0, -tld.length) : name) },
+  useDotNsTld: () => ({ data: '.dot', pending: false, error: null, refresh: vi.fn() }),
+  useDotNsLabels: () => ({
+    displayName: (name: string) => name.replace(/\.dot$/, ''),
+    shortLabel: (name: string) => name.replace(/\.dot$/, ''),
+  }),
 }));
 
 // ProductTabContent only consumes TabChip + tabIconClassName from the barrel,

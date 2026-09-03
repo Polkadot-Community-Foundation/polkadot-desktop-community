@@ -7,19 +7,17 @@ import {
 } from '@novasamatech/host-api';
 import { nanoid } from 'nanoid';
 import { type ResultAsync, errAsync, fromPromise } from 'neverthrow';
-import { lastValueFrom, map } from 'rxjs';
+import { lastValueFrom } from 'rxjs';
 
+import { guarded } from '@/shared/utils';
 import {
   type ChatMessage,
   type MessageContent,
-  clearDeclaredProductRooms,
   createMessageInProductRoom,
-  declaredProductRooms$,
   productChatService,
-  registerDeclaredProductRoom,
+  productRoomUseCase,
 } from '@/domains/chat';
 
-import { guarded } from './guarded';
 import { type Binding, type ProductWorkerInstance, type WorkerDeps } from './types';
 
 type ProductChatMessage = CodecType<typeof ChatMessageContent>;
@@ -50,25 +48,28 @@ function toMessageContent(payload: ProductChatMessage): MessageContent {
 }
 
 export function chatCreateRoomBinding(instance: ProductWorkerInstance, deps: WorkerDeps): VoidFunction {
-  const removeHandler = instance.container.handleChatCreateRoom(({ roomId }, { ok, err }) => {
+  return instance.container.handleChatCreateRoom(({ roomId }, { ok, err }) => {
     const session = deps.getSession();
     if (!session) {
       return err(new ChatRoomRegistrationErr.PermissionDenied());
     }
 
-    const status = registerDeclaredProductRoom({
-      roomId,
-      productId: instance.productId,
-    });
+    // Workers treat 'New' as "not greeted yet". The room is written before the
+    // status is returned, so the answer survives a restart and the greeting that
+    // follows a 'New' finds a live session to post into.
+    const params = { roomId, productId: instance.productId, userId: productChatService.getUserId(session) };
 
-    return ifAlive(instance, () => ok({ status }), new ChatRoomRegistrationErr.Unknown({ reason: 'disposed' }));
+    return fromPromise(
+      productRoomUseCase.createProductRoom(params),
+      e => new ChatRoomRegistrationErr.Unknown({ reason: String(e) }),
+    ).andThen(result =>
+      ifAlive(
+        instance,
+        () => (result ? ok({ status: result.status }) : err(new ChatRoomRegistrationErr.Unknown({ reason: 'commit failed' }))),
+        new ChatRoomRegistrationErr.Unknown({ reason: 'disposed' }),
+      ),
+    );
   });
-
-  // Declared rooms only mirror this running worker — drop them when it is disposed.
-  return () => {
-    removeHandler();
-    clearDeclaredProductRooms(instance.productId);
-  };
 }
 
 export function chatBotRegistrationBinding(instance: ProductWorkerInstance): VoidFunction {
@@ -77,13 +78,21 @@ export function chatBotRegistrationBinding(instance: ProductWorkerInstance): Voi
   );
 }
 
-export function chatListSubscribeBinding(instance: ProductWorkerInstance): VoidFunction {
+export function chatListSubscribeBinding(instance: ProductWorkerInstance, deps: WorkerDeps): VoidFunction {
   return instance.container.handleChatListSubscribe((_, send) => {
     const sendG = guarded(instance, send);
-    // BehaviorSubject-backed: replays the current snapshot on subscribe and
-    // re-emits whenever the worker declares a new room, so the list stays live.
-    const subscription = declaredProductRooms$
-      .pipe(map(rooms => rooms.filter(room => room.productId === instance.productId)))
+    const session = deps.getSession();
+
+    if (!session) {
+      sendG([]);
+
+      return () => {};
+    }
+
+    // Replays the stored rooms on subscribe and re-emits whenever one is added,
+    // so the list stays live and outlives the process.
+    const subscription = productRoomUseCase
+      .watchProductRooms({ productId: instance.productId, userId: productChatService.getUserId(session) })
       .subscribe(rooms => {
         sendG(rooms.map(room => ({ roomId: room.roomId, participatingAs: 'RoomHost' as const })));
       });

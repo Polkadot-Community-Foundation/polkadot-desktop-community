@@ -35,7 +35,7 @@ describe('collectChangesSince', () => {
     });
     const changes = await collectChangesSince(50);
     expect(changes.entities.length).toBeGreaterThan(0);
-    const chatsAdded = changes.entities.find(e => e.tag === 'ChatsAdded');
+    const chatsAdded = changes.entities.map(e => e.entity).find(e => e.tag === 'ChatsAdded');
     expect(chatsAdded).toBeDefined();
   });
 
@@ -58,7 +58,7 @@ describe('collectChangesSince', () => {
 
     const changes = await collectChangesSince(50);
 
-    const chatsAdded = changes.entities.find(e => e.tag === 'ChatsAdded');
+    const chatsAdded = changes.entities.map(e => e.entity).find(e => e.tag === 'ChatsAdded');
     expect(chatsAdded).toBeUndefined();
     // Mirrors Android `runSyncRound`: timePoint is captured as wall-clock at the
     // start of the round, not derived from item lastUpdate. After Ack this
@@ -86,7 +86,7 @@ describe('collectChangesSince', () => {
 
     const changes = await collectChangesSince(50);
 
-    const chatsAdded = changes.entities.find(e => e.tag === 'ChatsAdded');
+    const chatsAdded = changes.entities.map(e => e.entity).find(e => e.tag === 'ChatsAdded');
     expect(chatsAdded).toBeDefined();
     expect(chatsAdded?.value).toHaveLength(1);
   });
@@ -121,7 +121,7 @@ describe('collectChangesSince', () => {
     });
     await contactRepository.delete(TEST_PEER_SS58); // user-side delete writes tombstone
     const changes = await collectChangesSince(0);
-    const removed = changes.entities.find(e => e.tag === 'ChatsRemoved');
+    const removed = changes.entities.map(e => e.entity).find(e => e.tag === 'ChatsRemoved');
     expect(removed).toBeDefined();
     expect(removed?.value.length).toBe(1);
   });
@@ -141,10 +141,10 @@ describe('collectChangesSince', () => {
     });
 
     const changes = await collectChangesSince(0);
-    const removed = changes.entities.find(e => e.tag === 'ChatsRemoved');
+    const removed = changes.entities.map(e => e.entity).find(e => e.tag === 'ChatsRemoved');
     expect(removed).toBeUndefined();
     // The re-add itself still surfaces as ChatsAdded.
-    const added = changes.entities.find(e => e.tag === 'ChatsAdded');
+    const added = changes.entities.map(e => e.entity).find(e => e.tag === 'ChatsAdded');
     expect(added).toBeDefined();
   });
 
@@ -153,7 +153,6 @@ describe('collectChangesSince', () => {
       sessionId: 's1',
       peerId: TEST_PEER_SS58,
       peerUsername: 'alice',
-      peerP256PublicKey: '0xff',
       userId: 'u1',
       createdAt: 1,
       lastUpdate: 1,
@@ -171,7 +170,7 @@ describe('collectChangesSince', () => {
     });
 
     const changes = await collectChangesSince(0);
-    const messages = changes.entities.find(e => e.tag === 'Messages');
+    const messages = changes.entities.map(e => e.entity).find(e => e.tag === 'Messages');
     expect(messages).toBeDefined();
     if (messages?.tag !== 'Messages') throw new Error('unreachable');
     expect(messages.value).toHaveLength(1);
@@ -184,12 +183,52 @@ describe('collectChangesSince', () => {
     expect(m.status.value.tag).toBe('SENT');
   });
 
+  it('ships the deviceChatAccepted carrier under the canonical req-accepted:{requestId} wire id', async () => {
+    // Locally the carrier is stored as `device-chat-accepted:{requestId}`, but
+    // the acceptance is keyed `req-accepted:{requestId}` on visible rows. Desktop
+    // siblings ignore this wire id and re-derive it from the content, but
+    // Android/iOS preserve it verbatim and render the carrier as the "accepted"
+    // bubble — so shipping our local id there yields a second, un-dedupable
+    // bubble. The wire id must be the canonical per-request id.
+    await p2pChatDatabase.rooms.put({
+      sessionId: 's1',
+      peerId: TEST_PEER_SS58,
+      peerUsername: 'alice',
+      userId: 'u1',
+      createdAt: 1,
+      lastUpdate: 1,
+    });
+    await contactRepository.upsert({ accountId: TEST_PEER_SS58, identityChatPublicKey: '0xaa', devices: [] });
+    await p2pChatDatabase.messages.put({
+      messageId: 'device-chat-accepted:req-42',
+      sessionId: 's1',
+      peer: { type: 'p2p', accountId: TEST_PEER_SS58, name: 'alice' },
+      timestamp: 1000,
+      content: {
+        type: 'deviceChatAccepted',
+        requestId: 'req-42',
+        statementAccountId: `0x${'aa'.repeat(32)}`,
+        encryptionPublicKey: `0x${'bb'.repeat(32)}`,
+      },
+      status: { direction: 'incoming', state: 'seen' },
+      lastUpdate: 1000,
+    });
+
+    const changes = await collectChangesSince(0);
+    const messages = changes.entities.map(e => e.entity).find(e => e.tag === 'Messages');
+    if (messages?.tag !== 'Messages') throw new Error('unreachable');
+    expect(messages.value).toHaveLength(1);
+    const m = messages.value[0]!;
+    expect(m.remote.messageId).toBe('req-accepted:req-42');
+    if (m.remote.versioned.tag !== 'v1') throw new Error('unreachable');
+    expect(m.remote.versioned.value.tag).toBe('deviceChatAccepted');
+  });
+
   it('skips messages whose peer has no contact yet (variant-2 gate: pre-accept welcome)', async () => {
     await p2pChatDatabase.rooms.put({
       sessionId: 's1',
       peerId: TEST_PEER_SS58,
       peerUsername: 'alice',
-      peerP256PublicKey: '0xff',
       userId: 'u1',
       createdAt: 1,
       lastUpdate: 1,
@@ -206,7 +245,7 @@ describe('collectChangesSince', () => {
     });
 
     const changes = await collectChangesSince(0);
-    expect(changes.entities.find(e => e.tag === 'Messages')).toBeUndefined();
+    expect(changes.entities.map(e => e.entity).find(e => e.tag === 'Messages')).toBeUndefined();
   });
 
   it('skips messages whose contact is not yet syncable so they never ship before ChatsAdded', async () => {
@@ -219,7 +258,6 @@ describe('collectChangesSince', () => {
       sessionId: 's1',
       peerId: TEST_PEER_SS58,
       peerUsername: 'alice',
-      peerP256PublicKey: '0xff',
       userId: 'u1',
       createdAt: 1,
       lastUpdate: 1,
@@ -245,7 +283,7 @@ describe('collectChangesSince', () => {
     });
 
     const changes = await collectChangesSince(0);
-    expect(changes.entities.find(e => e.tag === 'ChatsAdded')).toBeUndefined();
-    expect(changes.entities.find(e => e.tag === 'Messages')).toBeUndefined();
+    expect(changes.entities.map(e => e.entity).find(e => e.tag === 'ChatsAdded')).toBeUndefined();
+    expect(changes.entities.map(e => e.entity).find(e => e.tag === 'Messages')).toBeUndefined();
   });
 });

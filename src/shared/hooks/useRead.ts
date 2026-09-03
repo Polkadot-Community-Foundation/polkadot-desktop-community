@@ -169,6 +169,11 @@ export function useRead<P>(
     error: null,
   }));
   const refreshRef = useRef<() => void>(() => {});
+  // The key `start()` last ran for. The effect below is the only thing that
+  // begins a read, and it runs after commit — so between the render where `key`
+  // becomes non-null and that effect, `snapshot.pending` is still false. Reading
+  // this during render is what closes that window (see `awaitingStart`).
+  const startedKeyRef = useRef<string | null>(null);
   const getSource = useLooseRef(source);
   const getMap = useLooseRef(map);
   const getKey = useLooseRef(keyFn);
@@ -183,6 +188,7 @@ export function useRead<P>(
     if (params == null) {
       setSnapshot({ data: defaultValue, pending: false, error: null });
       refreshRef.current = () => {};
+      startedKeyRef.current = null;
       return;
     }
     const serialize = getKey();
@@ -240,6 +246,10 @@ export function useRead<P>(
       }
     };
 
+    // `key`, not `requestKey`: for a resource source `key` is `source.key(params)`
+    // while `requestKey` is the serialized params. Recording the wrong one leaves
+    // `awaitingStart` true forever for every resource consumer.
+    startedKeyRef.current = key;
     start();
 
     refreshRef.current = () => {
@@ -262,7 +272,13 @@ export function useRead<P>(
 
   const refresh = useCallback(() => refreshRef.current(), []);
 
-  useDebugValue(`${snapshot.pending ? 'Pending' : snapshot.error ? 'Errored' : 'Idle'} read (key: ${key})`);
+  // Params just became non-null (or changed key) and the effect hasn't started the
+  // read yet. Without this the hook reports `pending: false` with no data for one
+  // commit, which consumers correctly read as "settled with nothing".
+  const awaitingStart = key !== null && startedKeyRef.current !== key;
+  const pending = awaitingStart || snapshot.pending;
 
-  return { ...snapshot, refresh };
+  useDebugValue(`${pending ? 'Pending' : snapshot.error ? 'Errored' : 'Idle'} read (key: ${key})`);
+
+  return { ...snapshot, pending, refresh };
 }

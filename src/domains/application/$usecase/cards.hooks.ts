@@ -17,18 +17,6 @@ export const useRemoveCard = () => {
   return { removeCard, pending, status };
 };
 
-export const useAddWidget = () => {
-  const { run, pending, status } = useAction(
-    ({ productId, size, minH }: { productId: string; size: { w: number; h: number }; minH: number }) =>
-      cardsUseCase.addWidgetToLayout(productId, size, minH),
-  );
-  const addWidget = useCallback(
-    (productId: string, size: { w: number; h: number }, minH: number = 4) => run({ productId, size, minH }),
-    [run],
-  );
-  return { addWidget, pending, status };
-};
-
 export const useResizeCard = () => {
   const { run, pending, status } = useAction(({ cardId, size }: { cardId: string; size: { w: number; h: number } }) =>
     cardsUseCase.resizeCardToGridSize(cardId, size),

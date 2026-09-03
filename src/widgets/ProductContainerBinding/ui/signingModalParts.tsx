@@ -6,7 +6,9 @@ import { type CSSProperties, memo, useEffect, useMemo, useRef, useState } from '
 import { TEST_IDS } from '@/shared/test-ids';
 import { useTranslation } from '@/shared/translation';
 import { type HexString } from '@/shared/types';
-import { useDisplayedProduct, useProductHeaderProps } from '@/domains/product';
+import { cnTw } from '@/shared/utils';
+import { useDisplayedProduct, useDotNsTld } from '@/domains/product';
+import { useProductHeaderProps } from '@/widgets/ProductHeader';
 
 export const normalizeCallSegment = (segment: string): string => segment.replace(/[_-]/g, '').toLowerCase();
 
@@ -21,7 +23,7 @@ const txArgumentsJsonTheme: CSSProperties = {
   '--w-rjv-font-family': 'inherit',
   '--w-rjv-color': 'currentColor',
   '--w-rjv-background-color': 'transparent',
-  '--w-rjv-line-color': 'var(--color-border-secondary)',
+  '--w-rjv-line-color': 'var(--color-stroke-secondary)',
   '--w-rjv-arrow-color': 'currentColor',
   '--w-rjv-info-color': 'currentColor',
   '--w-rjv-key-string': '#728806',
@@ -48,15 +50,7 @@ const isJsonObject = (value: unknown): value is object => typeof value === 'obje
 // occur in decoded SCALE call arguments (bigints are plain `bigint`), and excluding them keeps
 // the Array.from() result a clean number[]. Such a value, if ever present, simply renders as-is.
 type NumericTypedArray =
-  | Int8Array
-  | Uint8Array
-  | Uint8ClampedArray
-  | Int16Array
-  | Uint16Array
-  | Int32Array
-  | Uint32Array
-  | Float32Array
-  | Float64Array;
+  Int8Array | Uint8Array | Uint8ClampedArray | Int16Array | Uint16Array | Int32Array | Uint32Array | Float32Array | Float64Array;
 
 const isNumericTypedArray = (value: unknown): value is NumericTypedArray =>
   ArrayBuffer.isView(value) &&
@@ -98,38 +92,55 @@ export const TxArgumentsJson = memo(({ value }: { value: unknown }) => {
 
 TxArgumentsJson.displayName = 'TxArgumentsJson';
 
-export const signingSummarySectionClassName =
-  'flex flex-col gap-2 rounded-lg border border-border-secondary bg-bg-surface-container p-3';
+export const signingSummarySectionClassName = cnTw(
+  'flex flex-col gap-2 rounded-lg border border-stroke-secondary bg-bg-surface-container p-3',
+);
 
-export const signingRawMessageCardClassName =
-  'flex flex-col gap-3 rounded-lg border border-border-secondary bg-bg-surface-container p-3 shadow-sm';
+export const signingRawMessageCardClassName = cnTw(
+  'flex flex-col gap-3 rounded-lg border border-stroke-secondary bg-bg-surface-container p-3 shadow-sm',
+);
 
-export const signingDetailCodeBlockClassName = 'min-h-9 rounded-lg border border-general-border bg-general-muted p-3';
+export const signingDetailCodeBlockClassName = cnTw('min-h-9 rounded-lg border border-stroke-primary bg-bg-surface-nested p-3');
 
-export const signingDetailMonoTextClassName = 'font-mono text-xs leading-4 text-text-primary';
+export const signingDetailMonoTextClassName = cnTw('font-mono text-xs leading-4 text-fg-primary');
 
-export const signingDetailMonoSingleLineClassName = `${signingDetailMonoTextClassName} overflow-x-auto whitespace-nowrap`;
+export const signingDetailMonoSingleLineClassName = cnTw(signingDetailMonoTextClassName, 'overflow-x-auto whitespace-nowrap');
 
 type SigningAccountDetailsSectionProps = {
   label: string;
-  address: string;
+  /** Nullish while the subtree key is in flight — renders a placeholder, never a guessed address. */
+  address: Nullable<string>;
+  /** Lookup failed outright — show an error instead of pending forever. */
+  failed?: boolean;
 };
 
-export const SigningAccountDetailsSection = memo(({ label, address }: SigningAccountDetailsSectionProps) => {
+export const SigningAccountDetailsSection = memo(({ label, address, failed = false }: SigningAccountDetailsSectionProps) => {
   const { t } = useTranslation();
 
   return (
     <section className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-base leading-6 text-text-secondary">{label}</span>
-        <Copy value={address}>
-          <Button type="button" variant="ghost" size="icon" aria-label={t('feature.browser.copyAccountAddress')}>
+        <span className="text-base leading-6 text-fg-secondary">{label}</span>
+        <Copy value={address ?? ''}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            disabled={address == null}
+            aria-label={t('feature.browser.copyAccountAddress')}
+          >
             <CopyIcon className="size-4" />
           </Button>
         </Copy>
       </div>
       <div className={signingDetailCodeBlockClassName}>
-        <div className={signingDetailMonoSingleLineClassName}>{address}</div>
+        <div className={signingDetailMonoSingleLineClassName}>
+          {address ?? (
+            <span className={failed ? 'text-fg-error' : 'text-fg-secondary'}>
+              {failed ? t('feature.browser.accountAddressUnavailable') : t('common.status.loading')}
+            </span>
+          )}
+        </div>
       </div>
     </section>
   );
@@ -137,12 +148,11 @@ export const SigningAccountDetailsSection = memo(({ label, address }: SigningAcc
 
 SigningAccountDetailsSection.displayName = 'SigningAccountDetailsSection';
 
-export const signingDialogCornerControlClassName =
-  'absolute top-[11px] flex size-10 items-center justify-center rounded-xl p-2 text-fg-primary transition-colors hover:bg-bg-action-secondary-hover focus-visible:ring-[4px] focus-visible:ring-border-tertiary/35 focus-visible:ring-offset-0 focus-visible:outline-none disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*="size-"])]:size-5';
+export const signingDialogCornerControlClassName = cnTw(
+  'absolute top-2.75 flex size-10 items-center justify-center rounded-xl p-2 text-fg-primary transition-colors hover:bg-bg-action-secondary-hover focus-visible:ring-4 focus-visible:ring-stroke-tertiary/35 focus-visible:ring-offset-0 focus-visible:outline-none disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*="size-"])]:size-5',
+);
 
-export const signingDialogHeadingClassName = 'text-2xl leading-8 font-semibold text-text-primary';
-
-export const getProductPresentation = (identifier: string): { name: string; domain: string } => {
+export const getProductPresentation = (identifier: string, tld: string): { name: string; domain: string } => {
   const domain = identifier;
   const lower = identifier.toLowerCase();
 
@@ -150,8 +160,8 @@ export const getProductPresentation = (identifier: string): { name: string; doma
     return { name: 'Local', domain };
   }
 
-  if (identifier.endsWith('.dot')) {
-    const withoutDot = identifier.slice(0, -4);
+  if (identifier.endsWith(tld)) {
+    const withoutDot = identifier.slice(0, -tld.length);
     const leaf = withoutDot.includes('.') ? (withoutDot.split('.').pop() ?? withoutDot) : withoutDot;
     const name = leaf
       .split('-')
@@ -255,7 +265,8 @@ export const useSigningCountdown = (lifetimeMs: number | null, onExpire: VoidFun
 
 export const SigningProductHeader = memo(({ identifier }: { identifier: string }) => {
   const { data: product } = useDisplayedProduct(identifier);
-  const fallback = getProductPresentation(identifier);
+  const { data: tld } = useDotNsTld();
+  const fallback = getProductPresentation(identifier, tld);
   const header = useProductHeaderProps({
     product,
     fallbackName: fallback.name,
@@ -276,7 +287,7 @@ export const SigningPolkadotAppHint = memo(({ variant = 'transaction' }: Signing
 
   const hintKey = variant === 'rawMessage' ? 'feature.browser.polkadotAppRawMessageHint' : 'feature.browser.polkadotAppHint';
 
-  return <div className="text-sm leading-5 text-text-secondary">{t(hintKey)}</div>;
+  return <div className="text-sm leading-5 text-fg-secondary">{t(hintKey)}</div>;
 });
 
 SigningPolkadotAppHint.displayName = 'SigningPolkadotAppHint';
@@ -287,11 +298,20 @@ type SigningReviewFooterProps = {
   primaryPendingLabel: string;
   pending: boolean;
   primaryDisabled?: boolean;
+  primaryTestId?: string;
   onPrimary: VoidFunction;
 };
 
 export const SigningReviewFooter = memo(
-  ({ cancelLabel, primaryLabel, primaryPendingLabel, pending, primaryDisabled, onPrimary }: SigningReviewFooterProps) => (
+  ({
+    cancelLabel,
+    primaryLabel,
+    primaryPendingLabel,
+    pending,
+    primaryDisabled,
+    primaryTestId,
+    onPrimary,
+  }: SigningReviewFooterProps) => (
     <div className="shrink-0">
       <Dialog.Footer>
         <div className="flex w-full min-w-0 flex-row gap-2 sm:gap-2">
@@ -303,7 +323,7 @@ export const SigningReviewFooter = memo(
             </Dialog.Close>
           </div>
           <div className="min-w-0 flex-1">
-            <Button type="button" fullWidth disabled={pending || primaryDisabled} onClick={onPrimary}>
+            <Button type="button" fullWidth disabled={pending || primaryDisabled} data-testid={primaryTestId} onClick={onPrimary}>
               {pending ? primaryPendingLabel : primaryLabel}
             </Button>
           </div>
@@ -323,12 +343,12 @@ type SubmitErrorAlertProps = {
 export const SubmitErrorAlert = memo(({ title, description }: SubmitErrorAlertProps) => (
   <div
     data-testid={TEST_IDS.submitErrorAlert}
-    className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950"
+    className="flex items-start gap-2 rounded-lg border border-stroke-warning bg-bg-status-warning/10 p-3"
   >
-    <AlertCircle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+    <AlertCircle className="mt-0.5 size-4 shrink-0 text-fg-warning" />
     <div className="flex flex-col gap-0.5">
-      <p className="text-sm leading-5 font-medium text-amber-800 dark:text-amber-200">{title}</p>
-      <p className="text-xs leading-4 text-amber-700 dark:text-amber-300">{description}</p>
+      <p className="text-sm leading-5 font-medium text-fg-warning">{title}</p>
+      <p className="text-xs leading-4 text-fg-warning">{description}</p>
     </div>
   </div>
 ));

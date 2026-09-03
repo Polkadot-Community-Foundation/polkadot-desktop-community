@@ -7,11 +7,13 @@ export type {
   ExecutableContent,
   ExecutableKind,
   Icon,
+  LiveExecutable,
   PersistedProduct,
   Product,
   ProductArchive,
   ProductExecutables,
   RootManifest,
+  SemVer,
   WidgetExecutable,
   WorkerExecutable,
 } from './product';
@@ -23,17 +25,16 @@ export {
   productDb,
   productService,
   productsResource,
+  useDeclineUpdate,
   useDisplayedProduct,
   useExecutableArchive,
   useIsPinned,
   useIsProductInstalled,
-  useLiveExecutableContenthash,
+  useLiveExecutable,
   usePersistedProductById,
   usePersistedProducts,
-  useProductHeaderProps,
   useProductIcon,
 } from './product';
-export type { ProductHeaderViewModel } from './product';
 
 // Host-environment wiring — call once from the app bootstrap (never at import time).
 export { bootstrapProduct } from './bootstrap';
@@ -42,19 +43,31 @@ export { bootstrapProduct } from './bootstrap';
 // composition). Each group is exported separately per project structure.
 export { lifecycleUseCase } from './$usecase/lifecycle';
 export { offlineCacheUseCase } from './$usecase/offlineCache';
+// DEBT: on the public surface for `widgets/ProductContainerBinding/integrations/localStorage.ts`.
+// Fix: a use case owning the read/write, with the widget calling that.
+// eslint-disable-next-line local-rules/enforce-import-restrictions
 export { productLocalStorageRepository } from './local-storage/repository';
+export { remoteAccessUseCase } from './$usecase/remoteAccess';
 export { resolveProductUseCase } from './$usecase/resolve';
-export { usePinProduct, useUnpinProduct } from './$usecase/commitment.hooks';
+export { useCommitProductByIdentifier, usePinExecutable, usePinProduct, useUnpinProduct } from './$usecase/commitment.hooks';
 export { useInteractedProducts } from './$usecase/interaction.hooks';
-export { useOfflineCacheStatus } from './product/executable-cache/hooks';
+export { useOfflineCacheSize, useOfflineCacheStatus } from './product/executable-cache/hooks';
 export { commitmentUseCase } from './$usecase/commitment';
+export { onProductModalityOpenedSideEffect, updatesUseCase } from './$usecase/updates';
+export { allowanceUseCase } from './$usecase/allowance';
+export { productAccountUseCase } from './$usecase/account';
+export { useProductAccountAddress, useProductAccountAddresses } from './$usecase/account.hooks';
+export type { AllowanceResourceKind } from './allowance/types';
 
-export type { AppListing } from './browse';
-export { browseGateway, browseService, usePublishedWidgetListings } from './browse';
+export type { AppListing } from '@parity/browse-sdk';
+export { browseService } from './browse/service';
+export { usePublishedAppListings, usePublishedWidgetListings } from './browse/hooks';
 
 export { dotNsService } from './dotns/service';
-export { isLocalhostUrl, normalizeLocalhostUrl } from './dotns/localhost';
-export { dotNsGateway } from './dotns/gateway';
+export { isLocalhostUrl, normalizeLocalhostUrl } from './dotns/service';
+export { DEFAULT_DOTNS_TLD } from './dotns/constants';
+export { useDotNsLabels, useDotNsTld, useIsProductIdentifier } from './dotns/hooks';
+export { dotNsUseCase } from './$usecase/dotns';
 export type { DotNsUrl } from './dotns/types';
 
 export { productAccountService } from './account/service';
@@ -101,3 +114,8 @@ export { permissionsService } from './permissions/service';
 export type { DevicePermissionId } from './permissions/types';
 export { _resetRemotePermissionBroker, pendingRemotePermissionRequests$, requestExternalUrlAccess } from './permissions/broker';
 export type { PendingRemotePermissionRequest } from './permissions/broker';
+
+// Recently opened products — persisted visit history, read back on every boot.
+export { MAX_RECENT_PRODUCTS } from './recents/constants';
+export { clearRecentProducts, forgetRecentProduct, recordRecentProduct, restoreRecentProducts } from './recents/resource';
+export { useRecentProductIds } from './recents/hooks';

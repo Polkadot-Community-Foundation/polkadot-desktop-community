@@ -2,7 +2,7 @@
 
 The `network` domain is the renderer's bridge to Polkadot-shaped chains: the catalog of chains the app speaks to, the typed RPC clients used to talk to them, the address/account-id encoding, the block stream, and helpers for Bulletin-chain content (preimages).
 
-It is deliberately a **read/connect** layer. It owns *how* to reach a chain and *how* to interpret the values it returns. It does not sign, it does not move funds, and it does not encode product behavior.
+It is deliberately a **read/connect** layer. It owns _how_ to reach a chain and _how_ to interpret the values it returns. It does not sign, it does not move funds, and it does not encode product behavior.
 
 ## Vocabulary
 
@@ -12,7 +12,7 @@ It is deliberately a **read/connect** layer. It owns *how* to reach a chain and 
 - **Address** — The user-facing form of an account: SS58 for Substrate accounts, hex for EVM (20 bytes). Encoding/decoding to/from `AccountId` is part of this domain.
 - **Block** — `BlockHeight` (non-negative integer) and `BlockHash` (branded hex).
 - **API** — A typed RPC client for a specific chain (Polkadot, Polkadot Asset Hub, Kusama, Westend, Paseo, Bulletin, …) built from `@polkadot-api/descriptors` and routed through the `chainRegistry`.
-- **Preimage** — A content blob a product stores via the **Bulletin chain** (`TransactionStorage`), addressed by its BLAKE2b-256 hash. The bytes are retrieved from IPFS, where that hash is also the content's CID. Products submit preimage bytes and look them back up by hash. (Bulletin-chain content addressing — *not* a governance / runtime-call preimage.)
+- **Preimage** — A content blob a product stores via the **Bulletin chain** (`TransactionStorage`), addressed by its BLAKE2b-256 hash. The bytes are retrieved from IPFS, where that hash is also the content's CID. Products submit preimage bytes and look them back up by hash. (Bulletin-chain content addressing — _not_ a governance / runtime-call preimage.)
 
 ## Scope
 
@@ -41,14 +41,14 @@ This domain does **not** own:
 - **Signing, key derivation, or any private-key material.** Product-scoped account keys are derived in `domains/product/account`; user wallet/keystore concerns sit outside the renderer entirely.
 - **Wallet state** — selected account, balances, transaction history, fee estimates. None of that lives here.
 - **Extrinsic construction or submission flows.** Building, signing, and sending transactions belongs to features that compose the typed clients from this domain with signing from elsewhere.
-- **Governance, staking, identity, or DeFi business logic.** This domain reads chain state and moves bytes; it does not encode what that on-chain data *means*.
-- **Aggregate state** — current network selection, endpoint mode, multi-chain orchestration — those live in aggregates (`aggregates/network-settings`, etc.) and are *consumed* from here, not *defined* here.
+- **Governance, staking, identity, or DeFi business logic.** This domain reads chain state and moves bytes; it does not encode what that on-chain data _means_.
+- **Aggregate state** — current network selection, endpoint mode, multi-chain orchestration — those live in aggregates (`aggregates/network-settings`, etc.) and are _consumed_ from here, not _defined_ here.
 
 A useful distinction: `network/account` deals with **identity** (how to encode an address, how to compare account ids); `product/account` deals with **cryptography** (how to derive a key for a product). They are not the same module by accident.
 
 ## References
 
-- [Polkadot specification](https://spec.polkadot.network/) — runtime metadata, SCALE codec, block header format.
+- [Polkadot specification](https://spec.polkadot.org/) — runtime metadata, SCALE codec, block header format.
 - [`polkadot-api`](https://github.com/polkadot-api/polkadot-api) — typed RPC client used throughout, with descriptors generated from `@polkadot-api/descriptors`.
 - [SS58 registry](https://github.com/paritytech/ss58-registry) — address prefix definitions for Substrate chains.
 - [SCALE codec](https://docs.substrate.io/reference/scale-codec/) — wire format underlying chain types.

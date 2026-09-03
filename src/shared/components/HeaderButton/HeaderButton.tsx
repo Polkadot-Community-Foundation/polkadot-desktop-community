@@ -9,6 +9,9 @@ type Props = RefAttributes<HTMLButtonElement> &
     active?: boolean;
     variant?: 'default' | 'icon';
     testId?: string;
+    // Icon-only buttons have no text node, so the accessible name must land on
+    // the <button> itself — a label on the <svg> is not exposed reliably.
+    ariaLabel?: string;
     onFocus?: () => void;
     onBlur?: () => void;
     onClick?: () => void;
@@ -20,6 +23,7 @@ export const HeaderButton = ({
   variant = 'default',
   children,
   testId = 'HeaderButton',
+  ariaLabel,
   onClick,
   onFocus,
   onBlur,
@@ -30,11 +34,12 @@ export const HeaderButton = ({
       className={cnTw(
         'relative flex appearance-none items-center justify-center rounded-lg text-xs select-none',
         'cursor-pointer bg-transparent transition-colors hover:bg-bg-action-secondary-hover',
-        active ? 'bg-general-muted font-semibold text-text-primary' : 'text-fg-secondary',
+        active ? 'bg-bg-surface-nested font-semibold text-fg-primary' : 'text-fg-secondary',
         variant === 'icon' && 'h-8 w-8 shrink-0',
         variant === 'default' && 'h-8 px-2',
       )}
       style={{ appRegion: 'no-drag' }}
+      aria-label={ariaLabel}
       data-testid={testId}
       onClick={onClick}
       onFocus={onFocus}

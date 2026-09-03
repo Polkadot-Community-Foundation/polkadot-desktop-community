@@ -1,7 +1,7 @@
 import { SigningErr } from '@novasamatech/host-api';
 import { type UserSession } from '@novasamatech/host-papp';
 import { type SigningRawRequest } from '@novasamatech/host-papp';
-import { Button, Copy, Dialog, toastError } from '@novasamatech/tr-ui';
+import { Button, Copy, toastError } from '@novasamatech/tr-ui';
 import { toHex } from '@polkadot-api/utils';
 import { ChevronLeft, Copy as CopyIcon, Info } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -11,9 +11,10 @@ import { useTranslation } from '@/shared/translation';
 import { type HexString } from '@/shared/types';
 import { genesisHash, useAllChainsMap } from '@/domains/network';
 import { type SigningResult } from '../types';
+import { withAllowanceRenewal } from '../withAllowanceRenewal';
 import { withSigningTimeout } from '../withSigningTimeout';
 
-import { SignPolkadotAppModal } from './SignPolkadotAppModal';
+import { SSODialog } from './SSODialog';
 import {
   SigningAccountDetailsSection,
   SigningPolkadotAppHint,
@@ -22,7 +23,6 @@ import {
   signingDetailCodeBlockClassName,
   signingDetailMonoSingleLineClassName,
   signingDialogCornerControlClassName,
-  signingDialogHeadingClassName,
   signingRawMessageCardClassName,
 } from './signingModalParts';
 
@@ -75,10 +75,11 @@ export const SignRawWithLegacyAccountModal = memo(
       const startedAt = Date.now();
       console.info(`${tag} sign() started — calling session.signRawLegacy`, { address });
       setPending(true);
-      const signFlow = session
-        .signRawLegacy({ account: account.bytes, data: payload })
-        .map(signature => ({ signature, signedTransaction: undefined }));
-      withSigningTimeout(signFlow)
+      const startSignFlow = () =>
+        session
+          .signRawLegacy({ account: account.bytes, data: payload })
+          .map(signature => ({ signature, signedTransaction: undefined }));
+      withAllowanceRenewal(() => withSigningTimeout(startSignFlow()))
         .andTee(() => {
           console.info(`${tag} response received from remote signer in ${Date.now() - startedAt}ms`);
           setPending(false);
@@ -117,16 +118,6 @@ export const SignRawWithLegacyAccountModal = memo(
       onCancel(new SigningErr.Rejected());
     }, [onCancel, t]);
 
-    const handleOpenChange = (open: boolean) => {
-      if (!open) {
-        dismissReviewWithRejectedToast();
-      }
-    };
-
-    const handleInteractOutside = (event: { preventDefault: () => void }) => {
-      event.preventDefault();
-    };
-
     const handleToggleDetails = () => {
       setShowDetails(v => !v);
     };
@@ -140,41 +131,22 @@ export const SignRawWithLegacyAccountModal = memo(
       sign();
     };
 
-    if (step === 'polkadotApp') {
-      return (
-        <SignPolkadotAppModal
-          open
-          lifetimeMs={null}
-          productIdentifier={productIdentifier}
-          session={session}
-          onCancel={() => onCancel(new SigningErr.Rejected())}
-          onTimeout={() => onCancel(new SigningErr.Rejected())}
-        />
-      );
-    }
-
     return (
-      <Dialog modal open onOpenChange={handleOpenChange}>
-        <Dialog.Content
-          aria-describedby={undefined}
-          showCloseButton
-          variant="tall"
-          onOpenAutoFocus={event => event.preventDefault()}
-          onInteractOutside={handleInteractOutside}
-        >
+      <SSODialog.Root onDismiss={dismissReviewWithRejectedToast}>
+        {step === 'polkadotApp' ? (
+          <SSODialog.WaitingForMobile lifetimeMs={null} session={session} onAbort={() => onCancel(new SigningErr.Rejected())} />
+        ) : (
           <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-6">
             {!showDetails ? <SigningProductHeader identifier={productIdentifier} /> : null}
 
             {!showDetails ? (
               <div className="pt-2">
-                <Dialog.Title asChild>
-                  <h2 className={signingDialogHeadingClassName}>{t('feature.browser.signMessageRequestTitle')}</h2>
-                </Dialog.Title>
+                <SSODialog.Title>{t('feature.browser.signMessageRequestTitle')}</SSODialog.Title>
               </div>
             ) : (
               <button
                 type="button"
-                className={`${signingDialogCornerControlClassName} left-2.75`}
+                className={`${signingDialogCornerControlClassName} start-2.75`}
                 aria-label={t('common.action.back')}
                 onClick={handleToggleDetails}
               >
@@ -187,19 +159,19 @@ export const SignRawWithLegacyAccountModal = memo(
                 <>
                   <div className={signingRawMessageCardClassName}>
                     <div className="flex gap-2">
-                      <Info aria-hidden className="mt-0.5 size-4 shrink-0 text-text-secondary" />
-                      <p className="text-sm leading-5 text-text-secondary">{t('feature.browser.rawMessageNotReadableCaption')}</p>
+                      <Info aria-hidden className="mt-0.5 size-4 shrink-0 text-fg-secondary" />
+                      <p className="text-sm leading-5 text-fg-secondary">{t('feature.browser.rawMessageNotReadableCaption')}</p>
                     </div>
-                    <div className="border-t border-general-border" role="separator" />
+                    <div className="border-t border-stroke-primary" role="separator" />
                     <div className="flex items-start justify-between gap-3">
-                      <span className="text-base leading-6 text-text-secondary">{t('feature.browser.account')}</span>
-                      <span className="max-w-[65%] truncate font-mono text-base leading-6 text-text-primary">{address}</span>
+                      <span className="text-base leading-6 text-fg-secondary">{t('feature.browser.account')}</span>
+                      <span className="max-w-[65%] truncate font-mono text-base leading-6 text-fg-primary">{address}</span>
                     </div>
                     {hasNetworkInfo ? (
                       <div className="flex items-start justify-between gap-3">
-                        <span className="text-base leading-6 text-text-secondary">{t('feature.browser.network')}</span>
+                        <span className="text-base leading-6 text-fg-secondary">{t('feature.browser.network')}</span>
                         <div className="flex max-w-[65%] min-w-0 items-center justify-end gap-2">
-                          <span className="truncate text-right text-base leading-6 text-text-primary">{networkLabel}</span>
+                          <span className="truncate text-end text-base leading-6 text-fg-primary">{networkLabel}</span>
                         </div>
                       </div>
                     ) : null}
@@ -220,11 +192,11 @@ export const SignRawWithLegacyAccountModal = memo(
                   </div>
                 </>
               ) : (
-                <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-8 overflow-y-auto pt-14 pr-1">
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-8 overflow-y-auto pe-1 pt-14">
                   <SigningAccountDetailsSection label={t('feature.browser.accountAddress')} address={address} />
                   <section className="flex flex-col gap-3">
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-base leading-6 text-text-secondary">{t('common.label.message')}</span>
+                      <span className="text-base leading-6 text-fg-secondary">{t('common.label.message')}</span>
                       <Copy value={message}>
                         <Button type="button" variant="ghost" size="icon" aria-label={t('feature.browser.copyMessage')}>
                           <CopyIcon className="size-4" />
@@ -249,8 +221,8 @@ export const SignRawWithLegacyAccountModal = memo(
               />
             ) : null}
           </div>
-        </Dialog.Content>
-      </Dialog>
+        )}
+      </SSODialog.Root>
     );
   },
 );

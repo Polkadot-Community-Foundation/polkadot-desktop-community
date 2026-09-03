@@ -164,7 +164,8 @@ export function buildMenuTemplate(window: BrowserWindow | null): Menu {
       submenu: [
         { label: 'New Tab', accelerator: 'CmdOrCtrl+T', click: () => send('tab:new') },
         { label: 'Close Tab', accelerator: 'CmdOrCtrl+W', click: () => send('tab:close') },
-        { label: 'Focus Address Bar', accelerator: 'CmdOrCtrl+L', click: () => send('address-bar:focus') },
+        // Opens the input surface, not a field — the address bar is a button now.
+        { label: 'Search or Enter Address', accelerator: 'CmdOrCtrl+L', click: () => send('address-bar:focus') },
         {
           id: 'tab:add-to-dashboard',
           label: 'Add to Dashboard',

@@ -12,17 +12,9 @@ import { type MessageContent, ChatMessage as ChatMessageCodec } from '@novasamat
 import { type Encryption } from '@novasamatech/statement-store';
 import { type CodecType } from 'scale-ts';
 
-import { type EnvironmentId, environmentUseCase } from '@/domains/application';
-
 import { pushNotificationService } from './service';
 
 type MessageContentType = CodecType<typeof MessageContent>;
-
-const VOIP_CONTENT_TAGS = new Set(['dataChannelOffer', 'dataChannelAnswer', 'dataChannelCandidates']);
-
-async function getPushNotifyUrl(environmentId: EnvironmentId): Promise<string> {
-  return `${(await environmentUseCase.getById(environmentId)).backendUrl}/api/v1/notify`;
-}
 
 export type SendPushNotificationParams = {
   deviceToken: string;
@@ -34,14 +26,18 @@ export type SendPushNotificationParams = {
   messageId: string;
   timestamp: number;
   content: MessageContentType;
-  environmentId: EnvironmentId;
+  /** Identity-backend root; the caller resolves it, so this gateway stays environment-free. */
+  backendUrl: string;
+  /** APNs topic for iOS peers. Ignored for Android. */
+  iosBundleId: string;
 };
 
 /**
  * Send a push notification to the peer's device. Fire-and-forget.
  *
+ * 0. Drop contents the peer cannot present as a notification
  * 1. SCALE-encode the ChatMessage
- * 2. Encrypt with the session's AES-256-GCM encryption
+ * 2. Encrypt with the session's ChaCha20-Poly1305 encryption
  * 3. POST to the push backend
  */
 async function sendPushNotification(params: SendPushNotificationParams): Promise<void> {
@@ -55,10 +51,14 @@ async function sendPushNotification(params: SendPushNotificationParams): Promise
     messageId,
     timestamp,
     content,
-    environmentId,
+    backendUrl,
+    iosBundleId,
   } = params;
 
-  const environment = await environmentUseCase.getById(environmentId);
+  // The gate sits here rather than at the call site: every send path is a peer of this one, and a
+  // non-notifiable content reaching the backend surfaces on the peer as an "Unsupported message"
+  // banner (iOS `NewMessageHandler` has no silent branch), not as a dropped push.
+  if (!pushNotificationService.isNotifiableContent(content.tag)) return;
 
   try {
     // 1. Compute pushId
@@ -85,7 +85,7 @@ async function sendPushNotification(params: SendPushNotificationParams): Promise
       deviceToken: platformToken,
       pushId: pushNotificationService.bytesToHexString(pushId),
       message: pushNotificationService.bytesToHexString(encryptResult.value),
-      voip: VOIP_CONTENT_TAGS.has(content.tag),
+      voip: pushNotificationService.isVoIPContent(content.tag),
     };
 
     // iOS needs platform + bundlerId (APNs topic) for the backend to route via APNs.
@@ -93,13 +93,13 @@ async function sendPushNotification(params: SendPushNotificationParams): Promise
     // Mirrors iOS APNSClientService's NotifyRequestParameters.
     if (peerPlatform === 'iOS') {
       body['platform'] = 'ios';
-      body['bundlerId'] = environment.iosBundleId;
+      body['bundlerId'] = iosBundleId;
     } else if (peerPlatform === 'Android') {
       body['platform'] = 'android';
     }
 
     // 5. POST (fire-and-forget) — use Electron main process to bypass CORS
-    const url = `${environment.backendUrl}/api/v1/notify`;
+    const url = `${backendUrl}/api/v1/notify`;
     const bodyStr = JSON.stringify(body);
 
     let status: number;
@@ -129,6 +129,5 @@ async function sendPushNotification(params: SendPushNotificationParams): Promise
 }
 
 export const pushNotificationGateway = {
-  getPushNotifyUrl,
   sendPushNotification,
 };

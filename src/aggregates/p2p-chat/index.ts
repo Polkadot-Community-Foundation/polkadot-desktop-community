@@ -6,6 +6,7 @@ export {
   useDeclineRequest,
   useP2PChatManager,
   useP2PSessions,
+  useRevealRequest,
   useSearchPeers,
   useSendChatRequest,
 } from './hooks';

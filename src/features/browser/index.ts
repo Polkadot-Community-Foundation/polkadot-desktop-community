@@ -4,6 +4,7 @@ export {
   focusAddressBarSideEffect,
   openDotNsUrlSideEffect,
   productAddToDashboardSideEffect,
+  resolveAddressBarProductIconTransformer,
   tabContentSlot,
   tabHoverSlot,
 } from './di';

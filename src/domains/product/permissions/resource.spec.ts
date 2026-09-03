@@ -30,7 +30,7 @@ describe('deleteProductPermissions', () => {
   });
 
   it('deletes rows stored under any raw variant of the product id', async () => {
-    await deleteProductPermissions('localhost:5173.dot');
+    await deleteProductPermissions('localhost:5173.dot', '.dot');
 
     expect(deleteFn).toHaveBeenCalledTimes(1);
     const predicate = vi.mocked(productPermissionsDatabase.table.filter).mock.calls[0]![0]!;
@@ -39,7 +39,7 @@ describe('deleteProductPermissions', () => {
   });
 
   it('leaves rows of other products alone', async () => {
-    await deleteProductPermissions('app.dot');
+    await deleteProductPermissions('app.dot', '.dot');
 
     const predicate = vi.mocked(productPermissionsDatabase.table.filter).mock.calls[0]![0]!;
     expect(predicate(makeRow('other.dot'))).toBe(false);

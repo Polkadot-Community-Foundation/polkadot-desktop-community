@@ -1,18 +1,18 @@
 import { type AppListing } from '@parity/browse-sdk';
 
 import { createQueryResource } from '@/shared/resource';
-import { environmentUseCase } from '@/domains/application';
 
 import { browseGateway } from './gateway';
 
-type PublishedWidgetsParams = {
+type PublishedListingsParams = {
   environmentId: string;
+  genesisHash: string;
 };
 
-export const publishedWidgetListingsResource = createQueryResource<PublishedWidgetsParams>({
+export const publishedWidgetListingsResource = createQueryResource<PublishedListingsParams>({
   key: ({ environmentId }) => `published-widgets:${environmentId}`,
 })
-  .request<AppListing[]>(() => browseGateway.listPublishedWidgets())
+  .request<AppListing[]>(({ genesisHash }) => browseGateway.listPublishedWidgets(genesisHash))
   .timeout(30_000)
   .cache<AppListing[]>({
     initial: [],
@@ -21,6 +21,14 @@ export const publishedWidgetListingsResource = createQueryResource<PublishedWidg
   })
   .build();
 
-export const publishedWidgetListingsParams = async (): Promise<PublishedWidgetsParams> => ({
-  environmentId: (await environmentUseCase.getActive()).id,
-});
+export const publishedAppListingsResource = createQueryResource<PublishedListingsParams>({
+  key: ({ environmentId }) => `published-apps:${environmentId}`,
+})
+  .request<AppListing[]>(({ genesisHash }) => browseGateway.listPublishedApps(genesisHash))
+  .timeout(30_000)
+  .cache<AppListing[]>({
+    initial: [],
+    map: (_cache, response) => response,
+    staleAfter: 60_000,
+  })
+  .build();

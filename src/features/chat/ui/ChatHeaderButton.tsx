@@ -23,12 +23,16 @@ export const ChatHeaderButton = () => {
   return (
     <div className="inline-flex items-center" data-testid={TEST_IDS.quickChatButton}>
       <QuickChat open={isOpen} onOpenChange={setIsOpen}>
-        <HeaderButton variant="icon" active={isOpen}>
+        {/* The icon is the whole button, so without a label the button is
+            anonymous to a screen reader. The dot needs `role` for its own label
+            to apply at all — `aria-label` on a bare span is ignored. */}
+        <HeaderButton variant="icon" active={isOpen} ariaLabel={t('feature.chat.quickChat')}>
           <ChatBubbleIcon className={chatIconClassName} aria-hidden />
           {totalUnread > 0 && (
             <span
+              role="status"
               aria-label={t('feature.chat.unreadMessagesAria')}
-              className="absolute top-[5px] right-[5px] block size-2.5 rounded-full border border-bg-surface-container bg-fg-success"
+              className="absolute end-1.25 top-1.25 block size-2.5 rounded-full border border-bg-surface-container bg-fg-success"
             />
           )}
         </HeaderButton>

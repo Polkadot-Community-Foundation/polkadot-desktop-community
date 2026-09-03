@@ -27,13 +27,12 @@ export { accountService } from './account/service';
 
 export type { ArchiveContent } from './ipfs/types';
 export { ipfsService } from './ipfs/service';
-export { ipfsGateway } from './ipfs/gateway';
+export { ipfsUseCase } from './$usecase/ipfs';
 export { useIpfsRawData } from './ipfs/hooks';
 export { ipfsRawResource } from './ipfs/resource';
 
 export type { CustomChainEntry, CustomChainsRecord, DiscoveredChain } from './custom-chain/types';
 export { customChainService } from './custom-chain/service';
-export { customChainGateway } from './custom-chain/gateway';
 export { useAllChainsMap, useCustomChains, useCustomChainsMap, useRemoveCustomChain } from './custom-chain/hooks';
 export { type AddCustomChainResult, customChainUseCase } from './$usecase/customChain';
 export { useDiscoverAndAddChain } from './$usecase/customChain.hooks';

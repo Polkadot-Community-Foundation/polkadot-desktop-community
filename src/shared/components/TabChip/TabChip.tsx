@@ -6,7 +6,7 @@ import { cnTw } from '@/shared/utils';
 // renderers (browser/chat/dashboard/settings) class their icon the same way before
 // handing it to <TabChip /> — icons are arbitrary nodes (SVG, lucide, ProductIcon),
 // so the caller owns the className rather than TabChip cloning it on.
-export const tabIconClassName = 'size-4 shrink-0 text-fg-primary';
+export const tabIconClassName = 'size-4 shrink-0 rounded-sm text-fg-primary';
 
 type Props = {
   // Always-shown leading icon (real product / section icon).

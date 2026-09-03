@@ -32,6 +32,48 @@ export async function attachFailureScreenshot(context: ElectronAppContext, testI
   }
 }
 
+// A two-client chat scenario runs for minutes and the app is chatty; keep the
+// tail rather than the head — the throw we're chasing is always at the end.
+const CONSOLE_TAIL_LINES = 2_000;
+
+/**
+ * Start buffering the renderer's console output and uncaught errors, and return
+ * a reader for what has accumulated.
+ *
+ * Playwright reports a failed step's locator state but nothing the app itself
+ * logged, so an app-level rejection (`console.error` in a catch, an unhandled
+ * page error) leaves no trace in the run — the UI shows its friendly copy and
+ * the cause is gone. Pair with `attachFailureConsole` at teardown.
+ */
+export function recordRendererConsole(context: ElectronAppContext): () => string {
+  const lines: string[] = [];
+
+  const push = (line: string) => {
+    lines.push(line);
+    if (lines.length > CONSOLE_TAIL_LINES) lines.shift();
+  };
+
+  context.window.on('console', message => push(`[${message.type()}] ${message.text()}`));
+  context.window.on('pageerror', error => push(`[pageerror] ${error.stack ?? error.message}`));
+
+  return () => lines.join('\n');
+}
+
+/**
+ * Attach the buffered renderer console to the Allure result when the test has
+ * failed. No-op when nothing was logged.
+ */
+export async function attachFailureConsole(readConsole: () => string, testInfo: TestInfo, label: string): Promise<void> {
+  if (testInfo.status === testInfo.expectedStatus) return;
+
+  const body = readConsole();
+  if (!body) return;
+
+  await testInfo
+    .attach(`${label}-console`, { body, contentType: 'text/plain' })
+    .catch(err => console.warn('[CONSOLE] attach failed:', errorMessage(err)));
+}
+
 /**
  * Attach the recorded `.webm` video to the Allure result.
  *

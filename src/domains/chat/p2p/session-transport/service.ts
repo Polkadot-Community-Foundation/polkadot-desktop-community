@@ -4,11 +4,19 @@
  * The SDK side speaks the discriminated union of `MessageContent` codec
  * shapes (one nested in `ChatMessage.versioned.value`). The UI/domain side
  * uses the flatter `MessageContent` type from `chat/session/types`. These
- * mappers translate both directions so the manager and outbox layers don't
- * need to handle codec specifics.
+ * mappers translate both directions so the manager doesn't need to handle
+ * codec specifics.
+ *
+ * Also home to the identity-channel event interpretation at the bottom of the file —
+ * the same kind of stateless mapping over an already-decoded entity.
  */
 
+import { ChatMessage as ChatMessageCodec } from '@novasamatech/host-chat/codec/message';
+import { type CodecType } from 'scale-ts';
+
 import { type FileMeta, type MessageContent } from '../../session/types';
+
+import { type IdentityChannelEvent } from './types';
 
 const isReplyValue = (v: unknown): v is { messageId: string; ownContent: { text?: string | null } } =>
   typeof v === 'object' && v !== null && 'messageId' in v && 'ownContent' in v;
@@ -97,10 +105,12 @@ const isSendValue = (
   extrinsicHash?: Uint8Array;
 } => typeof v === 'object' && v !== null && 'amount' in v;
 
-const isOfferValue = (v: unknown): v is { purpose: 'AUDIO_CALL' | 'VIDEO_CALL' | { tag: 'AUDIO_CALL' | 'VIDEO_CALL' } } =>
+const isOfferValue = (
+  v: unknown,
+): v is { purpose: 'AUDIO_CALL' | 'VIDEO_CALL' | { tag: 'AUDIO_CALL' | 'VIDEO_CALL' }; sdp?: Uint8Array } =>
   typeof v === 'object' && v !== null && 'purpose' in v;
 
-const isOfferRefValue = (v: unknown): v is { offerMessageId: string } =>
+const isOfferRefValue = (v: unknown): v is { offerMessageId: string; sdp?: Uint8Array } =>
   typeof v === 'object' && v !== null && 'offerMessageId' in v;
 
 // The SCALE `Status` codec decodes a variant either as a bare tag string or
@@ -219,15 +229,28 @@ const mapSdkContent = (content: { tag: string; value: unknown }): MessageContent
       if (!isOfferValue(content.value)) return null;
       const purpose = extractCallPurpose(content.value.purpose);
       if (!purpose) return null;
-      return { type: 'callSignal', signal: 'offer', purpose };
+      const offerSdp = content.value.sdp instanceof Uint8Array ? content.value.sdp : undefined;
+      return { type: 'callSignal', signal: 'offer', purpose, ...(offerSdp !== undefined && { sdp: offerSdp }) };
     }
     case 'dataChannelAnswer': {
       if (!isOfferRefValue(content.value)) return null;
-      return { type: 'callSignal', signal: 'answer', offerMessageId: content.value.offerMessageId };
+      const answerSdp = content.value.sdp instanceof Uint8Array ? content.value.sdp : undefined;
+      return {
+        type: 'callSignal',
+        signal: 'answer',
+        offerMessageId: content.value.offerMessageId,
+        ...(answerSdp !== undefined && { sdp: answerSdp }),
+      };
     }
     case 'dataChannelIceCandidate': {
       if (!isOfferRefValue(content.value)) return null;
-      return { type: 'callSignal', signal: 'ice', offerMessageId: content.value.offerMessageId };
+      const iceSdp = content.value.sdp instanceof Uint8Array ? content.value.sdp : undefined;
+      return {
+        type: 'callSignal',
+        signal: 'ice',
+        offerMessageId: content.value.offerMessageId,
+        ...(iceSdp !== undefined && { sdp: iceSdp }),
+      };
     }
     case 'dataChannelClosed': {
       if (!isOfferRefValue(content.value)) return null;
@@ -291,17 +314,108 @@ const mapUiContentToSdk = (content: MessageContent, defaultNodeEndpoint = ''): {
         tag: 'edit',
         value: { messageId: content.messageId, newContent: { text: content.newContent.text, attachments: undefined } },
       };
-    // Desktop never initiates transfers or calls — both render-only.
+    // Desktop never initiates transfers.
     case 'transfer':
-    case 'callSignal':
       return null;
+    case 'callSignal': {
+      const { signal } = content;
+      if (signal === 'offer') {
+        return {
+          tag: 'dataChannelOffer',
+          value: {
+            sdp: content.sdp ?? new Uint8Array(),
+            purpose: content.purpose === 'video' ? 'VIDEO_CALL' : 'AUDIO_CALL',
+          },
+        };
+      }
+      if (signal === 'answer') {
+        return {
+          tag: 'dataChannelAnswer',
+          value: { offerMessageId: content.offerMessageId ?? '', sdp: content.sdp ?? new Uint8Array() },
+        };
+      }
+      if (signal === 'ice') {
+        return {
+          tag: 'dataChannelIceCandidate',
+          value: { offerMessageId: content.offerMessageId ?? '', sdp: content.sdp ?? new Uint8Array() },
+        };
+      }
+      // signal === 'closed'
+      return { tag: 'dataChannelClosed', value: { offerMessageId: content.offerMessageId ?? '' } };
+    }
     default:
       return null;
   }
 };
 
+// ── Identity-channel events ─────────────────────────────────────────────
+// A few content variants travel between user identities rather than devices; these
+// map a decoded `ChatMessage` to the events the manager acts on. Shared by the
+// session-backed channel and the byte-level decoder.
+
+function toIdentityChannelEvents(msg: CodecType<typeof ChatMessageCodec>): IdentityChannelEvent[] {
+  const acceptedAt = Number(msg.timestamp);
+  const content = msg.versioned.value;
+
+  if (content.tag === 'deviceChatAccepted') {
+    return [
+      {
+        tag: 'acceptSignal',
+        signal: { requestId: content.value.requestId, acceptorDevice: content.value.device, acceptedAt },
+      },
+    ];
+  }
+
+  if (content.tag === 'chatAccepted') {
+    // Android-legacy single-device accept (index 14, no DeviceInfo on the wire).
+    // Dropped intentionally: accepting it would force the matcher into the
+    // identity-conflated fallback (synthetic device keyed by peer's identity sr25519),
+    // which makes the peer unable to decrypt subsequent V2 sends (bug #9,
+    // blocked-on-Android). Better to leave the local outgoing request visibly stuck on
+    // 'pending' than to flip it to 'accepted' and then silently drop every message.
+    console.warn(
+      '[identity-channel] dropping Android-legacy chatAccepted @14 (requestId=%s) — peer must emit deviceChatAccepted @20',
+      content.value.messageId,
+    );
+
+    return [];
+  }
+
+  if (content.tag === 'deviceAdded') {
+    return [
+      {
+        tag: 'deviceAdded',
+        statementAccountId: content.value.statementAccountId,
+        encryptionPublicKey: content.value.encryptionPublicKey,
+      },
+    ];
+  }
+
+  if (content.tag === 'deviceRemoved') {
+    return [{ tag: 'deviceRemoved', statementAccountId: content.value.statementAccountId }];
+  }
+
+  return [];
+}
+
+/** Byte-level entry point, for callers holding an encoded `ChatMessage`. */
+function decodeEventsFromChatMessage(msgBytes: Uint8Array): IdentityChannelEvent[] {
+  let msg: CodecType<typeof ChatMessageCodec>;
+  try {
+    msg = ChatMessageCodec.dec(msgBytes);
+  } catch (e) {
+    console.warn('[identity-channel] ChatMessage decode failed: %s', String(e));
+
+    return [];
+  }
+
+  return toIdentityChannelEvents(msg);
+}
+
 export const chatContentService = {
   mapFileMeta,
   mapSdkContent,
   mapUiContentToSdk,
+  toIdentityChannelEvents,
+  decodeEventsFromChatMessage,
 };

@@ -12,7 +12,7 @@ Analytics, logging, and error tracking don't block user interaction. Load them a
 **Incorrect (blocks initial bundle):**
 
 ```tsx
-import { Analytics } from 'some-analytics-library'
+import { Analytics } from 'some-analytics-library';
 
 export default function RootLayout({ children }) {
   return (
@@ -22,18 +22,16 @@ export default function RootLayout({ children }) {
         <Analytics />
       </body>
     </html>
-  )
+  );
 }
 ```
 
 **Correct (loads after hydration):**
 
 ```tsx
-import { lazy } from 'react'
+import { lazy } from 'react';
 
-const Analytics = lazy(
-  () => import('some-analytics-library').then(m => m.Analytics),
-)
+const Analytics = lazy(() => import('some-analytics-library').then(m => m.Analytics));
 
 export default function RootLayout({ children }) {
   return (
@@ -43,6 +41,6 @@ export default function RootLayout({ children }) {
         <Analytics />
       </body>
     </html>
-  )
+  );
 }
 ```

@@ -1,12 +1,13 @@
+import { toastError } from '@novasamatech/tr-ui';
 import { MessageCircle } from 'lucide-react';
 import { useCallback } from 'react';
 
 import { useTranslation } from '@/shared/translation';
 import { useProductRooms } from '@/domains/chat';
-import { useDisplayedProduct } from '@/domains/product';
+import { useCommitProductByIdentifier, useDisplayedProduct } from '@/domains/product';
 import { MenuItem } from '@/features/product-actions-menu';
+import { useOpenChatTab } from '../hooks/useOpenChatTab';
 import { useOpenProductChatRoom } from '../hooks/useOpenProductChatRoom';
-import { openProceedInChatDialog } from '../state/proceedInChatDialog';
 
 type Props = {
   productId: string;
@@ -18,6 +19,8 @@ export const ProceedInChatMenuItem = ({ productId, closeMenu }: Props) => {
   const { data: product } = useDisplayedProduct(productId);
   const { data: persistedRooms } = useProductRooms(productId);
   const openChatRoom = useOpenProductChatRoom();
+  const openChatTab = useOpenChatTab();
+  const { run: commitProduct } = useCommitProductByIdentifier();
 
   const supportsChat = product?.executables.worker?.includes?.chat === true;
 
@@ -27,11 +30,25 @@ export const ProceedInChatMenuItem = ({ productId, closeMenu }: Props) => {
     const existingRoom = persistedRooms.at(0);
     if (existingRoom) {
       openChatRoom(existingRoom.sessionId);
+
       return;
     }
 
-    openProceedInChatDialog(productId);
-  }, [closeMenu, persistedRooms, openChatRoom, productId]);
+    // Navigate first: committing is a chain round-trip, and the room only appears
+    // once the product's worker has booted and declared it. The roomId belongs to
+    // the worker, so the host cannot create the room itself — committing is what
+    // makes WorkersManager mount that worker.
+    openChatTab();
+
+    const failed = () => toastError({ title: t('feature.chat.proceedInChat.toast.errorTitle') });
+
+    commitProduct(productId).subscribe({
+      next: committed => {
+        if (!committed) failed();
+      },
+      error: failed,
+    });
+  }, [closeMenu, persistedRooms, openChatRoom, openChatTab, commitProduct, productId, t]);
 
   if (!supportsChat) return null;
 

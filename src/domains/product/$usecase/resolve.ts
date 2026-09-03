@@ -1,13 +1,13 @@
-import { namehash } from 'viem';
-
-import { type HexString } from '@/shared/types';
-import { dotNsGateway } from '../dotns/gateway';
+import { environmentUseCase } from '@/domains/application';
 import { dotNsService } from '../dotns/service';
-import { EXECUTABLE_KINDS, EXECUTABLE_TEXT_RECORD_KEY, MANIFEST_TEXT_RECORD_KEY } from '../product/manifest/constants';
-import { manifestService } from '../product/manifest/service';
-import { type RootManifest } from '../product/manifest/types';
+import { EXECUTABLE_KINDS } from '../product/manifest/constants';
+import { readFreshExecutable } from '../product/manifest/resource';
+import { type Executable } from '../product/manifest/types';
 import { type PersistedProduct, productDb } from '../product/repository';
+import { readProductFromChain } from '../product/resource';
 import { type Product } from '../product/types';
+
+import { dotNsUseCase } from './dotns';
 
 // How many unpinned products `reconcileUnpinnedProducts` re-resolves concurrently.
 // Each row is ~10 RPC reads, so this caps the launch-time burst on the dotNS endpoint.
@@ -26,80 +26,29 @@ function recordToProduct(record: PersistedProduct): Product {
   };
 }
 
-// Synthetic root for legacy products — no `manifest` record means no metadata,
-// so surface the bare base name and let downstream defaults apply (the icon
-// hook returns null for an empty cid).
-function legacyRoot(baseName: string): RootManifest {
-  return {
-    $v: 1,
-    displayName: baseName,
-    description: '',
-    icon: { cid: '', format: 'png' },
-  };
-}
-
-// Legacy branch (pre-manifest): contenthash on the global content-resolver
-// contract, with no registry resolver indirection — exactly how the app
-// resolved products before manifests. The app archive lives at the bare base,
-// so the synthesized app executable's identifier IS the base name (not
-// `app.<base>` like the manifest branch).
-async function resolveLegacy(baseName: string): Promise<Product | null> {
-  const contenthash = await dotNsGateway.readLegacyContentHash(namehash(baseName));
-  if (!contenthash) return null;
-
-  return manifestService.assembleProduct({
-    baseName,
-    root: legacyRoot(baseName),
-    executables: { app: { kind: 'app', identifier: baseName, appVersion: [0, 0, 0], contenthash } },
-  });
-}
-
-// Manifest branch: metadata in the base `manifest` record; each kind
-// lives at its own `<kind>.<base>` subname with its own resolver + contenthash.
-async function resolveFromManifest(baseName: string, rootText: string, owner: HexString | null): Promise<Product | null> {
-  const root = manifestService.parseRootManifest(rootText);
-  if (!root) return null;
-
-  const entries = await Promise.all(
-    EXECUTABLE_KINDS.map(async kind => {
-      const subnode = namehash(dotNsService.subnameOf(baseName, kind));
-      const subResolver = await dotNsGateway.readResolver(subnode);
-      if (!subResolver) return null;
-      const [text, contenthash] = await Promise.all([
-        dotNsGateway.readText(subResolver, subnode, EXECUTABLE_TEXT_RECORD_KEY),
-        dotNsGateway.readContentHashAt(subResolver, subnode),
-      ]);
-      if (!contenthash) return null;
-      const manifest = manifestService.parseExecutableManifest(text, kind);
-      if (!manifest) return null;
-      return { manifest, contenthash };
-    }),
-  );
-
-  const executables = manifestService.executablesFromManifests(baseName, entries);
-  return manifestService.assembleProduct({ baseName, root, executables, owner: owner ?? undefined });
-}
-
-// Manifest resolution if the base node has a registry resolver carrying a
-// `manifest` record; otherwise legacy (contenthash on the global content resolver, no
-// registry entry required). The registry lookup gates only the manifest path —
-// legacy products predate it, so a missing resolver must NOT block resolution.
-// Null only when neither path finds anything. The canonical chain-resolve
-// primitive — exposed on `resolveProductUseCase`, not as a bare export, so
-// other use cases reach it through the group surface.
+// The canonical chain-resolve primitive: resolve the active environment, then read.
+// Exposed on `resolveProductUseCase`, not as a bare export, so other use cases reach
+// it through the group surface.
+//
+// Deliberately UNCACHED — it does not go through `chainResolveResource`. That cache
+// holds only *uncommitted* resolutions; `reconcileUnpinnedProducts` below re-resolves
+// *committed* rows, so routing this through the resource would put committed products
+// into that cache and break the invariant that the two stores cannot diverge.
 async function fetchProductFromChain(baseName: string): Promise<Product | null> {
-  const node = namehash(baseName);
-  const resolver = await dotNsGateway.readResolver(node);
+  const env = await environmentUseCase.getActive();
 
-  if (resolver) {
-    const [rootText, owner] = await Promise.all([
-      dotNsGateway.readText(resolver, node, MANIFEST_TEXT_RECORD_KEY),
-      dotNsGateway.readOwner(node).catch(() => null),
-    ]);
-    if (rootText) return resolveFromManifest(baseName, rootText, owner);
-  }
+  return readProductFromChain(env, baseName);
+}
 
-  return resolveLegacy(baseName);
+// Re-resolve one already-frozen executable's current on-chain state. Shared by
+// update-detection (`liveExecutableResource`) and the per-modality re-pin
+// (`commitment.ts`) so a shown update row is ALWAYS applicable (null ⇒ no row AND
+// no apply). Resolves the active environment; the chain read itself is the resource
+// module's, so the re-pin path shares one implementation with the cached read.
+async function resolveFreshExecutable(baseName: string, executable: Executable): Promise<Executable | null> {
+  const env = await environmentUseCase.getActive();
+
+  return readFreshExecutable(env, baseName, executable);
 }
 
 // Imperative blend read: the Product for an identifier, preferring the committed
@@ -108,7 +57,7 @@ async function fetchProductFromChain(baseName: string): Promise<Product | null> 
 // run on its own trigger; the React equivalent of this read is
 // `useDisplayedProduct`.) For non-React callers that need the value once, on demand.
 async function resolveProduct(identifier: string): Promise<Product | null> {
-  const baseName = dotNsService.baseNameOf(identifier);
+  const baseName = dotNsService.baseNameOf(identifier, await dotNsUseCase.getActiveTld());
 
   const stored = await productDb.getByBaseName(baseName);
   if (stored.isOk() && stored.value) return recordToProduct(stored.value);
@@ -176,4 +125,5 @@ export const resolveProductUseCase = {
   resolveProduct,
   fetchProductFromChain,
   reconcileUnpinnedProducts,
+  resolveFreshExecutable,
 };

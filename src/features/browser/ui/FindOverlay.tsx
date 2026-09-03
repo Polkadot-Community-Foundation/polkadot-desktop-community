@@ -55,7 +55,7 @@ export const FindOverlay = ({ tabId }: Props) => {
   return (
     <div
       data-testid={TEST_IDS.findBar}
-      className="animate-find-bar-in absolute top-3 right-3 z-50 flex h-8 items-center gap-2 rounded-lg border border-border-primary bg-bg-surface-nested px-3 shadow-md"
+      className="animate-find-bar-in absolute end-3 top-3 z-50 flex h-8 items-center gap-2 rounded-lg border border-stroke-primary bg-bg-surface-nested px-3 shadow-md"
       style={{ appRegion: 'no-drag' }}
     >
       <Search className="size-5 shrink-0 text-fg-secondary" aria-hidden />
@@ -85,13 +85,13 @@ export const FindOverlay = ({ tabId }: Props) => {
       </span>
 
       <div className="flex shrink-0 items-center gap-1">
-        {/* Fixed-width, right-aligned counter keeps the bar from resizing between
+        {/* Fixed-width, end-aligned counter keeps the bar from resizing between
             states (e.g. "3/12" vs "0/0"). Numeric, per the design — no wide
             "No results" label. */}
         <span
           data-testid={TEST_IDS.findCount}
           title={noResults ? t('feature.browser.findNoResults') : undefined}
-          className="w-14 text-right text-sm text-fg-primary tabular-nums"
+          className="w-14 text-end text-sm text-fg-primary tabular-nums"
         >
           {hasQuery ? t('feature.browser.findCount', { current: session.activeMatchOrdinal, total: session.matches }) : null}
         </span>
@@ -111,7 +111,7 @@ export const FindOverlay = ({ tabId }: Props) => {
         </div>
 
         <FindButton testId={TEST_IDS.findClose} ariaLabel={t('feature.browser.findClose')} onClick={close}>
-          <X className="size-[18px]" aria-hidden />
+          <X className="size-4.5" aria-hidden />
         </FindButton>
       </div>
     </div>

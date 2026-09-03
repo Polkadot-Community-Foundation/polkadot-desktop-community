@@ -1,11 +1,6 @@
 import { type PappAdapter, type UserSession } from '@novasamatech/host-papp';
 
-import {
-  type DeviceIdentity,
-  type UserIdentity,
-  deriveEncryptionPublicKey,
-  deriveStatementAccountPublicKey,
-} from '@/domains/device';
+import { type DeviceIdentity, type UserIdentity, deviceIdentityService } from '@/domains/device';
 import { userIdentity$ } from '@/domains/sso';
 
 import { ensurePappProvider } from './provider';
@@ -33,12 +28,12 @@ export const loadDeviceIdentity = async (): Promise<DeviceIdentity | null> => {
   if (!secrets) return null;
   return {
     // host-papp's `ssSecret` IS the 64-byte expanded sr25519 secret our
-    // `DeviceIdentity` calls `statementAccountSeed`; `encrSecret` is the P-256
+    // `DeviceIdentity` calls `statementAccountSeed`; `encrSecret` is the X25519
     // encryption private key.
     statementAccountSeed: secrets.ssSecret,
-    statementAccountPublicKey: deriveStatementAccountPublicKey(secrets.ssSecret),
+    statementAccountPublicKey: deviceIdentityService.deriveStatementAccountPublicKey(secrets.ssSecret),
     encryptionPrivateKey: secrets.encrSecret,
-    encryptionPublicKey: deriveEncryptionPublicKey(secrets.encrSecret),
+    encryptionPublicKey: deviceIdentityService.deriveEncryptionPublicKey(secrets.encrSecret),
   };
 };
 
@@ -60,7 +55,7 @@ export const loadUserIdentity = async (): Promise<UserIdentity | null> => {
     // (pre-v0.2.1); normalise that back to null so product soft-derivation
     // degrades gracefully rather than deriving from zeros.
     rootSr25519PublicKey: root && !isAllZero(root) ? root : null,
-    // The peer device's P-256 encryption key, persisted by the SDK as
+    // The peer device's X25519 encryption key, persisted by the SDK as
     // `deviceEncPubKey`. NOT `remoteAccount.publicKey` — that field holds the
     // 32-byte SSO ECDH shared secret, which device-sync would reject as a
     // public key.

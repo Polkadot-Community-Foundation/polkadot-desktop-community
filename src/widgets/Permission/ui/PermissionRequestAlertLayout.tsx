@@ -2,7 +2,8 @@ import { Dialog, ProductHeader } from '@novasamatech/tr-ui';
 import { type AnimationEvent, type ReactNode } from 'react';
 
 import { useTranslation } from '@/shared/translation';
-import { useDisplayedProduct, useProductHeaderProps } from '@/domains/product';
+import { useDisplayedProduct } from '@/domains/product';
+import { useProductHeaderProps } from '@/widgets/ProductHeader';
 
 type Props = {
   open: boolean;
@@ -69,7 +70,7 @@ export const PermissionRequestAlertLayout = ({
             <p className="text-xs leading-4 font-normal text-fg-secondary">
               {t('feature.productPermissions.permissionRequest.domainsLabel')}
             </p>
-            <div className="flex min-h-9 w-full flex-col rounded-lg border border-border-primary bg-bg-surface-nested p-3">
+            <div className="flex min-h-9 w-full flex-col rounded-lg border border-stroke-primary bg-bg-surface-nested p-3">
               {urlLines.map((line, index) => (
                 <p key={index} className="mb-0 text-sm leading-5 font-normal break-all text-fg-primary">
                   {line}

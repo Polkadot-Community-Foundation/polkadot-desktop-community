@@ -3,10 +3,12 @@ import Dexie, { type Table, type Transaction } from 'dexie';
 import {
   type AliasPermissionRow,
   type DashboardLayoutRow,
+  type DeclinedUpdateRow,
   type ProductExecutableCacheRow,
   type ProductLocalStorageRow,
   type ProductPermissionsRow,
   type ProductRow,
+  type ProductSubtreeRow,
 } from './types';
 
 export const APP_DB_NAME = 'polkadot-desktop-app-v1';
@@ -48,6 +50,15 @@ const dexie = new Dexie(APP_DB_NAME);
 dexie.version(1).stores(SCHEMA_V1);
 // Indexes are unchanged across v1 → v2, so no .stores() call — only the upgrade fn.
 dexie.version(2).upgrade(migrateProductPermissionsToV2);
+// v3: additive store for per-(product,kind,version) update declines. Keyed by
+// contenthash so a NEWER version (new contenthash → new key) re-surfaces after a
+// decline. No .upgrade() fn needed — a brand-new store has nothing to migrate.
+dexie.version(3).stores({ declinedUpdates: 'key, baseName' });
+// v4: additive store for the per-(session, product) subtree key fetched from the
+// paired device (RFC-0022). Keyed `${sessionId}:${productId}` so a re-pair cannot
+// serve the previous pairing's key. No .upgrade() fn — a brand-new store has
+// nothing to migrate.
+dexie.version(4).stores({ productSubtrees: 'key, sessionId, productId' });
 
 export const appDatabase = dexie;
 
@@ -58,6 +69,8 @@ export const database = {
   productLocalStorage: dexie.table<ProductLocalStorageRow, string>('productLocalStorage'),
   productPermissions: dexie.table<ProductPermissionsRow, string>('productPermissions'),
   productExecutableCache: dexie.table<ProductExecutableCacheRow, string>('productExecutableCache'),
+  declinedUpdates: dexie.table<DeclinedUpdateRow, string>('declinedUpdates'),
+  productSubtrees: dexie.table<ProductSubtreeRow, string>('productSubtrees'),
 };
 
 export type AppTable<T> = Table<T, string>;

@@ -361,6 +361,56 @@ describe('useRead — pending lifecycle', () => {
 
     await waitFor(() => expect(result.current.pending).toBe(false));
   });
+
+  // The read starts in an effect, i.e. after commit. Params flipping from null to
+  // non-null therefore produces one render where nothing has started yet — and a
+  // consumer reading `pending: false` + no data there sees "settled with nothing".
+  // `result.current` can't catch it (rerender is act-wrapped, so effects have
+  // already flushed by the time it returns), hence the per-render capture.
+  it('never reports settled between params becoming non-null and the read starting', () => {
+    const fn = vi.fn(() => new Promise<string>(() => {})); // never settles
+    const initialNullParams: { params: Nullable<{ id: number }> } = { params: null };
+    const seen: boolean[] = [];
+    const { rerender } = renderHook(
+      ({ params }: { params: Nullable<{ id: number }> }) => {
+        const state = useRead(fn, { params });
+        seen.push(state.pending);
+
+        return state;
+      },
+      { initialProps: initialNullParams },
+    );
+
+    // `pending: false` is correct while params are null — only what follows the flip matters.
+    seen.length = 0;
+    rerender({ params: { id: 1 } });
+
+    expect(seen).not.toContain(false);
+  });
+
+  it('settles a resource source once its read completes', async () => {
+    const resource = createQueryResource<{ id: number }>({ key: ({ id }) => `settle-${id}` })
+      .request<string>(async () => 'value')
+      .cache<Record<string, string>>({ initial: {}, map: (cache, value, { id }) => ({ ...cache, [`settle-${id}`]: value }) })
+      .build();
+
+    const { result } = renderHook(() => useRead(resource, { params: { id: 1 }, defaultValue: null }));
+
+    await waitFor(() => expect(result.current.pending).toBe(false));
+  });
+
+  it('returns to settled when params go back to null', async () => {
+    const fn = vi.fn().mockResolvedValue('x');
+    const initialParams: { params: Nullable<{ id: number }> } = { params: { id: 1 } };
+    const { result, rerender } = renderHook(({ params }: { params: Nullable<{ id: number }> }) => useRead(fn, { params }), {
+      initialProps: initialParams,
+    });
+
+    await waitFor(() => expect(result.current.pending).toBe(false));
+    rerender({ params: null });
+
+    expect(result.current.pending).toBe(false);
+  });
 });
 
 describe('useRead — custom key', () => {

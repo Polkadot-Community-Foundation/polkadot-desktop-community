@@ -27,6 +27,42 @@ export function createOnRateLimited(productId: string, getProductName: () => str
   };
 }
 
+// Tracks producer subscriptions opened inside a host-container subscribe
+// handler. The container's subscription slot only restores its default handler
+// on teardown — it never runs the producer unsub the handler returns — and
+// `transport.destroy()` doesn't drain active subscriptions. So a producer can
+// keep emitting after the container is disposed and call send() on a disposed
+// transport, which throws. The transport fans one slot handler out across every
+// concurrent subscription (one per requestId), so a scope tracks N unsubs.
+//
+// Usage inside a useEffect: return `scope.track(producerUnsub)` from the
+// subscribe handler, guard the emission callback with `if (scope.disposed)
+// return`, and call `scope.dispose()` in the effect cleanup.
+export function createSubscriptionScope() {
+  const cleanups = new Set<VoidFunction>();
+  let disposed = false;
+
+  return {
+    get disposed() {
+      return disposed;
+    },
+    track(unsubscribe: VoidFunction): VoidFunction {
+      const cleanup = () => {
+        cleanups.delete(cleanup);
+        unsubscribe();
+      };
+      cleanups.add(cleanup);
+      return cleanup;
+    },
+    dispose() {
+      disposed = true;
+      for (const cleanup of [...cleanups]) {
+        cleanup();
+      }
+    },
+  };
+}
+
 // Sequential papp SSO interactions: one approval modal at a time. Subsequent
 // requests queue behind the active one. Callers pass an AbortSignal so an
 // unmount during a hung interaction rejects every queued/active task and any

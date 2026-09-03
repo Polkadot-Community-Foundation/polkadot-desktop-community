@@ -1,25 +1,17 @@
-import { p256 } from '@noble/curves/nist.js';
+import { x25519 } from '@noble/curves/ed25519.js';
 import { createEncryption } from '@novasamatech/statement-store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { type Environment, environmentUseCase } from '@/domains/application';
 import { p2pService } from '../service';
 import { type P2PRoom } from '../types';
 
 import { pushNotificationGateway } from './gateway';
 import { pushNotificationService } from './service';
 
-// `environmentUseCase.getById` now assembles the Environment from Remote Config;
-// stub it with synthetic values, so these unit tests don't depend on a live RC fetch.
+// Plain caller-supplied values — the gateway takes backendUrl/iosBundleId as parameters,
+// so nothing here has to stub the environment use case or a Remote Config fetch.
 const IDENTITY_BACKEND = 'https://alpha-identity.example';
 const IOS_BUNDLE = 'com.example.app';
-
-beforeEach(() => {
-  vi.spyOn(environmentUseCase, 'getById').mockImplementation(id =>
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- partial Environment; the push path only reads backendUrl + iosBundleId
-    Promise.resolve({ id, backendUrl: IDENTITY_BACKEND, iosBundleId: IOS_BUNDLE } as Environment),
-  );
-});
 
 const ALICE_ACCOUNT_ID = new Uint8Array(32).fill(0xaa);
 const BOB_ACCOUNT_ID = new Uint8Array(32).fill(0xbb);
@@ -27,8 +19,8 @@ const BOB_ACCOUNT_ID = new Uint8Array(32).fill(0xbb);
 const ALICE_PRIV = new Uint8Array(32).fill(0x11);
 const BOB_PRIV = new Uint8Array(32).fill(0x22);
 
-const alice = { chatP256PrivateKey: ALICE_PRIV, chatP256PublicKey: p256.getPublicKey(ALICE_PRIV, false) };
-const bob = { chatP256PrivateKey: BOB_PRIV, chatP256PublicKey: p256.getPublicKey(BOB_PRIV, false) };
+const alice = { chatPrivateKey: ALICE_PRIV, chatPublicKey: x25519.getPublicKey(ALICE_PRIV) };
+const bob = { chatPrivateKey: BOB_PRIV, chatPublicKey: x25519.getPublicKey(BOB_PRIV) };
 
 describe('P2PRoom token fields', () => {
   it('accepts optional peerPushToken and peerPlatform', () => {
@@ -36,7 +28,6 @@ describe('P2PRoom token fields', () => {
       sessionId: 'peer-1',
       peerId: 'peer-1',
       peerUsername: 'alice',
-      peerP256PublicKey: '0x01',
       userId: 'me',
       createdAt: Date.now(),
       peerPushToken: 'abc123',
@@ -50,31 +41,68 @@ describe('P2PRoom token fields', () => {
 
 describe('computePushId', () => {
   it('returns a 32-byte Uint8Array', () => {
-    const sharedSecret = p2pService.computeSharedSecret(alice.chatP256PrivateKey, bob.chatP256PublicKey);
+    const sharedSecret = p2pService.computeSharedSecret(alice.chatPrivateKey, bob.chatPublicKey);
     const pushId = pushNotificationService.computePushId(sharedSecret, ALICE_ACCOUNT_ID, BOB_ACCOUNT_ID);
     expect(pushId).toBeInstanceOf(Uint8Array);
     expect(pushId).toHaveLength(32);
   });
 
   it('produces deterministic output for same inputs', () => {
-    const sharedSecret = p2pService.computeSharedSecret(alice.chatP256PrivateKey, bob.chatP256PublicKey);
+    const sharedSecret = p2pService.computeSharedSecret(alice.chatPrivateKey, bob.chatPublicKey);
     const pushId1 = pushNotificationService.computePushId(sharedSecret, ALICE_ACCOUNT_ID, BOB_ACCOUNT_ID);
     const pushId2 = pushNotificationService.computePushId(sharedSecret, ALICE_ACCOUNT_ID, BOB_ACCOUNT_ID);
     expect(pushId1).toEqual(pushId2);
   });
 
   it('produces different output when account order is swapped', () => {
-    const sharedSecret = p2pService.computeSharedSecret(alice.chatP256PrivateKey, bob.chatP256PublicKey);
+    const sharedSecret = p2pService.computeSharedSecret(alice.chatPrivateKey, bob.chatPublicKey);
     const pushIdAB = pushNotificationService.computePushId(sharedSecret, ALICE_ACCOUNT_ID, BOB_ACCOUNT_ID);
     const pushIdBA = pushNotificationService.computePushId(sharedSecret, BOB_ACCOUNT_ID, ALICE_ACCOUNT_ID);
     expect(pushIdAB).not.toEqual(pushIdBA);
   });
 });
 
-describe('getPushNotifyUrl', () => {
-  it('builds the notify URL from the Remote Config identity backend', async () => {
-    await expect(pushNotificationGateway.getPushNotifyUrl('alpha')).resolves.toBe(`${IDENTITY_BACKEND}/api/v1/notify`);
-    await expect(pushNotificationGateway.getPushNotifyUrl('beta')).resolves.toBe(`${IDENTITY_BACKEND}/api/v1/notify`);
+describe('content predicates', () => {
+  // Mirrors iOS `Chat.RemoteMessage.supportsNotification()`; keep both lists in step with it.
+  it.each([
+    'text',
+    'richText',
+    'send',
+    'coinagePayment',
+    'contactAdded',
+    'leftChat',
+    'reply',
+    'reacted',
+    'edit',
+    'chatAccepted',
+    'deviceChatAccepted',
+    'dataChannelOffer',
+  ])('treats %s as notifiable', tag => {
+    expect(pushNotificationService.isNotifiableContent(tag)).toBe(true);
+  });
+
+  it.each([
+    'token',
+    'reactionRemoved',
+    'dataChannelAnswer',
+    'dataChannelIceCandidate',
+    'dataChannelClosed',
+    'deviceAdded',
+    'deviceRemoved',
+  ])('treats %s as non-notifiable', tag => {
+    expect(pushNotificationService.isNotifiableContent(tag)).toBe(false);
+  });
+
+  it('fails closed on an unrecognised tag', () => {
+    expect(pushNotificationService.isNotifiableContent('somethingNewOnTheWire')).toBe(false);
+  });
+
+  // iOS reports every VoIP push to CallKit as an incoming call, so only the offer may carry it.
+  it('marks only a call offer as VoIP', () => {
+    expect(pushNotificationService.isVoIPContent('dataChannelOffer')).toBe(true);
+    expect(pushNotificationService.isVoIPContent('dataChannelAnswer')).toBe(false);
+    expect(pushNotificationService.isVoIPContent('dataChannelIceCandidate')).toBe(false);
+    expect(pushNotificationService.isVoIPContent('dataChannelClosed')).toBe(false);
   });
 });
 
@@ -116,7 +144,7 @@ describe('sendPushNotification', () => {
   });
 
   it('sends POST request with correct body fields', async () => {
-    const sharedSecret = p2pService.computeSharedSecret(alice.chatP256PrivateKey, bob.chatP256PublicKey);
+    const sharedSecret = p2pService.computeSharedSecret(alice.chatPrivateKey, bob.chatPublicKey);
     const encryption = createEncryption(sharedSecret);
 
     await pushNotificationGateway.sendPushNotification({
@@ -129,7 +157,8 @@ describe('sendPushNotification', () => {
       messageId: 'msg-1',
       timestamp: 1000,
       content: { tag: 'text' as const, value: 'Hello!' },
-      environmentId: 'alpha',
+      backendUrl: IDENTITY_BACKEND,
+      iosBundleId: IOS_BUNDLE,
     });
 
     expect(fetch).toHaveBeenCalledOnce();
@@ -148,7 +177,7 @@ describe('sendPushNotification', () => {
   });
 
   it('includes platform and bundlerId for iOS peers', async () => {
-    const sharedSecret = p2pService.computeSharedSecret(alice.chatP256PrivateKey, bob.chatP256PublicKey);
+    const sharedSecret = p2pService.computeSharedSecret(alice.chatPrivateKey, bob.chatPublicKey);
     const encryption = createEncryption(sharedSecret);
 
     await pushNotificationGateway.sendPushNotification({
@@ -161,7 +190,8 @@ describe('sendPushNotification', () => {
       messageId: 'msg-ios',
       timestamp: 1000,
       content: { tag: 'text' as const, value: 'Hello!' },
-      environmentId: 'beta',
+      backendUrl: IDENTITY_BACKEND,
+      iosBundleId: IOS_BUNDLE,
     });
 
     const body = JSON.parse(String(vi.mocked(fetch).mock.calls[0]![1]?.body));
@@ -170,7 +200,7 @@ describe('sendPushNotification', () => {
   });
 
   it('converts Android device token from hex to UTF-8 string and sets platform', async () => {
-    const sharedSecret = p2pService.computeSharedSecret(alice.chatP256PrivateKey, bob.chatP256PublicKey);
+    const sharedSecret = p2pService.computeSharedSecret(alice.chatPrivateKey, bob.chatPublicKey);
     const encryption = createEncryption(sharedSecret);
     const fcmToken = 'cFcmToken123';
     const hexToken = Array.from(new TextEncoder().encode(fcmToken))
@@ -187,7 +217,8 @@ describe('sendPushNotification', () => {
       messageId: 'msg-android',
       timestamp: 1000,
       content: { tag: 'text' as const, value: 'Hello!' },
-      environmentId: 'alpha',
+      backendUrl: IDENTITY_BACKEND,
+      iosBundleId: IOS_BUNDLE,
     });
 
     const body = JSON.parse(String(vi.mocked(fetch).mock.calls[0]![1]?.body));
@@ -196,8 +227,37 @@ describe('sendPushNotification', () => {
     expect(body.bundlerId).toBeUndefined();
   });
 
+  // iOS `NewMessageHandler` throws `unsupportedMessage` for every content its extension cannot
+  // present, and renders an "Unsupported message" banner from the catch. Call signalling travels as
+  // ordinary chat messages, so without this gate a single desktop-initiated call banners the peer
+  // once per ICE batch, once for the answer and once for the hang-up.
+  it.each(['dataChannelIceCandidate', 'dataChannelAnswer', 'dataChannelClosed', 'token', 'deviceAdded', 'deviceRemoved'])(
+    'sends no request for non-notifiable %s content',
+    async tag => {
+      const sharedSecret = p2pService.computeSharedSecret(alice.chatPrivateKey, bob.chatPublicKey);
+      const encryption = createEncryption(sharedSecret);
+
+      await pushNotificationGateway.sendPushNotification({
+        deviceToken: 'abc123token',
+        peerPlatform: 'iOS',
+        sharedSecret,
+        encryption,
+        localAccountId: ALICE_ACCOUNT_ID,
+        remoteAccountId: BOB_ACCOUNT_ID,
+        messageId: `msg-${tag}`,
+        timestamp: 1000,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/consistent-type-assertions -- the point of the case is a tag the notifiable set rejects
+        content: { tag, value: {} } as any,
+        backendUrl: IDENTITY_BACKEND,
+        iosBundleId: IOS_BUNDLE,
+      });
+
+      expect(fetch).not.toHaveBeenCalled();
+    },
+  );
+
   it('sets voip to true for callOffer content', async () => {
-    const sharedSecret = p2pService.computeSharedSecret(alice.chatP256PrivateKey, bob.chatP256PublicKey);
+    const sharedSecret = p2pService.computeSharedSecret(alice.chatPrivateKey, bob.chatPublicKey);
     const encryption = createEncryption(sharedSecret);
 
     await pushNotificationGateway.sendPushNotification({
@@ -210,7 +270,8 @@ describe('sendPushNotification', () => {
       messageId: 'msg-2',
       timestamp: 1000,
       content: { tag: 'dataChannelOffer' as const, value: { sdp: new Uint8Array(), purpose: 'AUDIO_CALL' as const } },
-      environmentId: 'beta',
+      backendUrl: IDENTITY_BACKEND,
+      iosBundleId: IOS_BUNDLE,
     });
 
     const body = JSON.parse(String(vi.mocked(fetch).mock.calls[0]![1]?.body));
@@ -220,7 +281,7 @@ describe('sendPushNotification', () => {
   it('does not throw when fetch fails', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')));
 
-    const sharedSecret = p2pService.computeSharedSecret(alice.chatP256PrivateKey, bob.chatP256PublicKey);
+    const sharedSecret = p2pService.computeSharedSecret(alice.chatPrivateKey, bob.chatPublicKey);
     const encryption = createEncryption(sharedSecret);
 
     await pushNotificationGateway.sendPushNotification({
@@ -233,7 +294,8 @@ describe('sendPushNotification', () => {
       messageId: 'msg-3',
       timestamp: 1000,
       content: { tag: 'text' as const, value: 'Hello!' },
-      environmentId: 'beta',
+      backendUrl: IDENTITY_BACKEND,
+      iosBundleId: IOS_BUNDLE,
     });
   });
 });

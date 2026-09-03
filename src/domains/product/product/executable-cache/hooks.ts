@@ -25,3 +25,10 @@ export const useOfflineCacheStatus = (baseName: Nullable<string>): ExecutableCac
     return 'ready';
   }, [entries]);
 };
+
+// Total cached size for a product, summed across executable kinds. 0 when
+// nothing is cached. Pure derivation over the cache index, next to the read.
+export const useOfflineCacheSize = (baseName: Nullable<string>): number => {
+  const entries = useExecutableCacheEntries(baseName);
+  return useMemo(() => entries.reduce((sum, e) => sum + e.sizeBytes, 0), [entries]);
+};

@@ -13,6 +13,9 @@ const MIME_TYPES: Record<string, string> = {
   '.jpg': 'image/jpeg',
 };
 
+/** How long a `__slow`-marked request is held before responding (loading-bar tests). */
+const SLOW_RESPONSE_MS = 3_000;
+
 export type StaticServer = {
   port: number;
   origin: string;
@@ -23,16 +26,33 @@ export type StaticServer = {
  * Start a tiny static file server for the given directory on an ephemeral port.
  * Unknown paths fall back to `index.html` so the fixture can behave as an SPA
  * that owns client-side routing — matching how real products get served.
+ *
+ * `replacements` are substituted into `index.html` at startup, for values the
+ * fixture cannot know when it is written — the network's dotNS suffix, which
+ * decides whether the host treats a `polkadot://` href as a cross-product link.
  */
-export async function startStaticServer(rootDir: string): Promise<StaticServer> {
+export async function startStaticServer(rootDir: string, replacements: Record<string, string> = {}): Promise<StaticServer> {
   const root = resolve(rootDir);
   const indexPath = join(root, 'index.html');
-  const indexBody = await readFile(indexPath);
+  const indexBody = Buffer.from(
+    Object.entries(replacements).reduce(
+      (html, [token, value]) => html.replaceAll(token, value),
+      await readFile(indexPath, 'utf8'),
+    ),
+  );
 
   const server: Server = createServer(async (req, res) => {
     try {
       const url = new URL(req.url ?? '/', 'http://localhost');
       const requested = decodeURIComponent(url.pathname);
+
+      // Deterministic slow-load hook: any path containing the `__slow` marker is
+      // held for SLOW_RESPONSE_MS before responding, so a test can observe the
+      // address bar's loading-progress bar while a product resolves.
+      if (requested.includes('__slow')) {
+        await new Promise<void>(resolveDelay => setTimeout(resolveDelay, SLOW_RESPONSE_MS));
+      }
+
       const candidate = normalize(join(root, requested));
 
       if (!candidate.startsWith(root)) {
@@ -49,6 +69,12 @@ export async function startStaticServer(rootDir: string): Promise<StaticServer> 
       try {
         const info = await stat(candidate);
         if (info.isDirectory()) {
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.end(indexBody);
+          return;
+        }
+        // Serve the substituted copy, never the file on disk.
+        if (candidate === indexPath) {
           res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
           res.end(indexBody);
           return;

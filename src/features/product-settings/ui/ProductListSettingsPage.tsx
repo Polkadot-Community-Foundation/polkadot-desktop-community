@@ -5,11 +5,19 @@ import { useMemo, useState } from 'react';
 
 import { ListItem, SettingsList } from '@/shared/components';
 import { useTranslation } from '@/shared/translation';
-import { type Icon, isLocalhostUrl, productService, useDisplayedProduct, useInteractedProducts } from '@/domains/product';
+import {
+  type Icon,
+  isLocalhostUrl,
+  productService,
+  useDisplayedProduct,
+  useDotNsTld,
+  useInteractedProducts,
+} from '@/domains/product';
 import { ProductIcon } from '@/widgets/ProductIcon';
 
 export const ProductListSettingsPage = () => {
   const { t } = useTranslation();
+  const { data: tld } = useDotNsTld();
   const navigate = useNavigate();
   const { data: interacted } = useInteractedProducts();
   const [query, setQuery] = useState('');
@@ -39,8 +47,8 @@ export const ProductListSettingsPage = () => {
         <Input
           type="search"
           value={query}
-          placeholder={t('feature.productSettings.searchPlaceholder')}
-          aria-label={t('feature.productSettings.searchAriaLabel')}
+          placeholder={t('feature.productSettings.searchPlaceholder', { tld })}
+          aria-label={t('feature.productSettings.searchAriaLabel', { tld })}
           onChange={event => setQuery(event.target.value)}
         />
 

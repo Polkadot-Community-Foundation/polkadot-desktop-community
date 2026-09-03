@@ -1,7 +1,7 @@
 import { arrayMove } from '@dnd-kit/sortable';
 import { nanoid } from 'nanoid';
 
-import { createEventStream, createState, persistLocalStorage } from '@/shared/rxstate';
+import { combine, createEventStream, createState, persistLocalStorage } from '@/shared/rxstate';
 
 import { removeAliveTab, touchAliveTab } from './alive';
 
@@ -54,6 +54,19 @@ persistLocalStorage(selectedTabId$, {
     return typeof value === 'string' ? value : null;
   },
 });
+
+// The currently selected tab (or null). Derived so consumers that only care
+// about the selection don't re-render on unrelated tab-list churn: add/remove/
+// reorder and other-tab edits preserve the selected tab's object identity, so
+// `combine`'s default reference-equality dedupe drops them and re-emits only
+// when the selection changes or the selected tab itself is replaced.
+// Combine over the `.value$` streams, not the `RxState` wrappers: RxJS `from()`
+// (inside `combineLatest`) does not recognize the wrapper's `Symbol.observable`
+// interop in the bundled build and throws "invalid object where a stream was
+// expected". `.value$` is the plain Observable every other consumer subscribes to.
+const selectedTab$ = combine([selectedTabId$.value$, tabs$.value$], ([id, tabs]) =>
+  id ? (tabs.find(tab => tab.id === id) ?? null) : null,
+);
 
 const selectTab = (id: string | null) => {
   selectedTabId$.set(id);
@@ -130,6 +143,7 @@ const replaceAliveTabId = (oldId: string, newId: string) => {
 export const browserTabs = {
   tabs$,
   selectedTabId$,
+  selectedTab$,
   aliveTabs$,
   sameTabClicked$,
   selectTab,

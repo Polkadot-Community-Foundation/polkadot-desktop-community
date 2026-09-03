@@ -2,13 +2,18 @@ import { type BrowserWindow, app, ipcMain } from 'electron';
 import { default as Store } from 'electron-store';
 import { autoUpdater } from 'electron-updater';
 
-import { ENVIRONMENT } from '../shared/constants/environment';
+import { getAutoUpdateSupported } from '../shared/auto-update';
 import { type UpdateChannel, AUTO_UPDATE_ENABLED, DEFAULT_UPDATE_CHANNEL, UPDATE_CHANNEL } from '../shared/constants/store';
-import { checkAutoUpdateSupported } from '../shared/lib/utils';
 
-// Base URL without channel suffix. Runtime appends `stable/` or `latest/`.
-const UPDATE_SERVER_URL_BASE = process.env['AUTO_UPDATE_URL'] ?? '';
+// A static feed base URL, without the channel suffix the runtime appends. Set = this build reads
+// updates from object storage rather than from GitHub Releases; see config/index.js.
+const AUTO_UPDATE_URL = process.env['AUTO_UPDATE_URL'] ?? '';
+const UPDATE_REPO_OWNER = process.env['UPDATE_REPO_OWNER'] ?? '';
+const UPDATE_REPO_NAME = process.env['UPDATE_REPO_NAME'] ?? '';
 
+// Persisted flag, kept under its original name so builds that already wrote it don't re-run the
+// one-time reset below. The name records when the reset was introduced, not where updates come
+// from; renaming it would replay the reset on every existing install for no benefit.
 const MIGRATED_KEY = 'autoUpdateMigratedToS3';
 
 let mainWindowRef: BrowserWindow | null = null;
@@ -25,23 +30,11 @@ function normalizeChannel(raw: unknown): UpdateChannel {
   return raw === 'experimental' ? 'experimental' : 'stable';
 }
 
-function channelPath(channel: UpdateChannel): string {
-  return channel === 'experimental' ? 'latest/' : 'stable/';
-}
-
-function computeFeedUrl(channel: UpdateChannel): string {
-  const base = UPDATE_SERVER_URL_BASE.endsWith('/') ? UPDATE_SERVER_URL_BASE : `${UPDATE_SERVER_URL_BASE}/`;
-  return `${base}${channelPath(channel)}`;
-}
-
 export function setupAutoUpdater(mainWindow: BrowserWindow | null) {
   mainWindowRef = mainWindow;
-  const isAutoUpdateSupported = checkAutoUpdateSupported();
-  // Without a configured feed URL there is nothing to point the updater at, and
-  // setFeedURL would parse an invalid relative URL and throw during startup. Honor
-  // the documented contract (empty AUTO_UPDATE_URL = auto-update disabled).
-  const hasFeedUrl = UPDATE_SERVER_URL_BASE.trim().length > 0;
-  const isSupported = !ENVIRONMENT.IS_DEV && hasFeedUrl && (isAutoUpdateSupported || app.isPackaged);
+  // Single gate shared with the menu and the renderer. Among other things it requires a configured
+  // update repository — without one there is nothing to point the updater at.
+  const isSupported = getAutoUpdateSupported();
   const store = new Store({
     defaults: {
       [AUTO_UPDATE_ENABLED]: isSupported,
@@ -49,8 +42,9 @@ export function setupAutoUpdater(mainWindow: BrowserWindow | null) {
     },
   });
 
-  // One-time migration: previous builds persisted AUTO_UPDATE_ENABLED as `false`
-  // because BUILD_SOURCE wasn't set. Reset to `true` for S3-enabled builds.
+  // One-time migration: older builds persisted AUTO_UPDATE_ENABLED as `false` because their
+  // build-time gate was off (the v0.6.21/22 IS_DEV regression).
+  // Reset to `true` once this build actually supports auto-update.
   if (isSupported && !store.get(MIGRATED_KEY)) {
     store.set(AUTO_UPDATE_ENABLED, true);
     store.set(MIGRATED_KEY, true);
@@ -58,14 +52,38 @@ export function setupAutoUpdater(mainWindow: BrowserWindow | null) {
 
   const ALLOWED_STORE_KEYS = new Set([AUTO_UPDATE_ENABLED, MIGRATED_KEY, UPDATE_CHANNEL]);
 
-  // Linux arm64 uses a separate metadata file; x64 uses default latest-linux.yml
+  // A channel means a different thing to each provider, so it is resolved per provider rather than
+  // normalised into one shape.
+  //
+  // On a static feed it is a directory: `stable/` and `latest/` are two independently promoted
+  // copies of the metadata, and linux arm64 keeps its own metadata file, named explicitly because
+  // the generic provider does not derive an arch suffix on its own.
+  //
+  // On GitHub Releases it is a release flag: `stable` reads the release marked Latest (what
+  // promote-to-stable sets), `experimental` takes the newest release in the Atom feed, prerelease
+  // or not. No `channel` is passed there — electron-updater already derives the metadata filename
+  // per platform *and* arch (`latest.yml`, `latest-mac.yml`, `latest-linux.yml`,
+  // `latest-linux-arm64.yml`), and anything passed is used as a *prefix* to that suffix, so naming
+  // the arm64 file would ask for `latest-linux-arm64-linux-arm64.yml`.
   const linuxArmChannel = process.platform === 'linux' && process.arch === 'arm64' ? 'latest-linux-arm64' : undefined;
 
-  function applyFeedUrl(channel: UpdateChannel) {
+  function applyUpdateChannel(channel: UpdateChannel) {
+    if (AUTO_UPDATE_URL) {
+      const base = AUTO_UPDATE_URL.endsWith('/') ? AUTO_UPDATE_URL : `${AUTO_UPDATE_URL}/`;
+      autoUpdater.setFeedURL({
+        provider: 'generic',
+        url: `${base}${channel === 'experimental' ? 'latest/' : 'stable/'}`,
+        ...(linuxArmChannel && { channel: linuxArmChannel }),
+      });
+
+      return;
+    }
+
+    autoUpdater.allowPrerelease = channel === 'experimental';
     autoUpdater.setFeedURL({
-      provider: 'generic',
-      url: computeFeedUrl(channel),
-      ...(linuxArmChannel && { channel: linuxArmChannel }),
+      provider: 'github',
+      owner: UPDATE_REPO_OWNER,
+      repo: UPDATE_REPO_NAME,
     });
   }
 
@@ -87,7 +105,7 @@ export function setupAutoUpdater(mainWindow: BrowserWindow | null) {
     if (isSupported && key === UPDATE_CHANNEL) {
       const next = normalizeChannel(value);
       console.info(`[app-updater] Channel changed to "${next}", re-checking for updates.`);
-      applyFeedUrl(next);
+      applyUpdateChannel(next);
       autoUpdater.checkForUpdates().catch(err => {
         console.error('[app-updater] Failed to check for updates after channel change:', err.message);
       });
@@ -96,7 +114,9 @@ export function setupAutoUpdater(mainWindow: BrowserWindow | null) {
 
   ipcMain.handle('app:check-for-updates', () => {
     if (!isSupported) {
-      sendUpdateEvent('update-not-available');
+      // Be honest: this build genuinely cannot self-update. Emitting a distinct signal lets the
+      // renderer say so instead of faking a reassuring "you're up to date".
+      sendUpdateEvent('update-unsupported');
       return;
     }
     autoUpdater.checkForUpdates().catch(err => {
@@ -111,7 +131,7 @@ export function setupAutoUpdater(mainWindow: BrowserWindow | null) {
 
   if (!isSupported) return;
 
-  applyFeedUrl(normalizeChannel(store.get(UPDATE_CHANNEL)));
+  applyUpdateChannel(normalizeChannel(store.get(UPDATE_CHANNEL)));
 
   autoUpdater.autoRunAppAfterInstall = true;
   autoUpdater.autoInstallOnAppQuit = false;

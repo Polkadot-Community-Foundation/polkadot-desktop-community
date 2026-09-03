@@ -19,7 +19,7 @@ export const CloseButton = ({ onClick, size = 'md' }: CloseButtonProps) => {
 
   return (
     <button
-      className={`absolute -top-1 -right-1 z-10 flex items-center justify-center rounded-full bg-white/90 text-gray-500 shadow-md backdrop-blur-sm transition-all hover:scale-110 hover:bg-red-500 hover:text-white ${sizeClasses[size]}`}
+      className={`absolute -end-1 -top-1 z-10 flex items-center justify-center rounded-full bg-bg-surface-container/90 text-fg-tertiary shadow-md backdrop-blur-sm transition-all hover:scale-110 hover:bg-bg-status-error hover:text-fg-static-white ${sizeClasses[size]}`}
       onClick={handleClick}
     >
       <X className="h-3 w-3" />

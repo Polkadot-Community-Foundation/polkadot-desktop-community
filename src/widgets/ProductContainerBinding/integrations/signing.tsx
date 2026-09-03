@@ -14,7 +14,7 @@ import { useTranslation } from '@/shared/translation';
 import { type HexString } from '@/shared/types';
 import { toError } from '@/shared/utils';
 import { accountId, accountService } from '@/domains/network';
-import { dotNsService, productAccountService } from '@/domains/product';
+import { productAccountService, useIsProductIdentifier } from '@/domains/product';
 import { type CreateTransactionResult, type SigningResult } from '../types';
 import { CreateTransactionModal } from '../ui/CreateTransactionModal';
 import { CreateTransactionWithLegacyAccountModal } from '../ui/CreateTransactionWithLegacyAccountModal';
@@ -46,6 +46,10 @@ export function useSigning(container: Container, identifier: string, contextGene
   const confirm = useConfirmation();
   const { session } = useSession();
   const sessionRef = useLooseRef(session);
+  // Through a ref because the handlers below are registered once. The check
+  // itself is settled-gated (`useIsProductIdentifier`): under the TLD fallback it
+  // would reject this network's names and admit another network's.
+  const isProductIdentifierRef = useLooseRef(useIsProductIdentifier());
 
   const [signingErrorState, setSigningErrorState] = useState<SigningErrorState | null>(null);
 
@@ -92,7 +96,7 @@ export function useSigning(container: Container, identifier: string, contextGene
         sLog(id, 'rejected — no active session');
         return err(new SigningErr.Rejected());
       }
-      if (!dotNsService.isProductIdentifier(account[0])) {
+      if (!isProductIdentifierRef()(account[0])) {
         sLog(id, 'permission denied — not a product account', { got: account[0] });
         return err(new SigningErr.PermissionDenied());
       }
@@ -141,13 +145,13 @@ export function useSigning(container: Container, identifier: string, contextGene
       const { signer: rawSigner, genesisHash, callData, extensions, txExtVersion } = params;
       const id = nextSigningId();
       const signer = productAccountService.normalizeProductAccountId(rawSigner);
-      sLog(id, 'handleCreateTransaction invoked', { identifier, signer, genesisHash: toHex(genesisHash) });
+      sLog(id, 'handleCreateTransaction invoked', { identifier, signer, genesisHash });
       const activeSession = sessionRef();
       if (!activeSession) {
         sLog(id, 'rejected — no active session');
         return err(new CreateTransactionErr.Rejected());
       }
-      if (!dotNsService.isProductIdentifier(signer[0])) {
+      if (!isProductIdentifierRef()(signer[0])) {
         sLog(id, 'permission denied — not a product account', { got: signer[0] });
         return err(new CreateTransactionErr.PermissionDenied());
       }
@@ -201,7 +205,7 @@ export function useSigning(container: Container, identifier: string, contextGene
         sLog(id, 'rejected — no active session');
         return err(new SigningErr.Rejected());
       }
-      if (!dotNsService.isProductIdentifier(account[0])) {
+      if (!isProductIdentifierRef()(account[0])) {
         sLog(id, 'permission denied — not a product account', { got: account[0] });
         return err(new SigningErr.PermissionDenied());
       }
@@ -376,7 +380,7 @@ export function useSigning(container: Container, identifier: string, contextGene
         sLog(id, 'handleCreateTransactionWithLegacyAccount invoked', {
           identifier,
           signer: legacyAccountAddress,
-          genesisHash: toHex(genesisHash),
+          genesisHash,
         });
         const activeSession = sessionRef();
         if (!activeSession) {

@@ -7,28 +7,48 @@ import {
 } from '../dashboard-layout/constants';
 import { dashboardLayoutDb } from '../dashboard-layout/repository';
 import { dashboardLayoutService } from '../dashboard-layout/service';
-import { type DashboardCard, type FolderItemPositions } from '../dashboard-layout/types';
+import { type DashboardCard } from '../dashboard-layout/types';
 
-async function addIconToFavorites(iconId: string): Promise<{ ok: boolean; pageIndex?: number }> {
+// Locates a folder card by id across pages, returning the card and its page.
+function findFolderById(pages: DashboardCard[][], folderId: string): { pageIndex: number; item: DashboardCard } | null {
+  for (let pageIndex = 0; pageIndex < pages.length; pageIndex++) {
+    const page = pages[pageIndex] ?? [];
+    const item = page.find(entry => dashboardLayoutService.isFolderCard(entry) && entry.i === folderId);
+    if (item) return { pageIndex, item };
+  }
+  return null;
+}
+
+// Adds an item to a folder's items, seeding the folder card if it does not yet
+// exist. Seeding is only supported for the favourites folder — any other target
+// folder must already exist (a user folder is created by the user, not implied
+// by an add). Rejects when the item is already in the folder.
+async function addItemToFolder(folderId: string, itemId: string): Promise<{ ok: boolean; pageIndex?: number }> {
   const main = await dashboardLayoutDb.getMain();
   if (main.isErr()) return { ok: false };
   const sourcePages = dashboardLayoutService.ensurePages(main.value?.pages ?? null);
 
-  const existing = dashboardLayoutService.findFavoritesFolder(sourcePages);
+  const existing = findFolderById(sourcePages, folderId);
   const existingFolder = existing ? dashboardLayoutService.asFolder(existing.item) : null;
-  if (existingFolder?.items.includes(iconId)) return { ok: false };
+  if (existingFolder?.items.includes(itemId)) return { ok: false };
 
-  const stripped = dashboardLayoutService.stripLegacyTopLevelCardFromPages(sourcePages, iconId);
+  // No folder to seed into and not the favourites folder → nothing to do.
+  if (!existing && folderId !== FAVORITES_FOLDER_ID) return { ok: false };
 
+  // Adding to a folder mutates folder `items` only — it must NOT sweep a
+  // coexisting top-level card of the same id. A product's standalone widget and
+  // its favourites membership are independent placements (symmetric with
+  // `removeItemFromFolder`); stripping here made `browse.dot` — the default
+  // seeded widget whose card id equals its productId — vanish from the dashboard.
   let nextPages: DashboardCard[][];
   let pageIndex: number;
   if (existing && existingFolder) {
     const nextFolder: DashboardCard = {
       ...existing.item,
-      payload: { ...existingFolder, items: [...existingFolder.items, iconId] },
+      payload: { ...existingFolder, items: [...existingFolder.items, itemId] },
     };
-    nextPages = stripped.map((page, pi) =>
-      pi === existing.pageIndex ? page.map(entry => (entry.i === FAVORITES_FOLDER_ID ? nextFolder : entry)) : page,
+    nextPages = sourcePages.map((page, pi) =>
+      pi === existing.pageIndex ? page.map(entry => (entry.i === folderId ? nextFolder : entry)) : page,
     );
     pageIndex = existing.pageIndex;
   } else {
@@ -43,14 +63,18 @@ async function addIconToFavorites(iconId: string): Promise<{ ok: boolean; pageIn
       minH: FOLDER_MIN_HEIGHT,
       maxH: MAX_WIDGET_HEIGHT,
       resizeHandles: [...DEFAULT_RESIZE_HANDLES],
-      payload: { kind: 'folder', items: [iconId] },
+      payload: { kind: 'folder', items: [itemId] },
     };
     const preferred = main.value?.activePageIndex ?? 0;
-    ({ pages: nextPages, pageIndex } = dashboardLayoutService.placeOnPages(stripped, newFolder, preferred));
+    ({ pages: nextPages, pageIndex } = dashboardLayoutService.placeOnPages(sourcePages, newFolder, preferred));
   }
 
   const saveResult = await dashboardLayoutDb.saveMainPages(nextPages, pageIndex);
   return { ok: saveResult.isOk(), pageIndex: saveResult.isOk() ? pageIndex : undefined };
+}
+
+function addToFavorites(itemId: string): Promise<{ ok: boolean; pageIndex?: number }> {
+  return addItemToFolder(FAVORITES_FOLDER_ID, itemId);
 }
 
 async function isIconInFavorites(iconId: string): Promise<boolean> {
@@ -60,7 +84,7 @@ async function isIconInFavorites(iconId: string): Promise<boolean> {
   return dashboardLayoutService.favoriteProductIds(pages).has(iconId);
 }
 
-async function removeIconFromFolder(iconId: string): Promise<boolean> {
+async function removeItemFromFolder(itemId: string): Promise<boolean> {
   const result = await dashboardLayoutDb.getMainPages();
   if (result.isErr() || !result.value) return false;
 
@@ -68,16 +92,13 @@ async function removeIconFromFolder(iconId: string): Promise<boolean> {
   const nextPages = result.value.map(page =>
     page.map(item => {
       const folder = dashboardLayoutService.asFolder(item);
-      if (!folder || !folder.items.includes(iconId)) return item;
+      if (!folder || !folder.items.includes(itemId)) return item;
       changed = true;
-      const positions = { ...folder.positions };
-      delete positions[iconId];
       return {
         ...item,
         payload: {
           ...folder,
-          items: folder.items.filter(id => id !== iconId),
-          positions,
+          items: folder.items.filter(id => id !== itemId),
         },
       };
     }),
@@ -88,36 +109,29 @@ async function removeIconFromFolder(iconId: string): Promise<boolean> {
   return saveResult.isOk();
 }
 
-async function setFolderItemPositions(folderId: string, positions: FolderItemPositions): Promise<boolean> {
+// Reorders a folder's `items` to match `orderedItemIds`. Only the ids present in
+// `orderedItemIds` are reordered — in place, into the slots those ids currently
+// occupy — so items outside the subset (native favourites, a search-hidden set,
+// the overflow beyond a widget's visible cap) keep their slots. `items` order is
+// the folder's only placement, so this is the single write both the Favorites SPA
+// and the Favorites widget use for drag-and-drop.
+async function reorderFolderItems(folderId: string, orderedItemIds: string[]): Promise<boolean> {
   const result = await dashboardLayoutDb.getMainPages();
   if (result.isErr() || !result.value) return false;
 
+  const orderedSet = new Set(orderedItemIds);
   let changed = false;
   const nextPages = result.value.map(page =>
     page.map(item => {
       const folder = dashboardLayoutService.asFolder(item);
       if (!folder || item.i !== folderId) return item;
 
-      const nextPositions: FolderItemPositions = {};
-      for (const id of folder.items) {
-        const position = positions[id];
-        if (position) {
-          nextPositions[id] = position;
-        }
-      }
-
-      const currentPositions = folder.positions ?? {};
-      const hasChanged =
-        Object.keys(nextPositions).length !== Object.keys(currentPositions).length ||
-        Object.entries(nextPositions).some(([id, position]) => {
-          const current = currentPositions[id];
-          return !current || current.x !== position.x || current.y !== position.y;
-        });
-
-      if (!hasChanged) return item;
+      let cursor = 0;
+      const nextItems = folder.items.map(id => (orderedSet.has(id) ? (orderedItemIds[cursor++] ?? id) : id));
+      if (nextItems.every((id, index) => id === folder.items[index])) return item;
 
       changed = true;
-      return { ...item, payload: { ...folder, positions: nextPositions } };
+      return { ...item, payload: { ...folder, items: nextItems } };
     }),
   );
 
@@ -127,8 +141,9 @@ async function setFolderItemPositions(folderId: string, positions: FolderItemPos
 }
 
 export const foldersUseCase = {
-  addIconToFavorites,
+  addItemToFolder,
+  addToFavorites,
   isIconInFavorites,
-  removeIconFromFolder,
-  setFolderItemPositions,
+  removeItemFromFolder,
+  reorderFolderItems,
 };

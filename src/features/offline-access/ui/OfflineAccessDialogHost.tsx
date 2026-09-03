@@ -15,5 +15,13 @@ export const OfflineAccessDialogHost = () => {
       return <RemoveOfflineDialog productId={target.productId} onClose={closeOfflineAccessDialog} />;
     case 'update':
       return <UpdateVersionDialog productId={target.productId} onClose={closeOfflineAccessDialog} />;
+    case 'updateExecutable':
+      return (
+        <UpdateVersionDialog
+          productId={target.productId}
+          executableKind={target.executableKind}
+          onClose={closeOfflineAccessDialog}
+        />
+      );
   }
 };

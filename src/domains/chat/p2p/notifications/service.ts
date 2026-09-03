@@ -5,11 +5,57 @@
  * Mirrors Android's RealPushNotificationHelper / ChatPushTokenUtils.
  */
 
+import { type MessageContent } from '@novasamatech/host-chat/codec/message';
 import { khash } from '@novasamatech/statement-store';
+import { type CodecType } from 'scale-ts';
 
 import { p2pService } from '../service';
 
+type ContentTag = CodecType<typeof MessageContent>['tag'];
+
 const NOTIFICATION_PREFIX = new TextEncoder().encode('notification');
+
+/**
+ * Content tags that warrant a push notification, mirroring iOS
+ * `Chat.RemoteMessage.supportsNotification()` (tag names are the desktop codec's).
+ *
+ * An allowlist, so an unrecognised tag fails closed: the receiver's notification extension has no
+ * silent path — anything it cannot present becomes an "Unsupported message" banner. Call
+ * signalling (`dataChannelAnswer` / `dataChannelIceCandidate` / `dataChannelClosed`), push-token
+ * exchange and device-roster mutations travel as ordinary chat messages and must stay off the push
+ * channel for that reason.
+ *
+ * Typed against the codec's tag union so a renamed or dropped variant breaks the build here rather
+ * than silently turning pushes off for that content; read back as `ReadonlySet<string>` so an
+ * unknown wire tag can still be tested against it.
+ */
+const NOTIFIABLE_CONTENT_TAGS: ReadonlySet<string> = new Set<ContentTag>([
+  'text',
+  'richText',
+  'send',
+  'coinagePayment',
+  'contactAdded',
+  'leftChat',
+  'reply',
+  'reacted',
+  'edit',
+  'chatAccepted',
+  'deviceChatAccepted',
+  'dataChannelOffer',
+]);
+
+function isNotifiableContent(tag: string): boolean {
+  return NOTIFIABLE_CONTENT_TAGS.has(tag);
+}
+
+/**
+ * Only a call offer is a VoIP wake-up. iOS reports every VoIP push to CallKit as an incoming call
+ * (`PushKitService.didReceiveIncomingPushWith`), so flagging any other content makes the peer ring
+ * for a call that is already under way. Matches iOS `isVoIPNotification()`.
+ */
+function isVoIPContent(tag: string): boolean {
+  return tag === ('dataChannelOffer' satisfies ContentTag);
+}
 
 /**
  * Compute push notification ID.
@@ -68,4 +114,6 @@ export const pushNotificationService = {
   computePushId,
   bytesToHexString,
   getPlatformDeviceToken,
+  isNotifiableContent,
+  isVoIPContent,
 };

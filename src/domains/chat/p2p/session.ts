@@ -3,18 +3,15 @@
  * Mirrors product/session.ts but backed by P2P resources and manager.
  */
 
-import { createNanoEvents } from 'nanoevents';
 import { distinctUntilChanged, from, map } from 'rxjs';
 
 import { chatMessageService } from '../session/service';
-import { type ChatMessage, type ChatSession, type MessageContent } from '../session/types';
+import { type ChatSession, type MessageContent } from '../session/types';
 
 import { p2pMessagesResource, p2pRoomsResource } from './resource';
 import { type P2PChatManager, type P2PPeer, type P2PRoom } from './types';
 
 export const createP2PChatSession = (peer: P2PPeer, room: P2PRoom, manager: P2PChatManager): ChatSession => {
-  const events = createNanoEvents<{ userMessage: (message: ChatMessage) => void }>();
-
   // Live-read peerUsername from the room roster so a background refresh
   // (manager.initialize() resolves missing usernames against
   // `Resources.Consumers`) propagates to the chat list + header without
@@ -38,13 +35,7 @@ export const createP2PChatSession = (peer: P2PPeer, room: P2PRoom, manager: P2PC
     map(x => {
       for (let i = x.length - 1; i >= 0; i--) {
         const m = x[i];
-        if (
-          m &&
-          !chatMessageService.isSyncCarrier(m.content) &&
-          m.content.type !== 'reacted' &&
-          m.content.type !== 'reactionRemoved' &&
-          m.content.type !== 'edit'
-        ) {
+        if (m && chatMessageService.isStandaloneMessage(m.content)) {
           return m;
         }
       }
@@ -55,7 +46,10 @@ export const createP2PChatSession = (peer: P2PPeer, room: P2PRoom, manager: P2PC
   const unreadCount = messages.pipe(
     map(x =>
       x.reduce((acc, m) => {
-        if (m.content.type === 'reacted' || m.content.type === 'reactionRemoved') return acc;
+        // Transport-only signals (call answer/ice/closed, device sync rows) and
+        // reactions are not readable messages — counting them leaves a phantom
+        // badge on a room the user has already seen.
+        if (!chatMessageService.isStandaloneMessage(m.content)) return acc;
 
         return acc + (m.status.direction === 'incoming' && m.status.state === 'new' ? 1 : 0);
       }, 0),
@@ -77,21 +71,7 @@ export const createP2PChatSession = (peer: P2PPeer, room: P2PRoom, manager: P2PC
     },
 
     async sendMessage(content: MessageContent) {
-      const result = await manager.sendMessage(room.peerId, content);
-      const message: ChatMessage = {
-        messageId: result.messageId,
-        sessionId: room.sessionId,
-        peer: { type: 'p2p', accountId: room.userId, name: '' },
-        timestamp: Date.now(),
-        content,
-        status: { direction: 'outgoing', state: 'new' },
-      };
-      events.emit('userMessage', message);
-      return result;
-    },
-
-    onUserMessage(callback) {
-      return events.on('userMessage', callback);
+      return manager.sendMessage(room.peerId, content);
     },
 
     async markAsRead() {

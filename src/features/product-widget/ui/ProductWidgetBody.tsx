@@ -1,25 +1,33 @@
 import { memo, useState } from 'react';
 
-import { WidgetLoadingScreen } from '@/shared/components';
+import { WidgetLoadingScreen, WidgetPlaceholder } from '@/shared/components';
 import { useSideEffect } from '@/shared/di';
+import { TEST_IDS } from '@/shared/test-ids';
 import { useTranslation } from '@/shared/translation';
-import { productService, useDisplayedProduct, useExecutableArchive } from '@/domains/product';
+import { type Product, productService } from '@/domains/product';
 import { onProductRefreshRequestedSideEffect } from '@/aggregates/product-loading';
 import { Webview } from '@/widgets/Webview';
+import { useAnnounceWidgetOpen } from '../hooks/useAnnounceWidgetOpen';
 
 type Props = {
   productId: string;
+  // Resolved product + whether its archive loaded + loading, owned by
+  // `ProductWidgetContent` (the single source — it also drives the block pulse
+  // via the chrome's `isLoading`). The webview re-resolves the archive itself,
+  // so the body only needs to know that content exists, not its shape.
+  product: Product | null;
+  hasContent: boolean;
+  pending: boolean;
+  onRemoveCard: VoidFunction;
 };
 
-// The card body for a product widget — resolves the widget executable's
-// archive and mounts a webview against it. The surrounding chrome (topbar,
-// menu, actions) lives in `DashboardCardChrome`; this component is only the
-// body.
-export const ProductWidgetBody = memo(({ productId }: Props) => {
+// The card body for a product widget — mounts a webview against the resolved
+// widget executable's archive. The surrounding chrome (topbar, menu, actions)
+// lives in `DashboardCardChrome`; this component is only the body. Resolution
+// and loading come in as props so there is one source of loading truth.
+export const ProductWidgetBody = memo(({ productId, product, hasContent, pending, onRemoveCard }: Props) => {
   const { t } = useTranslation();
   const [refreshKey, setRefreshKey] = useState(0);
-  const { data: product, pending: productPending } = useDisplayedProduct(productId);
-  const { data: content, pending: executablePending } = useExecutableArchive(product ? { product, kind: 'widget' } : null);
 
   useSideEffect(onProductRefreshRequestedSideEffect, ({ identifier }) => {
     if (productService.refreshTargetIdentifiers(productId, product).has(identifier)) {
@@ -27,18 +35,34 @@ export const ProductWidgetBody = memo(({ productId }: Props) => {
     }
   });
 
-  const pending = productPending || executablePending;
+  useAnnounceWidgetOpen(productId);
 
-  if (!pending && !content) {
+  // When settled (not loading) with no product, the widget was removed on-chain.
+  if (!pending && !product) {
     return (
-      <div className="flex h-full w-full items-center justify-center text-sm text-text-secondary">
-        {t('feature.dashboard.domainNotFound')}
-      </div>
+      <WidgetPlaceholder
+        message={t('feature.dashboard.placeholder.widgetNotFound')}
+        actionLabel={t('feature.dashboard.placeholder.deleteWidget')}
+        onAction={onRemoveCard}
+      />
     );
   }
 
-  if (pending || !content) {
-    return <WidgetLoadingScreen />;
+  if (!pending && !hasContent) {
+    return (
+      <WidgetPlaceholder
+        testId={TEST_IDS.productWidgetNotFound}
+        message={t('feature.dashboard.placeholder.widgetUnavailable')}
+        actionLabel={t('common.action.retry')}
+        onAction={() => void onProductRefreshRequestedSideEffect.apply({ identifier: productId })}
+      />
+    );
+  }
+
+  // Phase-1 loading renders nothing — the whole block pulses via
+  // DashboardCardChrome. The webview `loader` (below) covers phase-2 page load.
+  if (pending) {
+    return null;
   }
 
   return (

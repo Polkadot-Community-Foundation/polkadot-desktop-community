@@ -10,6 +10,9 @@ import { ProductDialogHeader } from '@/widgets/ProductDialogHeader';
 type Props = {
   product: Nullable<Product>;
   requestedIdentifier: string;
+  // RFC-0024: set only when the alias is derived from another product's member key. That is a
+  // fact the stored grant cannot record, so it is named here and "Allow always" is withheld.
+  foreignKeyOwner: Nullable<string>;
   onAllowAlways: VoidFunction;
   onAllowOnce: VoidFunction;
   onDeny: VoidFunction;
@@ -17,7 +20,7 @@ type Props = {
 };
 
 export const AliasPermissionModal = memo(
-  ({ product, requestedIdentifier, onAllowAlways, onAllowOnce, onDeny, onDismiss }: Props) => {
+  ({ product, requestedIdentifier, foreignKeyOwner, onAllowAlways, onAllowOnce, onDeny, onDismiss }: Props) => {
     const { t } = useTranslation();
     return (
       <Dialog
@@ -32,6 +35,7 @@ export const AliasPermissionModal = memo(
           onOpenAutoFocus={event => event.preventDefault()}
           onInteractOutside={event => event.preventDefault()}
         >
+          <div className="contents" data-testid={TEST_IDS.aliasPermissionDialog} />
           <ProductDialogHeader product={product} />
 
           <div className="flex flex-col gap-2 py-3">
@@ -45,11 +49,16 @@ export const AliasPermissionModal = memo(
                 {t('widget.productContainerBinding.aliasPermission.subtitle')}
               </span>
             </Dialog.Description>
+            {foreignKeyOwner ? (
+              <p className="text-sm leading-5 font-normal text-fg-secondary">
+                {t('widget.productContainerBinding.aliasPermission.keyOwner', { keyOwner: foreignKeyOwner })}
+              </p>
+            ) : null}
           </div>
 
-          <div className="flex w-full items-start gap-2 rounded-lg border border-border-primary bg-[#fdfbed] p-3">
-            <AlertTriangle size={20} className="mt-0.5 shrink-0 text-[#f08d1b]" />
-            <p className="text-sm leading-5 font-medium text-[#1c1c1c]">
+          <div className="flex w-full items-start gap-2 rounded-lg border border-stroke-primary bg-bg-status-warning/10 p-3">
+            <AlertTriangle size={20} className="mt-0.5 shrink-0 text-fg-warning" />
+            <p className="text-sm leading-5 font-medium text-fg-primary">
               {t('widget.productContainerBinding.aliasPermission.warning')}
             </p>
           </div>
@@ -61,21 +70,23 @@ export const AliasPermissionModal = memo(
                 </Button>
               </div>
               <div className="min-w-0 flex-1">
-                <Button type="button" variant="outline" fullWidth onClick={onAllowOnce}>
+                <Button type="button" variant={foreignKeyOwner ? 'default' : 'outline'} fullWidth onClick={onAllowOnce}>
                   {t('widget.productContainerBinding.aliasPermission.allowOnce')}
                 </Button>
               </div>
-              <div className="min-w-0 flex-1">
-                <Button
-                  type="button"
-                  variant="default"
-                  fullWidth
-                  data-testid={TEST_IDS.aliasPermissionAllow}
-                  onClick={onAllowAlways}
-                >
-                  {t('widget.productContainerBinding.aliasPermission.allowAlways')}
-                </Button>
-              </div>
+              {foreignKeyOwner ? null : (
+                <div className="min-w-0 flex-1">
+                  <Button
+                    type="button"
+                    variant="default"
+                    fullWidth
+                    data-testid={TEST_IDS.aliasPermissionAllow}
+                    onClick={onAllowAlways}
+                  >
+                    {t('widget.productContainerBinding.aliasPermission.allowAlways')}
+                  </Button>
+                </div>
+              )}
             </div>
           </Dialog.Footer>
         </Dialog.Content>

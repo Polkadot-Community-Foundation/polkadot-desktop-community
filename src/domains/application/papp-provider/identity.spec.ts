@@ -7,8 +7,10 @@ import { ensurePappProvider } from './provider';
 
 // Pure, predictable derivations so the test asserts the SDK→app mapping, not crypto.
 vi.mock('@/domains/device', () => ({
-  deriveStatementAccountPublicKey: () => new Uint8Array([0xaa]),
-  deriveEncryptionPublicKey: () => new Uint8Array([0xbb]),
+  deviceIdentityService: {
+    deriveStatementAccountPublicKey: () => new Uint8Array([0xaa]),
+    deriveEncryptionPublicKey: () => new Uint8Array([0xbb]),
+  },
 }));
 
 const userIdentitySet = vi.fn();

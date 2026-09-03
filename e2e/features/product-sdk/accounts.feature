@@ -2,11 +2,12 @@
 Feature: Accounts
 
   Verify account-related APIs work correctly in a product sandbox
-  using the host-playground.dot test product.
+  using the host-playground test product.
 
-  Scenario: Account APIs work correctly in product sandbox
+  @allure.id:14786
+  Scenario: TC-5.4.1 Account APIs work correctly in product sandbox
     Given the user is authenticated
-    And the test product "host-playground.dot" is opened
+    And the test product "host-playground" is opened
     And the user clicks the "Accounts" tab
     When the user runs "Get Product Account"
     Then the result contains "publicKey"

@@ -47,7 +47,8 @@ export async function provisionRoles(opts: { singletonRoles?: PoolRole[]; pairCo
   const start = Date.now();
 
   console.info(
-    `[SETUP] Provisioning ${singletonRoles.length} singletons (${singletonRoles.join(', ') || '—'}) + ${pairCount} chat pairs on ${BOT_NETWORK}…`,
+    `[SETUP] Provisioning ${singletonRoles.length} singletons (${singletonRoles.join(', ') || '—'}) + ` +
+      `${pairCount} chat pairs on ${BOT_NETWORK}…`,
   );
 
   const singletonTasks = singletonRoles.map(async role => {
@@ -74,7 +75,8 @@ export async function provisionRoles(opts: { singletonRoles?: PoolRole[]; pairCo
   await writePool(merged);
 
   console.info(
-    `[SETUP] Ready in ${Math.round((Date.now() - start) / 1000)}s. Pool now has ${Object.keys(merged.users).length} singletons, ${merged.chatPairs.length} pairs.`,
+    `[SETUP] Ready in ${Math.round((Date.now() - start) / 1000)}s. Pool now has ` +
+      `${Object.keys(merged.users).length} singletons, ${merged.chatPairs.length} pairs.`,
   );
 }
 

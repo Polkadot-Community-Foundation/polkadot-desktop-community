@@ -166,7 +166,14 @@ export function delay(ttl: number): Promise<void> {
 }
 
 export function withTimeout<T>(promise: Promise<T>, ttl: number, fallback: T): Promise<T> {
-  return Promise.race([promise, new Promise<T>(resolve => setTimeout(() => resolve(fallback), ttl))]);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  return Promise.race([
+    promise,
+    new Promise<T>(resolve => {
+      timer = setTimeout(() => resolve(fallback), ttl);
+    }),
+  ]).finally(() => clearTimeout(timer));
 }
 
 /**
@@ -184,4 +191,21 @@ export function* range(from: number, to: number) {
     yield i;
   }
   yield to;
+}
+
+type DisposableLike = { readonly disposed: boolean };
+
+/**
+ * Wrap `fn` so it no-ops (returning `undefined`) once `instance.disposed` is
+ * true. `disposed` is read at call time, so a wrapper created while alive stops
+ * firing the moment the instance is disposed.
+ */
+export function guarded<Args extends unknown[], R>(
+  instance: DisposableLike,
+  fn: (...args: Args) => R,
+): (...args: Args) => R | undefined {
+  return (...args) => {
+    if (instance.disposed) return undefined;
+    return fn(...args);
+  };
 }

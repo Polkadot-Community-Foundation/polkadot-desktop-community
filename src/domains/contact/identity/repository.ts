@@ -1,10 +1,5 @@
 import Dexie, { type Table } from 'dexie';
 
-/* eslint-disable-next-line boundaries/dependencies -- leaf signal module; importing
-   via @/domains/device-sync index would create a cycle (device-sync/applier
-   imports this repository). */
-import { signalLocalChange } from '@/domains/device-sync/localChangeSignal';
-
 import { type Contact } from './types';
 
 /**
@@ -64,7 +59,6 @@ export const contactRepository = {
       await contactDatabase.contacts.put(withTimestamp);
       await contactDatabase.removedContacts.delete(contact.accountId);
     });
-    signalLocalChange();
   },
 
   /** User-initiated removal: drop + write tombstone so sync replicates the deletion to own-devices. */
@@ -73,7 +67,6 @@ export const contactRepository = {
       await contactDatabase.contacts.delete(accountId);
       await contactDatabase.removedContacts.put({ accountId, removedAt: Date.now() });
     });
-    signalLocalChange();
   },
 
   /** Inbound sync removal: drop WITHOUT tombstone so we don't echo the deletion back. */

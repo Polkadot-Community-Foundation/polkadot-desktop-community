@@ -121,8 +121,8 @@ export function resetPermissionToDefault({
 // Rows are keyed by the raw webview identifier, which may differ from the
 // normalized base name callers (e.g. the purge flow) hold — match through
 // `isSameBaseName`, not the primary key.
-export async function deleteProductPermissions(productId: string): Promise<void> {
-  await productPermissionsDatabase.table.filter(row => dotNsService.isSameBaseName(row.productId, productId)).delete();
+export async function deleteProductPermissions(productId: string, tld: string): Promise<void> {
+  await productPermissionsDatabase.table.filter(row => dotNsService.isSameBaseName(row.productId, productId, tld)).delete();
 }
 
 // Session-scoped device-permission grants. "Allow once" must open the native

@@ -6,9 +6,36 @@ name: Release (Paseo / DEV)
 # delivered at runtime from Firebase Remote Config (chains_v2 / dot_ns_config /
 # ipfs_gateway_url / identity_backend_url) — this workflow only bakes the env-only values
 # and the public Firebase client ids, then packages per-OS via electron-builder.
-# BUILD_CHANNEL=dev gives the installers a distinct electron identity
-# (com.polkadot.desktop.dev / "Polkadot Desktop Dev") so they install side-by-side with
-# the prod/summit build (see config/index.js).
+# BUILD_TYPE=dev selects the `*_DEVELOP` application identity
+# (com.polkadot.desktop.dev / "Polkadot Desktop Dev") so the installers land side-by-side
+# with the prod/summit build. The identity itself is supplied by the job `env:` block
+# below, because config/index.js now reads it from process.env and refuses to package
+# without it (`assertPackagingIdentity`).
+#
+# NOTE — this workflow is the ONLY release path in this fork, and it owns the v* tag.
+# Upstream ships two more that also end in a published GitHub Release; both are deleted
+# here rather than carried:
+#
+#   .github/workflows/release-pipeline.yml — also triggered on `push: tags: ['v*']`, so
+#     it would race this workflow to create a Release for the same tag. Worse, it wins
+#     wrongly: with no `github.event.inputs` on a tag push its `env.BUILD_TYPE` falls
+#     through to `dev`, `.github/actions/build-app` maps that to `npm run build:dev` →
+#     `vite --mode development` → `BUILD_MODE=development` → `isProductionBuild()` false,
+#     which renders the onboarding network chooser
+#     (src/features/onboarding/ui/OnboardingScreen.tsx:179) and the onboarding Skip button
+#     (:222 — gated on isProductionBuild() ALONE, so scripts/validate-release-env.mjs's
+#     single-channel guard does not cover it) in a published installer. It also never
+#     invokes that guard at all, and it reads the Firebase/TURN/sandbox config from
+#     `secrets.*` while this repository holds them as repo *Variables*.
+#
+#   .github/workflows/create-release-tag.yml — `schedule: cron '0 16 * * 1-5'`. This
+#     repository is a standalone repo, not a GitHub fork (`"fork": false`), so GitHub does
+#     NOT auto-disable scheduled workflows in it: merged to main, that cron would push a
+#     new v* tag every weekday and publish a GitHub Release off it unattended, and then
+#     `gh workflow run release-pipeline.yml` on top.
+#
+# Releases in this fork are cut by pushing a v* tag by hand. If upstream's pipeline is
+# ever wanted here, reconcile the two paths deliberately — do not restore the files.
 #
 # CONFIG SOURCE — repo Variables & Secrets, NOT a committed file. No .env* is ever
 # committed to this repo (.gitignore blocks it). The runner writes an ephemeral .env
@@ -19,12 +46,20 @@ name: Release (Paseo / DEV)
 # Required repo VARIABLES (non-secret — network + public web-app config):
 #   VITE_ENVIRONMENTS               single-channel Paseo catalog JSON (default+shared+
 #                                   channels:{paseo}); >1 channel FAILS the guard
-#   VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_PROJECT_ID,
-#   VITE_FIREBASE_STORAGE_BUCKET, VITE_FIREBASE_MESSAGING_SENDER_ID, VITE_FIREBASE_APP_ID
+#   VITE_FIREBASE_API_KEY, VITE_FIREBASE_PROJECT_ID, VITE_FIREBASE_APP_ID
+#   VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_STORAGE_BUCKET,
+#   VITE_FIREBASE_MESSAGING_SENDER_ID   (written to .env; read by nothing in src/ or
+#                                        main/ — kept for parity with the web config)
 #   VITE_WEBRTC_TURN_HOST, VITE_WEBRTC_TURN_TTL
 #   SANDBOX_IPFS_ALLOWLIST, SANDBOX_RELAY_ALLOWLIST
-# Optional repo VARIABLES:
-#   AUTO_UPDATE_URL + BUILD_SOURCE (github|s3)   enable the auto-update feed
+# Optional repo VARIABLES (all have a working fallback in the `env:` block below):
+#   BUILD_TYPE (dev|production)
+#   APP_ID, PRODUCT_NAME, APP_NAME                 base packaging identity
+#   APP_ID_DEVELOP, PRODUCT_NAME_DEVELOP, APP_NAME_DEVELOP   BUILD_TYPE=dev identity
+#   UPDATE_REPO_OWNER, UPDATE_REPO_NAME            GitHub auto-update feed
+#   AUTO_UPDATE_URL                 switch the feed to a plain static (S3) feed instead
+#                                   of GitHub Releases. BUILD_SOURCE was REMOVED upstream
+#                                   (replaced by the feed shape above) and is now a no-op.
 # Required SECRETS:
 #   VITE_WEBRTC_TURN_SECRET         TURN static-auth-secret (NOTE: baked into the
 #                                   renderer bundle → present in the shipped binary;
@@ -78,9 +113,58 @@ jobs:
         os: [macos-latest, ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     env:
-      # Distinct electron identity for the public DEV distribution (config/index.js):
-      # com.polkadot.desktop.dev / "Polkadot Desktop Dev", installable beside prod/summit.
-      BUILD_CHANNEL: dev
+      # ── Packaged application identity ────────────────────────────────────────────
+      # Distinct electron identity for the public DEV distribution:
+      # com.polkadot.desktop.dev / "Polkadot Desktop Dev", installable beside the
+      # prod/summit build.
+      #
+      # This used to be a `BUILD_CHANNEL: dev` branch over literals inside
+      # config/index.js. Upstream removed that mechanism (BUILD_CHANNEL has zero hits
+      # in their tree) and made identity pure configuration: config/index.js now reads
+      # APP_ID / PRODUCT_NAME / APP_NAME from process.env, picks the `_DEVELOP` variant
+      # whenever BUILD_TYPE != 'production', and `assertPackagingIdentity()` THROWS at
+      # electron-builder config load if any of the three resolves empty. So the literals
+      # move here — the identity is still pinned by this repository, just at the layer
+      # upstream now reads it from.
+      #
+      # Each falls back to the value that shipped in 0.1.2 when the matching repo
+      # Variable is unset, so packaging cannot hard-fail on a missing Variable and an
+      # existing install slot / userData directory is never orphaned by a typo. Set the
+      # repo Variables to override.
+      BUILD_TYPE: ${{ vars.BUILD_TYPE || 'dev' }}
+      APP_ID_DEVELOP: ${{ vars.APP_ID_DEVELOP || 'com.polkadot.desktop.dev' }}
+      PRODUCT_NAME_DEVELOP: ${{ vars.PRODUCT_NAME_DEVELOP || 'Polkadot Desktop Dev' }}
+      # 🔴 APP_NAME is the packaged `name`, and Electron derives the userData directory
+      # from it (scripts/postbuild.js writes it into the packaged manifest;
+      # app.getName() falls back to `name` because no `productName` is set there). It has
+      # to stay `polkadot-desktop` — that is not a guess:
+      #
+      #   $ node -e '<read package.json out of resources/app.asar>' \
+      #       "Polkadot Desktop Dev-0.1.0-x86_64.AppImage"
+      #   { "name": "polkadot-desktop", ... }        # no productName
+      #   $ ls ~/.config/polkadot-desktop            # exists; …/polkadot-desktop-dev does not
+      #
+      # The shipped builds predate upstream's APP_NAME concept: pre-sync
+      # scripts/postbuild.js never rewrote `name`, so every installed user's profile
+      # lives in `polkadot-desktop` no matter what appId or productName the build used.
+      # Shipping `polkadot-desktop-dev` here would silently start every existing install
+      # from an empty profile — no accounts, no contacts, no chats — with no error and no
+      # migration path. If a second (production) distribution is ever added, give THAT
+      # one a new APP_NAME; do not move this one.
+      APP_NAME_DEVELOP: ${{ vars.APP_NAME_DEVELOP || 'polkadot-desktop' }}
+      # Base identity, used when BUILD_TYPE=production. APP_ID/PRODUCT_NAME are the
+      # pre-sync non-dev branch of config/index.js; APP_NAME is the same directory as
+      # above for the same reason.
+      APP_ID: ${{ vars.APP_ID || 'com.polkadot.desktop' }}
+      PRODUCT_NAME: ${{ vars.PRODUCT_NAME || 'Polkadot Desktop' }}
+      APP_NAME: ${{ vars.APP_NAME || 'polkadot-desktop' }}
+      # ── Auto-update feed ─────────────────────────────────────────────────────────
+      # config/index.js defaults the GitHub update feed to paritytech/polkadot-desktop-
+      # community. Left unset, an installed PCF build would poll Parity's release feed
+      # and be offered Parity's builds. Pin it to whichever repository actually published
+      # this run; the repo Variables override.
+      UPDATE_REPO_OWNER: ${{ vars.UPDATE_REPO_OWNER || github.repository_owner }}
+      UPDATE_REPO_NAME: ${{ vars.UPDATE_REPO_NAME || github.event.repository.name }}
       # NOTE: the VITE_* values are intentionally NOT declared here at job scope. Vite
       # gives process-env vars precedence over the .env file, so a job-level VITE_X set to
       # "" (which is what `${{ vars.X }}` expands to when a variable is unset) would BLANK

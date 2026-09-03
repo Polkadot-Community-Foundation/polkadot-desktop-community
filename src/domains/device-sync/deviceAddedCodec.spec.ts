@@ -6,12 +6,12 @@ import { describe, expect, it } from 'vitest';
 // scenario-3 fix: a sibling device must be able to decode the propagated
 // peer-device addition. Imports only `./codec` (no app graph), so it runs
 // without the full host-papp dependency tree.
-import { SyncEntityCodec } from './codec';
+import { SyncEntityCodec } from './schemas';
 
 describe('deviceAdded wire round-trip (device-sync Messages entity)', () => {
   it('encodes and decodes a Messages entity carrying a deviceAdded chat content', () => {
     const statementAccountId = new Uint8Array(32).fill(0xcd);
-    const encryptionPublicKey = new Uint8Array(65).fill(0xef);
+    const encryptionPublicKey = new Uint8Array(32).fill(0xef);
     const peerId = new Uint8Array(32).fill(0xaa);
 
     const entity = {

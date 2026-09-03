@@ -12,4 +12,8 @@ describe('aliasPermissionSchema', () => {
     const row = { key: 'k', requesterProductId: 'a', requestedContextId: 'b', status: 'granted' };
     expect(v.parse(aliasPermissionSchema, row).status).toBe('granted');
   });
+  it('parses an "ask" row (allow-once persistence)', () => {
+    const row = { key: 'k', requesterProductId: 'a', requestedContextId: 'b', status: 'ask' };
+    expect(v.parse(aliasPermissionSchema, row).status).toBe('ask');
+  });
 });

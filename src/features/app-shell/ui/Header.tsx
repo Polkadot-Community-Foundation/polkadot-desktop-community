@@ -18,6 +18,7 @@ export const Header = memo(() => {
   const isFocused = useWindowFocus();
 
   const tintUnfocused = isMac && !isFocused;
+  const macSpacer = isMac && !isFullscreen;
 
   return (
     // Native OS drag region. Right-clicking it no longer crashes on macOS since
@@ -25,13 +26,18 @@ export const Header = memo(() => {
     <header
       className={cnTw(
         'flex w-full shrink-0 flex-col transition-colors duration-200',
-        tintUnfocused ? 'bg-general-muted dark:bg-bg-surface-container' : 'bg-bg-surface-container',
+        tintUnfocused ? 'bg-bg-surface-nested dark:bg-bg-surface-container' : 'bg-bg-surface-container',
       )}
       style={{ appRegion: 'drag' }}
     >
       <div className="flex h-12 items-center">
-        <div className="flex h-full min-w-0 flex-1 basis-0 items-center border-general-border">
-          {isMac && !isFullscreen ? <div className="pointer-events-none h-full w-[86px]" /> : null}
+        <div className="flex h-full min-w-0 flex-1 basis-0 items-center border-stroke-primary">
+          {/* The macOS traffic lights are OS chrome pinned to the physical top-left; they do not
+              move under `dir="rtl"`. This flex row does, so the spacer that clears them is rendered
+              in whichever track ends up on the physical left — the leading one in LTR, the trailing
+              one in RTL — and hidden in the other. Reserving the space with physical padding on
+              <header> instead would shift the centred address bar in LTR too. */}
+          {macSpacer ? <div className="pointer-events-none h-full w-21.5 rtl:hidden" /> : null}
           <Slot id={topBarLeadingSlot} />
         </div>
         {/* Three tracks: the address bar sits in the centered middle track while
@@ -47,8 +53,11 @@ export const Header = memo(() => {
             <Slot id={topBarCenterTrailingSlot} />
           </div>
         </div>
-        <div className="flex h-full min-w-0 flex-1 basis-0 items-center justify-end gap-1 pr-2">
+        <div className="flex h-full min-w-0 flex-1 basis-0 items-center justify-end gap-1 pe-2">
           <Slot id={topBarTrailingSlot} />
+          {/* Last child, so in RTL — where this track sits on the physical left — it lands against
+              the window edge, under the traffic lights. See the note on the leading track. */}
+          {macSpacer ? <div className="pointer-events-none h-full w-21.5 ltr:hidden" /> : null}
         </div>
       </div>
       <Slot id={tabBarSlot} />

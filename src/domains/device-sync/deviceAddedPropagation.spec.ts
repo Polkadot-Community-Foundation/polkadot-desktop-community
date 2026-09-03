@@ -16,7 +16,7 @@ const DEVICE_ACCOUNT_ID = `0x${'cd'.repeat(32)}`;
 const DEVICE_ENC_PUBKEY = `0x${'ef'.repeat(65)}`;
 
 const ctx: ApplierContext = {
-  resolveConsumerInfo: vi.fn().mockResolvedValue({ chatKey: new Uint8Array(65).fill(0x9a), username: 'alice' }),
+  resolveConsumerInfo: vi.fn().mockResolvedValue({ chatKey: new Uint8Array(32).fill(0x9a), username: 'alice' }),
   ownUserId: OWN_USER_ID,
 };
 
@@ -26,7 +26,6 @@ const seedContactAndRoom = async () => {
     sessionId: PEER_SS58,
     peerId: PEER_SS58,
     peerUsername: 'alice',
-    peerP256PublicKey: '0xaa',
     userId: OWN_USER_ID,
     createdAt: 1,
     lastUpdate: 1,
@@ -59,8 +58,8 @@ describe('deviceAdded propagation (producer row → collector → applier)', () 
       lastUpdate: 2,
     });
 
-    const { entities } = await collectChangesSince(1);
-    const messages = entities.find(e => e.tag === 'Messages');
+    const { entities: collected } = await collectChangesSince(1);
+    const messages = collected.map(c => c.entity).find(e => e.tag === 'Messages');
     if (messages?.tag !== 'Messages') throw new Error('expected a Messages entity');
 
     const versioned = messages.value[0]!.remote.versioned;
@@ -84,8 +83,8 @@ describe('deviceAdded propagation (producer row → collector → applier)', () 
       lastUpdate: 2,
     });
 
-    const { entities } = await collectChangesSince(1);
-    const messages = entities.find(e => e.tag === 'Messages');
+    const { entities: collected } = await collectChangesSince(1);
+    const messages = collected.map(c => c.entity).find(e => e.tag === 'Messages');
     if (messages?.tag !== 'Messages') throw new Error('expected a Messages entity');
 
     // Sibling starts with the contact but an empty device roster.

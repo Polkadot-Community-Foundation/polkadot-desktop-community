@@ -13,6 +13,40 @@ function isSyncCarrier(content: MessageContent): boolean {
   return content.type === 'deviceChatAccepted' || content.type === 'deviceAdded' || content.type === 'token';
 }
 
+/**
+ * True when the message stands on its own in a conversation, rather than
+ * servicing or modifying another message. Three groups are excluded: sync
+ * carriers (device metadata replication), non-offer call signals (folded into
+ * the offer's derived call state by `deriveCallStates`), and reactions/edits
+ * (folded into their target message).
+ *
+ * This is the single rule behind every "which message does the user actually
+ * see" decision: chat bubbles, the room-list preview, the last-activity
+ * timestamp, and the unread count.
+ */
+function isStandaloneMessage(content: MessageContent): boolean {
+  if (isSyncCarrier(content)) return false;
+  if (content.type === 'callSignal' && content.signal !== 'offer') return false;
+
+  return content.type !== 'reacted' && content.type !== 'reactionRemoved' && content.type !== 'edit';
+}
+
+/** The plain text a message contributes to search; text-less content (reactions, transfers, sync carriers) yields ''. */
+function getSearchableText(content: MessageContent): string {
+  switch (content.type) {
+    case 'text':
+      return content.text;
+    case 'richText':
+      return content.text ?? '';
+    case 'reply':
+      return getSearchableText(content.content);
+    case 'edit':
+      return content.newContent.text ?? '';
+    default:
+      return '';
+  }
+}
+
 const OUTGOING_STATE_RANK: Record<string, number> = { new: 0, sent: 1, delivered: 2 };
 const INCOMING_STATE_RANK: Record<string, number> = { new: 0, seen: 1 };
 
@@ -35,4 +69,4 @@ function shouldUpgradeStatus(current: ChatMessageStatus, incoming: ChatMessageSt
   return statusRank(incoming) > statusRank(current);
 }
 
-export const chatMessageService = { isSyncCarrier, shouldUpgradeStatus };
+export const chatMessageService = { isSyncCarrier, isStandaloneMessage, shouldUpgradeStatus, getSearchableText };

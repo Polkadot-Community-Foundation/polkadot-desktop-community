@@ -10,4 +10,3 @@ and update its structure according to file structure described in CLAUDE.md.
 Directory name should be in the kebab-case.
 Use the file structure described in CLAUDE.md.
 Don't forget to add feature to `./src/bootstrap.ts`
-

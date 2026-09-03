@@ -4,5 +4,5 @@ export const aliasPermissionSchema = v.object({
   key: v.string(),
   requesterProductId: v.string(),
   requestedContextId: v.string(),
-  status: v.picklist(['granted', 'denied']),
+  status: v.picklist(['ask', 'granted', 'denied']),
 });

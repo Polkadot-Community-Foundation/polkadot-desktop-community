@@ -1,7 +1,7 @@
 import { type HexString } from '@/shared/types';
 import { type ArchiveContent } from '@/domains/network';
 
-import { type AppManifest, type Icon, type RootManifest, type WidgetManifest, type WorkerManifest } from './schemas';
+import { type AppManifest, type Icon, type RootManifest, type SemVer, type WidgetManifest, type WorkerManifest } from './schemas';
 
 // Runtime executable shapes — the wire `*Manifest` minus the `$v` version
 // marker, plus the resolved `identifier` (the subname the archive lives
@@ -34,5 +34,9 @@ export type ExecutableContent = {
   contenthash: HexString;
   archive: ProductArchive;
 };
+
+// A fresh, on-chain resolution of one executable kind: the current contenthash
+// (for drift detection) plus its declared version (for display).
+export type LiveExecutable = { contenthash: HexString; version: SemVer };
 
 export type { Icon, RootManifest };

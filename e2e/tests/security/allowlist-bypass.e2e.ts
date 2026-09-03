@@ -1,6 +1,6 @@
 import * as allure from 'allure-js-commons';
 
-import { expect, securityTest as test } from '../../fixtures/security';
+import { expect, probe, securityTest as test } from '../../fixtures/security';
 
 /**
  * These tests verify that the allowlist uses exact domain matching,
@@ -13,37 +13,32 @@ test.describe('Allowlist Bypass', { tag: ['@security'] }, () => {
     await allure.feature('Security');
   });
 
-  test('blocks fetch to fake IPFS domain', async ({ probeResults }) => {
-    const result = probeResults['allow.ipfs.fake'];
-    expect(result).toBeDefined();
+  test('blocks fetch to fake IPFS domain', ({ probeResults }) => {
+    const result = probe(probeResults, 'allow.ipfs.fake');
     expect(result.passed).toBe(true);
     expect(result.actual).toContain('blocked');
   });
 
-  test('blocks fetch to IPFS subdomain abuse', async ({ probeResults }) => {
-    const result = probeResults['allow.ipfs.subdomain'];
-    expect(result).toBeDefined();
+  test('blocks fetch to IPFS subdomain abuse', ({ probeResults }) => {
+    const result = probe(probeResults, 'allow.ipfs.subdomain');
     expect(result.passed).toBe(true);
     expect(result.actual).toContain('blocked');
   });
 
-  test('blocks fetch to fake TURN domain', async ({ probeResults }) => {
-    const result = probeResults['allow.turn.fake'];
-    expect(result).toBeDefined();
+  test('blocks fetch to fake TURN domain', ({ probeResults }) => {
+    const result = probe(probeResults, 'allow.turn.fake');
     expect(result.passed).toBe(true);
     expect(result.actual).toContain('blocked');
   });
 
-  test('blocks fetch to saturn domain (contains "turn")', async ({ probeResults }) => {
-    const result = probeResults['allow.saturn'];
-    expect(result).toBeDefined();
+  test('blocks fetch to saturn domain (contains "turn")', ({ probeResults }) => {
+    const result = probe(probeResults, 'allow.saturn');
     expect(result.passed).toBe(true);
     expect(result.actual).toContain('blocked');
   });
 
-  test('blocks fetch to fake STUN domain', async ({ probeResults }) => {
-    const result = probeResults['allow.stun.fake'];
-    expect(result).toBeDefined();
+  test('blocks fetch to fake STUN domain', ({ probeResults }) => {
+    const result = probe(probeResults, 'allow.stun.fake');
     expect(result.passed).toBe(true);
     expect(result.actual).toContain('blocked');
   });

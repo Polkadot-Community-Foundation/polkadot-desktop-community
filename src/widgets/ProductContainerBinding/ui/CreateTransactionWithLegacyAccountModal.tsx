@@ -1,6 +1,6 @@
 import { type CodecType, type ProductAccountTransaction, CreateTransactionErr } from '@novasamatech/host-api';
 import { type UserSession } from '@novasamatech/host-papp';
-import { Button, Copy, Dialog, toastError } from '@novasamatech/tr-ui';
+import { Button, Copy, toastError } from '@novasamatech/tr-ui';
 import { toHex } from '@polkadot-api/utils';
 import { ChevronLeft, Copy as CopyIcon, Info } from 'lucide-react';
 import { type Transaction } from 'polkadot-api';
@@ -11,9 +11,10 @@ import { useTranslation } from '@/shared/translation';
 import { amountToString } from '@/shared/utils';
 import { chainService, genesisHash, useAllChainsMap, useApi } from '@/domains/network';
 import { type CreateTransactionResult } from '../types';
+import { withAllowanceRenewal } from '../withAllowanceRenewal';
 import { withSigningTimeout } from '../withSigningTimeout';
 
-import { SignPolkadotAppModal } from './SignPolkadotAppModal';
+import { SSODialog } from './SSODialog';
 import {
   SigningAccountDetailsSection,
   SigningPolkadotAppHint,
@@ -25,7 +26,6 @@ import {
   signingDetailCodeBlockClassName,
   signingDetailMonoSingleLineClassName,
   signingDialogCornerControlClassName,
-  signingDialogHeadingClassName,
   signingSummarySectionClassName,
   stringifyTxArguments,
 } from './signingModalParts';
@@ -54,7 +54,8 @@ export const CreateTransactionWithLegacyAccountModal = memo(
     const address = account.address;
     const { data: chains } = useAllChainsMap();
 
-    const genesisHashHex = toHex(transaction.genesisHash);
+    // v0.9: `genesisHash` arrives as a hex string on the wire payload.
+    const genesisHashHex = transaction.genesisHash;
     const callDataHex = toHex(transaction.callData);
 
     const signStartedRef = useRef(false);
@@ -72,19 +73,20 @@ export const CreateTransactionWithLegacyAccountModal = memo(
         genesisHash: genesisHashHex,
       });
       setPending(true);
-      const signFlow = session.createTransactionLegacy({
-        payload: {
-          tag: 'v1',
-          value: {
-            signer: account.bytes,
-            genesisHash: transaction.genesisHash,
-            callData: transaction.callData,
-            extensions: transaction.extensions,
-            txExtVersion: transaction.txExtVersion,
+      const startSignFlow = () =>
+        session.createTransactionLegacy({
+          payload: {
+            tag: 'v1',
+            value: {
+              signer: account.bytes,
+              genesisHash: transaction.genesisHash,
+              callData: transaction.callData,
+              extensions: transaction.extensions,
+              txExtVersion: transaction.txExtVersion,
+            },
           },
-        },
-      });
-      withSigningTimeout(signFlow)
+        });
+      withAllowanceRenewal(() => withSigningTimeout(startSignFlow()))
         .andTee(() => {
           console.info(`${tag} response received from remote signer in ${Date.now() - startedAt}ms`);
           setPending(false);
@@ -244,16 +246,6 @@ export const CreateTransactionWithLegacyAccountModal = memo(
       onCancel(new CreateTransactionErr.Rejected());
     }, [onCancel, t]);
 
-    const handleOpenChange = (open: boolean) => {
-      if (!open) {
-        dismissReviewWithRejectedToast();
-      }
-    };
-
-    const handleInteractOutside = (event: { preventDefault: () => void }) => {
-      event.preventDefault();
-    };
-
     const handleToggleDetails = () => {
       setShowDetails(v => !v);
     };
@@ -267,41 +259,26 @@ export const CreateTransactionWithLegacyAccountModal = memo(
       sign();
     };
 
-    if (step === 'polkadotApp') {
-      return (
-        <SignPolkadotAppModal
-          open
-          lifetimeMs={null}
-          productIdentifier={productIdentifier}
-          session={session}
-          onCancel={() => onCancel(new CreateTransactionErr.Rejected())}
-          onTimeout={() => onCancel(new CreateTransactionErr.Rejected())}
-        />
-      );
-    }
-
     return (
-      <Dialog modal open onOpenChange={handleOpenChange}>
-        <Dialog.Content
-          aria-describedby={undefined}
-          showCloseButton
-          variant="tall"
-          onOpenAutoFocus={event => event.preventDefault()}
-          onInteractOutside={handleInteractOutside}
-        >
+      <SSODialog.Root onDismiss={dismissReviewWithRejectedToast}>
+        {step === 'polkadotApp' ? (
+          <SSODialog.WaitingForMobile
+            lifetimeMs={null}
+            session={session}
+            onAbort={() => onCancel(new CreateTransactionErr.Rejected())}
+          />
+        ) : (
           <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-6">
             {!showDetails ? <SigningProductHeader identifier={productIdentifier} /> : null}
 
             {!showDetails ? (
               <div className="pt-2">
-                <Dialog.Title asChild>
-                  <h2 className={signingDialogHeadingClassName}>{requestTitle}</h2>
-                </Dialog.Title>
+                <SSODialog.Title>{requestTitle}</SSODialog.Title>
               </div>
             ) : (
               <button
                 type="button"
-                className={`${signingDialogCornerControlClassName} left-2.75`}
+                className={`${signingDialogCornerControlClassName} start-2.75`}
                 aria-label={t('common.action.back')}
                 onClick={handleToggleDetails}
               >
@@ -316,39 +293,37 @@ export const CreateTransactionWithLegacyAccountModal = memo(
                     {!canInspectSigning ? (
                       <>
                         <div className="flex items-center gap-2">
-                          <Info aria-hidden className="size-4 shrink-0 text-amber-500" />
-                          <p className="text-sm leading-5 text-text-secondary">
-                            {t('feature.browser.customChainSigningWarning')}
-                          </p>
+                          <Info aria-hidden className="size-4 shrink-0 text-fg-warning" />
+                          <p className="text-sm leading-5 text-fg-secondary">{t('feature.browser.customChainSigningWarning')}</p>
                         </div>
-                        <div className="border-t border-general-border" role="separator" />
+                        <div className="border-t border-stroke-primary" role="separator" />
                       </>
                     ) : null}
                     {canInspectSigning && batchBehaviorHint ? (
                       <>
                         <div className="flex items-center gap-2">
-                          <Info aria-hidden className="size-4 shrink-0 text-text-secondary" />
-                          <p className="text-sm leading-5 text-text-secondary">{batchBehaviorHint}</p>
+                          <Info aria-hidden className="size-4 shrink-0 text-fg-secondary" />
+                          <p className="text-sm leading-5 text-fg-secondary">{batchBehaviorHint}</p>
                         </div>
-                        <div className="border-t border-general-border" role="separator" />
+                        <div className="border-t border-stroke-primary" role="separator" />
                       </>
                     ) : null}
                     <div className="flex items-start justify-between gap-3">
-                      <span className="text-base leading-6 text-text-secondary">{t('feature.browser.account')}</span>
-                      <span className="max-w-[65%] truncate font-mono text-base leading-6 text-text-primary">{address}</span>
+                      <span className="text-base leading-6 text-fg-secondary">{t('feature.browser.account')}</span>
+                      <span className="max-w-[65%] truncate font-mono text-base leading-6 text-fg-primary">{address}</span>
                     </div>
                     <div className="flex items-start justify-between gap-3">
-                      <span className="text-base leading-6 text-text-secondary">{t('feature.browser.network')}</span>
+                      <span className="text-base leading-6 text-fg-secondary">{t('feature.browser.network')}</span>
                       <div className="flex max-w-[65%] min-w-0 items-center justify-end gap-2">
-                        <span className="truncate text-right text-base leading-6 text-text-primary">
+                        <span className="truncate text-end text-base leading-6 text-fg-primary">
                           {chain?.name ?? genesisHashHex}
                         </span>
                       </div>
                     </div>
                     {canInspectSigning ? (
-                      <div className="flex items-start justify-between gap-3 text-base leading-6 text-text-secondary">
+                      <div className="flex items-start justify-between gap-3 text-base leading-6 text-fg-secondary">
                         <span>{t('feature.browser.networkFee')}</span>
-                        <span className="text-right text-text-primary">{feeDisplay}</span>
+                        <span className="text-end text-fg-primary">{feeDisplay}</span>
                       </div>
                     ) : null}
                     <div className="mt-1 w-full">
@@ -368,11 +343,11 @@ export const CreateTransactionWithLegacyAccountModal = memo(
                   </div>
                 </>
               ) : (
-                <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-8 overflow-y-auto pt-14 pr-1">
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-8 overflow-y-auto pe-1 pt-14">
                   <SigningAccountDetailsSection label={t('feature.browser.accountAddress')} address={address} />
                   <section className="flex flex-col gap-3">
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-base leading-6 text-text-secondary">{t('common.label.arguments')}</span>
+                      <span className="text-base leading-6 text-fg-secondary">{t('common.label.arguments')}</span>
                       <Copy value={argumentsJson}>
                         <Button type="button" variant="ghost" size="icon" aria-label={t('feature.browser.copyArguments')}>
                           <CopyIcon className="size-4" />
@@ -385,7 +360,7 @@ export const CreateTransactionWithLegacyAccountModal = memo(
                   </section>
                   <section className="flex flex-col gap-3">
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-base leading-6 text-text-secondary">{t('common.label.callData')}</span>
+                      <span className="text-base leading-6 text-fg-secondary">{t('common.label.callData')}</span>
                       <Copy value={callDataHex}>
                         <Button type="button" variant="ghost" size="icon" aria-label={t('feature.browser.copyCallData')}>
                           <CopyIcon className="size-4" />
@@ -410,8 +385,8 @@ export const CreateTransactionWithLegacyAccountModal = memo(
               />
             ) : null}
           </div>
-        </Dialog.Content>
-      </Dialog>
+        )}
+      </SSODialog.Root>
     );
   },
 );
