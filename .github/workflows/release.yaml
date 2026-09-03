@@ -134,9 +134,27 @@ jobs:
       BUILD_TYPE: ${{ vars.BUILD_TYPE || 'dev' }}
       APP_ID_DEVELOP: ${{ vars.APP_ID_DEVELOP || 'com.polkadot.desktop.dev' }}
       PRODUCT_NAME_DEVELOP: ${{ vars.PRODUCT_NAME_DEVELOP || 'Polkadot Desktop Dev' }}
-      APP_NAME_DEVELOP: ${{ vars.APP_NAME_DEVELOP || 'polkadot-desktop-dev' }}
-      # Base identity, used when BUILD_TYPE=production. Same fallbacks as the pre-sync
-      # non-dev branch of config/index.js.
+      # 🔴 APP_NAME is the packaged `name`, and Electron derives the userData directory
+      # from it (scripts/postbuild.js writes it into the packaged manifest;
+      # app.getName() falls back to `name` because no `productName` is set there). It has
+      # to stay `polkadot-desktop` — that is not a guess:
+      #
+      #   $ node -e '<read package.json out of resources/app.asar>' \
+      #       "Polkadot Desktop Dev-0.1.0-x86_64.AppImage"
+      #   { "name": "polkadot-desktop", ... }        # no productName
+      #   $ ls ~/.config/polkadot-desktop            # exists; …/polkadot-desktop-dev does not
+      #
+      # The shipped builds predate upstream's APP_NAME concept: pre-sync
+      # scripts/postbuild.js never rewrote `name`, so every installed user's profile
+      # lives in `polkadot-desktop` no matter what appId or productName the build used.
+      # Shipping `polkadot-desktop-dev` here would silently start every existing install
+      # from an empty profile — no accounts, no contacts, no chats — with no error and no
+      # migration path. If a second (production) distribution is ever added, give THAT
+      # one a new APP_NAME; do not move this one.
+      APP_NAME_DEVELOP: ${{ vars.APP_NAME_DEVELOP || 'polkadot-desktop' }}
+      # Base identity, used when BUILD_TYPE=production. APP_ID/PRODUCT_NAME are the
+      # pre-sync non-dev branch of config/index.js; APP_NAME is the same directory as
+      # above for the same reason.
       APP_ID: ${{ vars.APP_ID || 'com.polkadot.desktop' }}
       PRODUCT_NAME: ${{ vars.PRODUCT_NAME || 'Polkadot Desktop' }}
       APP_NAME: ${{ vars.APP_NAME || 'polkadot-desktop' }}
