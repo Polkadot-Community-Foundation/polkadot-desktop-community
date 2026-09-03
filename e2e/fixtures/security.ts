@@ -41,6 +41,18 @@ export async function injectProduct(window: Page, domain: string, dirPath: strin
 }
 
 /**
+ * Look up a probe result by id, failing with the id when it is missing.
+ * Without this, a probe that never ran surfaces as `expected undefined to be true`,
+ * which is indistinguishable from a probe that ran and failed.
+ */
+export function probe(results: Record<string, ProbeResult>, id: string): ProbeResult {
+  const result = results[id];
+  if (!result) throw new Error(`No probe result for "${id}"`);
+
+  return result;
+}
+
+/**
  * Worker-scoped fixtures shared across all security probe tests.
  * Launches Electron once, injects the probe product, collects all results,
  * then shares them with every test in the worker.

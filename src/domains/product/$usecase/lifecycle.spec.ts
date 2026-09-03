@@ -1,6 +1,10 @@
 import { ResultAsync } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('./dotns', () => ({
+  dotNsUseCase: { getActiveTld: vi.fn().mockResolvedValue('.dot') },
+}));
+
 vi.mock('../product', () => ({
   EXECUTABLE_KINDS: ['app', 'widget', 'worker'],
   invalidateExecutableArchive: vi.fn(),
@@ -24,6 +28,12 @@ vi.mock('../local-storage/repository', () => ({
   },
 }));
 
+vi.mock('../product/declined-updates/repository', () => ({
+  declinedUpdatesRepository: {
+    deleteByBaseName: vi.fn(),
+  },
+}));
+
 vi.mock('@/shared/env', () => ({
   isElectron: vi.fn(() => true),
 }));
@@ -41,6 +51,7 @@ import { deleteAliasPermissionsByRequester } from '../alias-permissions/resource
 import { productLocalStorageRepository } from '../local-storage/repository';
 import { deleteProductPermissions } from '../permissions/resource';
 import { invalidateExecutableArchive, productDb } from '../product';
+import { declinedUpdatesRepository } from '../product/declined-updates/repository';
 
 import { lifecycleUseCase } from './lifecycle';
 
@@ -58,6 +69,7 @@ beforeEach(() => {
   vi.mocked(deleteProductPermissions).mockResolvedValue(undefined);
   vi.mocked(deleteAliasPermissionsByRequester).mockResolvedValue(undefined);
   vi.mocked(productLocalStorageRepository.clearAllEntries).mockResolvedValue(undefined);
+  vi.mocked(declinedUpdatesRepository.deleteByBaseName).mockResolvedValue(undefined);
   vi.mocked(isElectron).mockReturnValue(true);
   vi.mocked(productDb.getByBaseName).mockReturnValue(ResultAsync.fromSafePromise(Promise.resolve(null)));
   clearProductSandboxData.mockResolvedValue(undefined);
@@ -126,7 +138,27 @@ describe('purgeProduct', () => {
 
     await lifecycleUseCase.purgeProduct('app.dot');
 
-    expect(deleteAliasPermissionsByRequester).toHaveBeenCalledWith('app.dot');
+    expect(deleteAliasPermissionsByRequester).toHaveBeenCalledWith('app.dot', '.dot');
+  });
+
+  it('deletes declined-update rows for the product', async () => {
+    vi.mocked(productDb.delete).mockReturnValue(okResult());
+
+    await lifecycleUseCase.purgeProduct('app.dot');
+
+    expect(declinedUpdatesRepository.deleteByBaseName).toHaveBeenCalledWith('app.dot');
+  });
+
+  it('still clears the sandbox partition when the declined-updates wipe rejects (best-effort)', async () => {
+    vi.mocked(productDb.delete).mockReturnValue(okResult());
+    vi.mocked(declinedUpdatesRepository.deleteByBaseName).mockRejectedValue(new Error('dexie-locked'));
+    vi.mocked(isElectron).mockReturnValue(true);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await expect(lifecycleUseCase.purgeProduct('app.dot')).resolves.toBe(true);
+    expect(clearProductSandboxData).toHaveBeenCalledWith('app.dot');
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it('invalidates the executable archive cache for every kind', async () => {

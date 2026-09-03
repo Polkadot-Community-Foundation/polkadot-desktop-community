@@ -15,7 +15,7 @@ const SidebarItem = ({ icon, to, children }: SidebarLinkProps) => {
         <div
           className={cnTw(
             'flex h-8 items-center gap-2 rounded-md px-3 py-1 transition-colors',
-            isActive ? 'bg-general-muted text-text-primary' : 'text-text-primary hover:bg-general-muted',
+            isActive ? 'bg-bg-surface-nested text-fg-primary' : 'text-fg-primary hover:bg-bg-surface-nested',
           )}
         >
           <span className="flex size-4 shrink-0 items-center justify-center">{icon}</span>

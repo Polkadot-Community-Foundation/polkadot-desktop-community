@@ -1,39 +1,5 @@
 import * as v from 'valibot';
 
-import { hexString } from '@/shared/types';
-
-// `hexString` only checks the `0x` prefix, and polkadot-api `fromHex` does NOT
-// throw on undecodable input — it silently maps non-hex chars to garbage bytes.
-// Without real hex validation a corrupt record would be "restored" into junk
-// statement bytes instead of degrading to a clean start, so enforce
-// even-length canonical hex at this boundary.
-const strictHexString = v.pipe(hexString, v.regex(/^0x(?:[0-9a-f]{2})*$/iu, 'must be even-length hex'));
-
-/**
- * Persisted V2 outbox record — one per (user, peer) in localStorage. Read
- * back across app restarts, so it crosses a trust boundary and must be
- * schema-validated on load (a corrupt record degrades to a clean start, it
- * must never crash the session).
- *
- * - `batch` mirrors the session's in-memory `unackedEntries` (every message
- *   the peer hasn't ACKed; all carried by the latest statement). `notified`
- *   = "onSent already fired" so a crash between persist and submit neither
- *   loses nor double-fires the `sent` flip.
- * - `coverage` mirrors `requestCoverage` (requestId → messageIds that
- *   submission carried), so a peer ACK for a pre-restart requestId still
- *   marks exactly the right messages delivered.
- * - `queue` is the FIFO of parked messages that didn't fit the statement
- *   budget. `bytesHex` is the SCALE-encoded ChatMessage (self-contained:
- *   messageId, timestamp, content).
- */
-export const OutboxRecordSchema = v.object({
-  batch: v.array(v.object({ messageId: v.string(), bytesHex: strictHexString, notified: v.boolean() })),
-  coverage: v.record(v.string(), v.array(v.string())),
-  queue: v.array(v.object({ messageId: v.string(), bytesHex: strictHexString })),
-});
-
-export type OutboxRecord = v.InferOutput<typeof OutboxRecordSchema>;
-
 // ── Persisted Dexie rows ─────────────────────────────────────────────────
 // Rows read back from IndexedDB cross a trust boundary (the store can be
 // corrupted, hand-edited via DevTools, or written by a different app
@@ -50,7 +16,6 @@ export const P2PRoomSchema = v.object({
   sessionId: v.string(),
   peerId: v.string(),
   peerUsername: v.string(),
-  peerP256PublicKey: v.string(),
   userId: v.string(),
   createdAt: v.number(),
   peerPushToken: v.optional(v.string()),
@@ -76,14 +41,19 @@ export const P2PChatRequestSchema = v.object({
   // 'pending'/'accepted'/'declined' as before.
   status: v.picklist(['pending', 'accepted', 'declined', 'removed']),
   welcomeMessage: v.optional(v.string()),
+  // Per-request "View message" reveal flag. Incoming requests hide their
+  // welcome message by default (see `request-preferences`); once the user
+  // reveals it this is set true and persists across reloads. Optional so
+  // rows that pre-date the column keep decoding (treated as not revealed).
+  revealed: v.optional(v.boolean()),
   timestamp: v.number(),
   channelTopic: v.optional(v.string()),
   userId: v.string(),
   pushToken: v.optional(v.string()),
   pushPlatform: v.optional(PlatformSchema),
   /**
-   * Hex-encoded P-256 (uncompressed, 65 bytes) public key the sender device
-   * uses for ECDH-derived per-device key wrapping. Populated only on V2 chat
+   * Hex-encoded X25519 (32 bytes) public key the sender device uses for
+   * key-agreement-derived per-device key wrapping. Populated only on V2 chat
    * requests; absent for V1 single-device requests.
    */
   senderDevicePubKey: v.optional(v.string()),

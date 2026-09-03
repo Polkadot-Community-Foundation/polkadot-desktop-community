@@ -13,12 +13,15 @@ const { usePinProductMock, useDisplayedProductMock } = vi.hoisted(() => ({
 vi.mock('@/domains/product', () => ({
   usePinProduct: () => usePinProductMock(),
   useDisplayedProduct: () => useDisplayedProductMock(),
+  useProductIcon: () => ({ data: null, pending: false, error: null }),
+}));
+
+vi.mock('@/widgets/ProductHeader', () => ({
   useProductHeaderProps: ({ product }: { product: { displayName?: string } | null }) => ({
     name: product?.displayName ?? '',
     description: undefined,
     iconSrc: undefined,
   }),
-  useProductIcon: () => ({ data: null, pending: false, error: null }),
 }));
 
 vi.mock('@/shared/translation', () => ({ useTranslation: () => ({ t: (k: string) => k }) }));

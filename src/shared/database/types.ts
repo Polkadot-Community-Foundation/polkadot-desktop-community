@@ -84,10 +84,29 @@ export type ProductExecutableCacheRow = {
   updatedAt: number;
 };
 
+export type DeclinedUpdateRow = {
+  key: string; // `${baseName}#${kind}#${contenthash}`
+  baseName: string;
+  kind: string;
+  contenthash: HexString;
+  version: (number | string)[];
+  declinedAt: number;
+};
+
+export type ProductSubtreeRow = {
+  key: string; // `${sessionId}:${productId}`
+  sessionId: string;
+  productId: string;
+  subtreeKey: Uint8Array;
+  createdAt: number;
+};
+
 export type AppTableName =
   | 'products'
   | 'dashboardLayouts'
   | 'aliasPermissions'
   | 'productLocalStorage'
   | 'productPermissions'
-  | 'productExecutableCache';
+  | 'productExecutableCache'
+  | 'declinedUpdates'
+  | 'productSubtrees';

@@ -1,4 +1,5 @@
 import { isElectron } from '@/shared/env';
+import { environmentUseCase } from '@/domains/application';
 import { dotNsService } from '../dotns/service';
 import { archiveStoreGateway } from '../product/archive-store/gateway';
 import { executableCacheRepository } from '../product/executable-cache/repository';
@@ -7,8 +8,6 @@ import { archiveGateway } from '../product/manifest/gateway';
 import { peekExecutableArchive } from '../product/manifest/resource';
 import { productDb } from '../product/repository';
 import { type Product } from '../product/types';
-
-import { resolveProductUseCase } from './resolve';
 
 // Download + persist every present executable archive for a product, tracking
 // per-kind status in the index. Best-effort per kind; never throws.
@@ -26,7 +25,12 @@ async function prefetchArchives(product: Product): Promise<void> {
       // before pinning it) — avoids a redundant download and lets the pin succeed
       // offline. Disk-hit entries (cached as `files: {}`) and a cold cache both
       // return null here and fall through to a fresh IPFS fetch.
-      const fetched = peekExecutableArchive(product, kind) ?? (await archiveGateway.fetchExecutable(product, kind));
+      let fetched = peekExecutableArchive(product, kind);
+      if (!fetched) {
+        // Resolve the gateway URL only on a real miss — the peek path must stay free.
+        const { ipfsGatewayUrl } = await environmentUseCase.getActive();
+        fetched = await archiveGateway.fetchExecutable(product, kind, ipfsGatewayUrl);
+      }
       if (!fetched) {
         await executableCacheRepository.setStatus(product.baseName, kind, domain, executable.contenthash, 'failed');
         continue;
@@ -64,8 +68,9 @@ async function evictArchives(baseName: string): Promise<void> {
 }
 
 // On launch: every pinned product must have all present executables persisted.
-// Any missing kind triggers a full re-pin (re-resolve from chain, then prefetch)
-// so the row contenthash and disk bytes are rewritten together. Best-effort per product.
+// Any missing kind triggers a re-persist of the FROZEN version (re-fetch each present
+// executable by the row's frozen contenthash) — never a chain re-resolve, so a pin is
+// never silently advanced. Best-effort per product.
 async function reconcilePinnedArchives(): Promise<void> {
   if (!isElectron()) return;
 
@@ -92,17 +97,12 @@ async function reconcilePinnedArchives(): Promise<void> {
       }
       if (!needsRepin) continue;
 
-      const fresh = await resolveProductUseCase.fetchProductFromChain(row.baseName);
-      if (!fresh) continue;
-      // Re-pin and prefetch only after the row is committed, so the persisted
-      // contenthash and the disk bytes stay in lockstep. If the upsert fails,
-      // skip prefetch — otherwise disk would hold bytes the row doesn't reference.
-      const upserted = await productDb.upsert(fresh, { pinned: true });
-      if (upserted.isErr()) {
-        console.warn('[offlineCache] re-pin upsert failed for', row.baseName, upserted.error);
-        continue;
-      }
-      await prefetchArchives(upserted.value);
+      // Re-persist the FROZEN version — re-fetch each present executable by its frozen
+      // contenthash and write it back. Never re-resolve chain: that would silently advance
+      // the pin to the current version. If a frozen archive is no longer on IPFS,
+      // prefetchArchives marks that kind `failed` and the product stays pinned at its
+      // frozen version (offline bytes unavailable) rather than jumping to latest.
+      await prefetchArchives(row);
     } catch (error) {
       console.warn('[offlineCache] reconcile failed for', row.baseName, error);
     }

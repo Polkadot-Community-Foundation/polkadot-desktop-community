@@ -1,37 +1,42 @@
-import { useMemo } from 'react';
-
-import { useFitCount } from '@/shared/hooks';
+import { useElementSize } from '@/shared/hooks';
 import { TEST_IDS } from '@/shared/test-ids';
-import { useProductSessions } from '@/domains/chat';
-import { useP2PSessions } from '@/aggregates/p2p-chat';
+import { type ChatSession } from '@/domains/chat';
 import { useOpenProductChatRoom } from '../hooks/useOpenProductChatRoom';
+import { chatService } from '../service';
 
-import { CHAT_ITEM_HEIGHT } from './partials/ChatItem';
-import { ChatItemSkeleton } from './partials/ChatItemSkeleton';
 import { RoomList } from './partials/RoomList';
 
-export const ChatWidget = () => {
+type Props = {
+  // Max chats to show, derived from the dashboard widget size (small:2 / medium:4 / large:8).
+  visibleCount: number;
+  // Sessions + loading are owned by ChatWidgetContent (single source), which
+  // also drives the block pulse via DashboardCardChrome's `isLoading`.
+  sessions: ChatSession[];
+  pending: boolean;
+};
+
+export const ChatWidget = ({ visibleCount, sessions, pending }: Props) => {
   const openChatRoom = useOpenProductChatRoom();
-  const { data: productSessions, pending: pendingProduct } = useProductSessions();
-  const { data: p2pSessions, pending: pendingP2P } = useP2PSessions();
 
-  const pending = pendingProduct || pendingP2P;
-  const sessions = useMemo(() => [...productSessions, ...p2pSessions], [productSessions, p2pSessions]);
-
-  const { containerRef, count } = useFitCount({
-    itemHeight: CHAT_ITEM_HEIGHT,
-    maxCount: sessions.length || 5,
-    defaultCount: 5,
-  });
+  // The visible items split the container height evenly to fill it without scrolling.
+  // Before the first measurement (height 0) fall back to natural item height.
+  const { ref, height } = useElementSize();
+  const slotHeight = height > 0 ? height / visibleCount : undefined;
+  // Density is size-driven (small → compact, medium/large → regular), not height-driven.
+  const density = chatService.chatItemDensityForCount(visibleCount);
 
   return (
     <div data-testid={TEST_IDS.chatWidget} className="flex h-full w-full flex-col">
-      <div ref={containerRef} className="min-h-0 flex-1 overflow-y-auto">
-        {pending ? (
-          // eslint-disable-next-line react/no-array-index-key
-          Array.from({ length: count }).map((_, index) => <ChatItemSkeleton key={index} isLast={index === count - 1} />)
-        ) : (
-          <RoomList sessions={sessions} selected={null} onSelect={session => openChatRoom(session.sessionId)} />
+      <div ref={ref} className="min-h-0 flex-1 overflow-hidden">
+        {pending ? null : (
+          <RoomList
+            sessions={sessions}
+            selected={null}
+            visibleCount={visibleCount}
+            density={density}
+            itemHeight={slotHeight}
+            onSelect={session => openChatRoom(session.sessionId)}
+          />
         )}
       </div>
     </div>

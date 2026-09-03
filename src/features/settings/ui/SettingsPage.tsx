@@ -21,6 +21,7 @@ export const SettingsPage = memo(() => {
     <div className="flex size-full h-full gap-2 p-2">
       <aside style={sideMenuStyle} className="flex shrink-0 flex-col overflow-hidden rounded-xl bg-bg-surface-container">
         <SettingsHeader
+          variant="list"
           icon={
             <AppIcon size="sm" alt="">
               <SettingsIcon className="size-4" />

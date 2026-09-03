@@ -1,7 +1,8 @@
+import { blake2b } from '@noble/hashes/blake2.js';
 import { toHex } from 'polkadot-api/utils';
-import { type CodecType } from 'scale-ts';
+import { type CodecType, Bytes, Struct } from 'scale-ts';
 
-import { type DeviceRosterEvent } from './device-event-codec';
+import { type DeviceRosterEvent } from './schemas';
 import { type Contact, type Device } from './types';
 
 const hasKnownDevices = (contact: Contact): boolean => contact.devices.length > 0;
@@ -35,9 +36,32 @@ const applyRosterEvent = (contact: Contact, event: CodecType<typeof DeviceRoster
   }
 };
 
+// ── Roster topic derivation ─────────────────────────────────────────────────
+// Each user broadcasts their own DeviceAdded / DeviceRemoved events on a topic
+// keyed on their identity sr25519 accountId; contacts subscribe (matchAny) to
+// the roster topics of every known contact. Wire format mirrors V1 chat-request
+// topics — context-prefixed SCALE-encoded blake2b256 — with a distinct context
+// string so roster events don't collide with chat-request topics:
+//   blake2b-256( SCALE({ context: "device-roster", accountId: userAccountId }) )
+// NOTE: the exact context string / SCALE encoding aren't pinned by the HackMD
+// spec — confirm with iOS/Android before shipping.
+const ROSTER_TOPIC_CONTEXT = new TextEncoder().encode('device-roster');
+const RosterTopicInput = Struct({ context: Bytes(), accountId: Bytes() });
+
+const computeRosterTopic = (userAccountId: Uint8Array): Uint8Array => {
+  const encoded = RosterTopicInput.enc({ context: ROSTER_TOPIC_CONTEXT, accountId: userAccountId });
+  return blake2b(encoded, { dkLen: 32 });
+};
+
+/** The matchAny topic set a recipient subscribes to to track all known contacts' roster events. */
+const computeRosterSubscriptionTopics = (contactAccountIds: Uint8Array[]): Uint8Array[] =>
+  contactAccountIds.map(computeRosterTopic);
+
 export const contactService = {
   hasKnownDevices,
   addDevice,
   removeDevice,
   applyRosterEvent,
+  computeRosterTopic,
+  computeRosterSubscriptionTopics,
 };

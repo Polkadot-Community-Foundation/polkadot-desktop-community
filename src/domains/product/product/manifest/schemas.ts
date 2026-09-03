@@ -72,6 +72,28 @@ export type WidgetManifest = v.InferOutput<typeof widgetManifestSchema>;
 // surfaces it serves. Both `chat` and `pocket` may be false: such a worker
 // exposes no Pocket/Chat affordance and runs purely as background logic, but
 // still launches — so neither flag is required.
+// RFC-0024 § Declaring what a worker accepts. Optional: a worker without it
+// receives no queries at all and still serves whatever `includes` declares, so
+// every manifest published before this key stays valid. The declaration names
+// query *shapes* only — never answerable content — which is what keeps the
+// query space open while bounding the recipient set.
+// The four categories the wire carries, so a product declares in the same terms a
+// delivery arrives in. RFC-0027 § Registration: an unrecognized member is ignored
+// rather than rejecting the manifest, so unknown entries are dropped here instead
+// of failing the parse. Absent and empty mean the same thing.
+export const attachmentCategorySchema = v.picklist(['audio', 'video', 'image', 'file']);
+
+export const workerQuerySchema = v.object({
+  text: v.optional(v.boolean(), false),
+  attachment: v.optional(
+    v.pipe(
+      v.array(v.unknown()),
+      v.transform(entries => entries.filter(entry => v.is(attachmentCategorySchema, entry))),
+    ),
+    [],
+  ),
+});
+
 export const workerManifestSchema = v.object({
   ...commonExecutableFields,
   kind: v.literal('worker'),
@@ -80,6 +102,7 @@ export const workerManifestSchema = v.object({
     chat: v.boolean(),
     pocket: v.boolean(),
   }),
+  query: v.optional(workerQuerySchema),
 });
 
 export type WorkerManifest = v.InferOutput<typeof workerManifestSchema>;

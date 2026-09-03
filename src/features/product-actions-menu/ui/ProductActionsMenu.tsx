@@ -6,15 +6,13 @@ import { useCallback, useState } from 'react';
 import { Slot } from '@/shared/di';
 import { TEST_IDS } from '@/shared/test-ids';
 import { useTranslation } from '@/shared/translation';
-import { cnTw } from '@/shared/utils';
 import { productActionsMenuItemsSlot } from '../di';
 
 type Props = {
   productId: string;
-  isFocused: boolean;
 };
 
-export const ProductActionsMenu = ({ productId, isFocused }: Props) => {
+export const ProductActionsMenu = ({ productId }: Props) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -27,18 +25,14 @@ export const ProductActionsMenu = ({ productId, isFocused }: Props) => {
           type="button"
           aria-label={t('feature.productActionsMenu.trigger')}
           data-testid={TEST_IDS.productActionsMenuTrigger}
-          tabIndex={isFocused ? -1 : 0}
-          className={cnTw(
-            '-mr-1 -ml-2 flex size-6 shrink-0 items-center justify-center rounded-full transition-[colors,opacity] duration-200 hover:bg-bg-action-secondary-hover',
-            isFocused && 'hidden',
-          )}
+          className="-ms-2 -me-1 flex size-6 shrink-0 items-center justify-center rounded-full transition-colors duration-200 hover:bg-bg-action-secondary-hover"
           onMouseDown={e => e.preventDefault()}
         >
-          <MoreHorizontal className="size-4 text-text-secondary" aria-hidden />
+          <MoreHorizontal className="size-4 text-fg-secondary" aria-hidden />
         </button>
       </DropdownMenu.Trigger>
       <DropdownMenu.Content align="start">
-        <div className="flex w-[210px] flex-col gap-0.5 p-1">
+        <div className="flex w-52.5 flex-col gap-0.5 p-1">
           <Slot id={productActionsMenuItemsSlot} props={{ productId, closeMenu }} />
           <div className="px-1 pt-1">
             <Button

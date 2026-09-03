@@ -1,4 +1,3 @@
-import { produce } from 'immer';
 import { interval, map, switchMap, throttle } from 'rxjs';
 import * as v from 'valibot';
 
@@ -24,9 +23,7 @@ export const finalizedBlockResource = createStreamResource<Chain>({
   .cache<Record<GenesisHash, Block>>({
     initial: {},
     map(cache, block, chain) {
-      return produce(cache, draft => {
-        draft[chain.genesisHash] = block;
-      });
+      return { ...cache, [chain.genesisHash]: block };
     },
   })
   .build();
@@ -43,9 +40,7 @@ export const bestBlockResource = createStreamResource<Chain>({
   .cache<Record<GenesisHash, Block>>({
     initial: {},
     map(cache, block, chain) {
-      return produce(cache, draft => {
-        draft[chain.genesisHash] = block;
-      });
+      return { ...cache, [chain.genesisHash]: block };
     },
   })
   .build();

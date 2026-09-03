@@ -3,12 +3,12 @@
  * these are storage / runtime types.
  */
 
-export type DeviceSyncStatus = 'active' | 'removed';
+export type KnownUserDeviceStatus = 'active' | 'removed';
 
 export type KnownUserDevice = {
   statementAccountId: string; // hex
-  encryptionPublicKey: string; // hex (P-256 uncompressed, 65 bytes)
-  status: DeviceSyncStatus;
+  encryptionPublicKey: string; // hex (X25519, 32 bytes)
+  status: KnownUserDeviceStatus;
   lastUpdate: number; // ms since epoch
   outgoingUpdateTime: number; // last acked timePoint we sent to this peer
   /**
@@ -28,3 +28,21 @@ export type KnownUserDevice = {
 };
 
 export type ChatIdValue = { type: 'contact'; accountId: string }; // SS58
+
+/** Per-peer connection phase emitted by the orchestrator (engine-internal vocabulary). */
+export type DeviceSyncConnectionPhase = 'inactive' | 'connecting' | 'syncing' | 'synced' | 'disconnected' | 'error';
+
+/** Activity reported by the per-pair sync state machine. */
+export type SyncActivity = 'active' | 'idle' | 'error';
+
+/**
+ * Semantic sync status for the tracked peer. The consuming feature maps this to
+ * icon / copy / visibility — the domain does not decide whether anything renders.
+ */
+export type DeviceSyncStatus = 'inactive' | 'syncing' | 'synced' | 'stale' | 'error';
+
+/** Persisted device-sync connection metadata (survives reloads). */
+export type DeviceSyncConnectionMeta = {
+  id: 'default';
+  lastConnectionClosedAt: number | null;
+};

@@ -4,13 +4,13 @@
  * Shape:
  *   - Topics + envelope: same as V1 (recipient-keyed allPeer + day pair plus
  *     a channel topic; `EncryptedRemoteModel { encryptionPubKey, encryptedData }`
- *     with ECDH against the recipient's identity chat P-256 pubkey).
+ *     with X25519 against the recipient's identity chat pubkey).
  *   - Inner content: `RequestContentV2` carrying:
  *       * `IdentityProof { identityAccountId, proof }` — `proof` is
  *         `kHash(K(A,B), SCALE(IdentityProofPayload))`, a keyed blake2b-256
  *         where `K(A,B) = ECDH(senderIdentityChatPriv, recipientIdentityChatPub)`.
  *         The receiver recomputes the same kHash and matches bytes.
- *       * `deviceEncPubKey: Bytes(65)` — the **sending** device's P-256
+ *       * `deviceEncPubKey: Bytes(32)` — the **sending** device's X25519
  *         encryption pubkey, used by the recipient as the ECDH counter-party
  *         for V2 multi-device session traffic.
  *   - Inner proof: still signed by the **device sr25519** (proves the
@@ -19,7 +19,7 @@
  *   - Outer Statement Store proof: same device sr25519.
  */
 
-import { p256 } from '@noble/curves/nist.js';
+import { x25519 } from '@noble/curves/ed25519.js';
 import {
   type StatementStoreAdapter,
   createEncryption,
@@ -60,7 +60,7 @@ export type ValidatedRequest = {
  *
  * Wire shape matches the v0.2 spec + android `feature/location-for-handshake`:
  * `RequestContentV2 { identityProof, deviceEncPubKey, pushToken, welcomeMessage }`.
- * `senderIdentityChatPrivateKey` is the user-identity chat P-256 private scalar
+ * `senderIdentityChatPrivateKey` is the user-identity chat X25519 private scalar
  * delivered by the SSO V2 handshake; combined with the recipient's identity
  * chat pubkey it derives the shared secret `K(A,B)` that keys the kHash proof.
  */
@@ -92,10 +92,10 @@ const sendChatRequestV2 = async (params: {
   const allPeerTopic = chatRequestTopicService.computeAllPeerTopic(recipientAccountId);
   const paginationTopic = chatRequestTopicService.computePaginationTopic(recipientAccountId, currentDay.day);
 
-  // 2. Ephemeral P-256 ECDH for envelope encryption against the recipient's
-  //    on-chain user chat pubkey — same shape as V1.
-  const ephemeralPrivKey = p256.utils.randomSecretKey();
-  const ephemeralPubKey = p256.getPublicKey(ephemeralPrivKey, false); // 65 bytes uncompressed
+  // 2. Ephemeral X25519 key agreement for envelope encryption against the
+  //    recipient's on-chain user chat pubkey — same shape as V1.
+  const ephemeralPrivKey = x25519.utils.randomSecretKey();
+  const ephemeralPubKey = x25519.getPublicKey(ephemeralPrivKey); // 32 bytes (CHAT-RFC-0004)
   const sharedSecret = p2pService.computeSharedSecret(ephemeralPrivKey, recipientChatPubKey);
   const encryption = createEncryption(sharedSecret);
 
@@ -188,7 +188,7 @@ export type ValidatedRequestV2 = ValidatedRequest & {
   senderIdentityAccountId: Uint8Array;
   /** kHash(K(A,B), SCALE(IdentityProofPayload)) — 32 bytes. */
   senderIdentityProof: Uint8Array;
-  /** P-256 (65 bytes) — sender device's encryption pubkey (RequestContentV2.deviceEncPubKey). */
+  /** X25519 (32 bytes) — sender device's encryption pubkey (RequestContentV2.deviceEncPubKey). */
   senderDevicePubKey: Uint8Array;
   /**
    * sr25519 (32 bytes) — sender device's statementAccountId. Taken from
@@ -204,7 +204,7 @@ export type ValidatedRequestV2 = ValidatedRequest & {
  * inner content; returns the V1 `ValidatedRequest` shape for V1 messages and
  * the extended `ValidatedRequestV2` shape for V2 messages.
  *
- * `ownChatP256PrivateKey` is the recipient's user chat P-256 private key
+ * `ownChatPrivateKey` is the recipient's user chat X25519 private key
  * (V1-derived from the wallet ssSecret). On desktop after V2 SSO this is
  * **not available**, so this function will fail to decrypt V2 chat requests
  * sent to the user chat key. The caller is expected to handle the null
@@ -212,20 +212,20 @@ export type ValidatedRequestV2 = ValidatedRequest & {
  */
 const decryptAndValidateRequestV2 = (
   statementData: Uint8Array,
-  ownChatP256PrivateKey: Uint8Array,
+  ownChatPrivateKey: Uint8Array,
 ): ValidatedRequest | ValidatedRequestV2 | null => {
   try {
     const encrypted = EncryptedRemoteModel.dec(statementData);
 
-    const sharedSecret = p2pService.computeSharedSecret(ownChatP256PrivateKey, encrypted.encryptionPubKey);
+    const sharedSecret = p2pService.computeSharedSecret(ownChatPrivateKey, encrypted.encryptionPubKey);
     const encryption = createEncryption(sharedSecret);
 
     const decryptResult = encryption.decrypt(encrypted.encryptedData);
     if (decryptResult.isErr()) {
-      // Expected on V2 requests when desktop lacks user chat P-256 private key.
-      const ownPub = p256.getPublicKey(ownChatP256PrivateKey, false);
+      // Expected on V2 requests when desktop lacks the user chat private key.
+      const ownPub = x25519.getPublicKey(ownChatPrivateKey);
       console.warn(
-        '[chat-request-v2] outer decrypt failed (recipient lacks identity chat priv key, or wrong key): %s. ownChatP256PubKey=%s sender ephemeralPubKey=%s',
+        '[chat-request-v2] outer decrypt failed (recipient lacks identity chat priv key, or wrong key): %s. ownChatPubKey=%s sender ephemeralPubKey=%s',
         String(decryptResult.error),
         toHex(ownPub),
         toHex(encrypted.encryptionPubKey),
@@ -254,9 +254,6 @@ const decryptAndValidateRequestV2 = (
     }
 
     const content = remote.message.content;
-    let welcomeMessage: string | undefined;
-    let pushToken: string | undefined;
-    let pushPlatform: 'Android' | 'iOS' | undefined;
 
     // Channel topic is deterministic from (ephemeralPubKey, sharedSecret) —
     // both peers can derive it locally. Don't rely on the outer `stmt.channel`
@@ -268,11 +265,11 @@ const decryptAndValidateRequestV2 = (
     const base: ValidatedRequest = {
       requestId: remote.message.messageId,
       senderAccountId: remote.proof.value.signer,
-      welcomeMessage,
+      welcomeMessage: undefined,
       timestamp: Number(remote.message.timestamp),
       channelTopic,
-      pushToken,
-      pushPlatform,
+      pushToken: undefined,
+      pushPlatform: undefined,
     };
 
     if (content.tag === 'v1') {
@@ -332,12 +329,12 @@ const decryptAndValidateRequestV2 = (
 const subscribeToIncomingRequestsV2 = (
   params: {
     ownAccountId: Uint8Array;
-    ownChatP256PrivateKey: Uint8Array;
+    ownChatPrivateKey: Uint8Array;
     statementStore: StatementStoreAdapter;
   },
   callback: (request: ValidatedRequest | ValidatedRequestV2) => void,
 ): VoidFunction => {
-  const { ownAccountId, ownChatP256PrivateKey, statementStore } = params;
+  const { ownAccountId, ownChatPrivateKey, statementStore } = params;
 
   const currentDay = chatRequestTopicService.getCurrentDay();
   if (!currentDay) return () => {};
@@ -350,7 +347,7 @@ const subscribeToIncomingRequestsV2 = (
   const unsubV1 = trackedSubscribeStatements(statementStore, { matchAll: [paginationTopic] }, ({ statements }) => {
     for (const stmt of statements) {
       if (!stmt.data) continue;
-      const validated = decryptAndValidateRequestV2(stmt.data, ownChatP256PrivateKey);
+      const validated = decryptAndValidateRequestV2(stmt.data, ownChatPrivateKey);
       if (validated) callback(validated);
     }
   });

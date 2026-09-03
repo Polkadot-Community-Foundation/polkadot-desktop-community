@@ -137,26 +137,22 @@ export function createDeviceSyncTransport(deviceStatementAccountSeed: Uint8Array
 
   const subscribeStatementTopic: DeviceSyncTransport['subscribeStatementTopic'] = topic =>
     new Observable(subscriber => {
-      // Capture subscribe-time so we can age-filter the historical replay
-      // batch. Statement Store delivers every still-alive statement on a
-      // matched topic to a new subscriber, regardless of when it was
-      // originally submitted. Without filtering, every fresh signaler
-      // would re-process stale Offers from previous app sessions and
-      // thrash the WebRTC state machine.
-      const subscribedAtSecs = Math.floor(Date.now() / 1000);
+      // `statement_subscribeStatement` delivers an INITIAL DUMP of every resident
+      // statement matching the topic, then streams new ones — the SDK's
+      // `getStatements` is built on exactly this dump (it collects `newStatements`
+      // events until `remaining === 0`). So a peer's Request posted while we were
+      // closed IS replayed here on subscribe; no separate backfill query is needed.
+      //
+      // The bug was the old `ageSecs > 35` filter that silently dropped that
+      // resident Request (it's old by definition), so we never surfaced it, never
+      // ACKed it, and the peer's one-request-at-a-time sender stalled forever.
+      // No age-filter now: staleness is handled downstream by per-channel
+      // supersession in the store + the signaler's offerId filter. On chain
+      // reconnect the reconnect-aware layer re-subscribes and the dump re-delivers,
+      // which is also how a lost ACK self-recovers.
       const cleanup = statementStoreAdapter.subscribeStatements({ matchAll: [topic] }, ({ statements }) => {
         for (const s of statements) {
           if (!s.data || !s.proof) continue;
-
-          // Age-filter: see submissionSecsFromExpiry for the per-layout
-          // derivation. 35s = 30s staleness threshold + ~5s clock-skew
-          // tolerance; anything older is dropped silently — the peer's retry
-          // layer re-emits a fresh copy if the message still matters.
-          if (s.expiry !== undefined) {
-            const ageSecs = subscribedAtSecs - submissionSecsFromExpiry(s.expiry);
-            if (ageSecs > 35) continue;
-          }
-
           const signerHex = extractSignerHex(s.proof);
           if (!signerHex) continue;
           subscriber.next({ topic, data: s.data, signer: fromHex(signerHex) });

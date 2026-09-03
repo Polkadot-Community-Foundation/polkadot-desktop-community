@@ -15,7 +15,7 @@ test.describe('Sandbox Lifecycle — forgetAndReset', { tag: ['@security'] }, ()
     await allure.feature('Security');
   });
 
-  test('clearProductSandboxData wipes localStorage in the partition', async ({ electronApp }) => {
+  test('clearProductSandboxData wipes localStorage in the partition', { tag: ['@allure.id:14939'] }, async ({ electronApp }) => {
     const { window } = electronApp;
     const productId = 'lifecycle-probe.test';
     const probePath = path.resolve(__dirname, '../../test-products/lifecycle-probe');

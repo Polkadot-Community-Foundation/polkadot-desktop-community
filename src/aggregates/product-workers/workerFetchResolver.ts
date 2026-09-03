@@ -2,13 +2,7 @@ import { useCallback } from 'react';
 
 import { isElectron } from '@/shared/env';
 import { useLooseRef } from '@/shared/hooks';
-import {
-  type FetchResolver,
-  type ProductPermissions,
-  permissionsService,
-  requestExternalUrlAccess,
-  useProductPermissions,
-} from '@/domains/product';
+import { type FetchResolver, type PermissionStatus, remoteAccessUseCase, useProductPermissions } from '@/domains/product';
 
 type FetchRequest = Parameters<FetchResolver>[0];
 type FetchResponse = Awaited<ReturnType<FetchResolver>>;
@@ -25,15 +19,6 @@ function rejectOnAbort(signal: AbortSignal): Promise<never> {
     }
     signal.addEventListener('abort', abort, { once: true });
   });
-}
-
-// Same decision the webview's remote-permission handler makes: honor a stored Remote pattern,
-// otherwise prompt through the broker (which coalesces concurrent requests by origin and
-// persists the user's choice via the app-wide RemotePermissionPromptHost).
-async function isRemoteAllowed(productId: string, url: string, permissions: ProductPermissions | null): Promise<boolean> {
-  const stored = permissionsService.getRemotePermissionRequestStatus(permissions, { tag: 'Remote', value: [url] }, 'app');
-  const status = stored ?? (await requestExternalUrlAccess({ productId, url, modality: 'app' }));
-  return status === 'granted';
 }
 
 async function performFetch(req: FetchRequest): Promise<FetchResponse> {
@@ -65,21 +50,31 @@ async function performFetch(req: FetchRequest): Promise<FetchResponse> {
 }
 
 /**
- * Builds the worker's `fetch` resolver, gated against the product's remote permissions the same
- * way the webview is. Stable across renders; reads the latest permissions on each call so grants
- * made after the worker starts take effect immediately.
+ * Builds the worker's `fetch` resolver, gated against the product's remote permissions through the
+ * same chokepoint as the webview and navigateTo. Stable across renders; reads the latest permission
+ * state on each call, so grants made after the worker starts take effect immediately.
  */
 export function useWorkerFetchResolver(productId: Nullable<string>): FetchResolver {
-  const { data: permissions } = useProductPermissions(productId);
-  const permissionsRef = useLooseRef(permissions);
+  // Hold the product's permission subscription open for the worker's lifetime. Worker startup
+  // resolves many module imports through this resolver *before* the product view (which otherwise
+  // keeps the resource warm) mounts; without this, each fetch's `resolveRemoteUrlAccess` would
+  // reopen and tear down a Dexie liveQuery per request instead of replaying the shared cache.
+  useProductPermissions(productId);
   const productIdRef = useLooseRef(productId);
 
   return useCallback<FetchResolver>(async req => {
     const productId = productIdRef();
     if (!productId) return BLOCKED_RESPONSE;
 
-    const allowed = await isRemoteAllowed(productId, req.url, permissionsRef());
+    let status: PermissionStatus;
+    try {
+      status = await remoteAccessUseCase.resolveRemoteUrlAccess({ productId, url: req.url, modality: 'app' });
+    } catch {
+      // Fail closed: a permission-layer error (e.g. the permissions stream erroring) denies
+      // the fetch with the webview's 403 rather than rejecting and breaking worker loading.
+      return BLOCKED_RESPONSE;
+    }
 
-    return allowed ? performFetch(req) : BLOCKED_RESPONSE;
+    return status === 'granted' ? performFetch(req) : BLOCKED_RESPONSE;
   }, []);
 }

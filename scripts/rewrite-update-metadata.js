@@ -11,7 +11,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import yaml from 'js-yaml';
+import { load as loadYaml, dump as dumpYaml } from 'js-yaml';
 
 const ARTIFACTS_DIR = process.env.ARTIFACTS_DIR || 'artifacts';
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
@@ -57,13 +57,7 @@ async function fetchGitHubReleaseNotes() {
   return release.body?.trim() || null;
 }
 
-const METADATA_FILES = [
-  'latest.yml',
-  'latest-mac.yml',
-  'latest-linux.yml',
-  'latest-linux-x64.yml',
-  'latest-linux-arm64.yml',
-];
+const METADATA_FILES = ['latest.yml', 'latest-mac.yml', 'latest-linux.yml', 'latest-linux-x64.yml', 'latest-linux-arm64.yml'];
 
 const releaseNotes = await fetchGitHubReleaseNotes();
 if (releaseNotes) {
@@ -77,9 +71,9 @@ for (const filename of METADATA_FILES) {
     content = rewritePaths(content);
 
     if (releaseNotes) {
-      const parsed = yaml.load(content);
+      const parsed = loadYaml(content);
       parsed.releaseNotes = releaseNotes;
-      content = yaml.dump(parsed, { lineWidth: -1 });
+      content = dumpYaml(parsed, { lineWidth: -1 });
     }
 
     writeFileSync(filepath, content);

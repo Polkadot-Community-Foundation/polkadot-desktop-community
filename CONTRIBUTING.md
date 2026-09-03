@@ -1,11 +1,14 @@
 # Code of Conduct
-This project and everyone participating in it is governed by the [Polkadot Desktop Code of Conduct](./CODE_OF_CONDUCT.md). 
-By participating, you are expected to uphold this code. Please report unacceptable behavior 
+
+This project and everyone participating in it is governed by the [Polkadot Desktop Code of Conduct](./CODE_OF_CONDUCT.md).
+By participating, you are expected to uphold this code. Please report unacceptable behavior
 to the project maintainers.
 
 # How to Contribute
+
 ## Reporting Bugs
-Before opening a new issue, please search the existing issues to make sure that the bug has not already been reported. 
+
+Before opening a new issue, please search the existing issues to make sure that the bug has not already been reported.
 If it has not, please open a new issue and include the following information:
 
 - A clear and descriptive title
@@ -16,6 +19,7 @@ If it has not, please open a new issue and include the following information:
 - Polkadot Desktop logs
 
 # Suggesting Enhancements
+
 If you have a suggestion for how to improve the project, please open a new issue and include the following information:
 
 - A clear and descriptive title
@@ -23,6 +27,7 @@ If you have a suggestion for how to improve the project, please open a new issue
 - Any relevant code samples or screenshots
 
 # Contributing Code
+
 To contribute code to the project, please follow these steps:
 
 1. Fork the repository
@@ -33,7 +38,7 @@ To contribute code to the project, please follow these steps:
 6. Run the tests with `npm run test` to make sure that your changes did not introduce any regressions
 7. Test your changes. Use `npm run start` for running the application
 8. Push your changes to your forked repository
-9. Open a pull request against the dev branch of the Polkadot Desktop repository
+9. Open a pull request against the `main` branch of the Polkadot Desktop repository
 10. Wait for feedback from the maintainers
 
 When contributing code, please keep the following guidelines in mind:
@@ -44,6 +49,7 @@ When contributing code, please keep the following guidelines in mind:
 - Keep the scope of your changes as small as possible
 
 ## Reviewing Code
+
 If you are reviewing code that has been submitted by someone else, please follow these guidelines:
 
 - Be respectful and constructive in your feedback
@@ -52,5 +58,6 @@ If you are reviewing code that has been submitted by someone else, please follow
 - Remember that the goal is to improve the project, not to prove that you are right
 
 # License
-By contributing to the Polkadot Desktop project, you agree that your contributions will be licensed under the 
+
+By contributing to the Polkadot Desktop project, you agree that your contributions will be licensed under the
 [GNU General Public License v3.0](./LICENSE).

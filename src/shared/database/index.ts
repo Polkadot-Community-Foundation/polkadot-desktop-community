@@ -5,9 +5,11 @@ export {
   type AppTableName,
   type DashboardLayoutItemRow,
   type DashboardLayoutRow,
+  type DeclinedUpdateRow,
   type ProductExecutableCacheRow,
   type ProductExecutableRow,
   type ProductLocalStorageRow,
   type ProductPermissionsRow,
   type ProductRow,
+  type ProductSubtreeRow,
 } from './types';

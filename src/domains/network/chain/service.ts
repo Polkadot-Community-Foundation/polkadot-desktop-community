@@ -122,7 +122,7 @@ function toAsset(raw: NonNullable<RemoteChain['assets']>[number]): Asset {
     assetId: raw.assetId,
     symbol: raw.symbol,
     precision: raw.precision,
-    priceId: raw.priceId,
+    priceId: raw.priceId ?? undefined,
     type: raw.type ?? 'native',
     typeExtras: raw.typeExtras ?? undefined,
     icon: { monochrome: raw.icon ?? '', colored: raw.icon ?? '' },

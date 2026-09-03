@@ -76,6 +76,24 @@ describe('createArchiveMemoryCache', () => {
     expect(cache.stats().totalBytes).toBe(100);
   });
 
+  it('peek returns the stored contenthash without bumping recency', () => {
+    const cache = createArchiveMemoryCache(250);
+    cache.set('a', archive(100), true, '0xaa');
+    cache.set('b', archive(100), true, '0xbb');
+    expect(cache.peek('a')?.contenthash).toBe('0xaa');
+    // peek must NOT bump recency: 'a' stays oldest and is evicted when 'c' arrives.
+    cache.peek('a');
+    cache.set('c', archive(100), true, '0xcc'); // 300 > 250 → evict oldest = 'a'
+    expect(cache.get('a')).toBeUndefined();
+    expect(cache.get('b')).toBeDefined();
+  });
+
+  it('defaults contenthash to null when omitted (warm entry)', () => {
+    const cache = createArchiveMemoryCache(1000);
+    cache.set('warm', archive(10), false);
+    expect(cache.peek('warm')?.contenthash).toBeNull();
+  });
+
   it('re-set updates diskBacked so a now-disk-backed entry becomes evictable', () => {
     const cache = createArchiveMemoryCache(150);
     cache.set('a', archive(100), false); // not evictable yet

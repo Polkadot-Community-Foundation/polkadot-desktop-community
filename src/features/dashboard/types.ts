@@ -1,18 +1,10 @@
-import { type ComponentType, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 
 import { type DashboardCard } from '@/domains/application';
-import { type Icon } from '@/domains/product';
 
 export type WidgetSize = {
   w: number;
   h: number;
-};
-
-export type FolderItem = {
-  widgetId: string;
-  icon?: Icon;
-  NativeIcon?: ComponentType<{ className?: string }>;
-  name: string;
 };
 
 // Props passed to dashboardCardContentTransformer handlers. Carries the
@@ -29,6 +21,7 @@ export type CardRenderProps = {
   onResizeCard: (size: WidgetSize) => void;
   onRemoveCard: () => void;
   onCleanupCards: () => void;
+  onOpenAddWidgetModal?: VoidFunction;
 };
 
 // Visual metadata for one card kind, consumed by `DashboardCardChrome` to

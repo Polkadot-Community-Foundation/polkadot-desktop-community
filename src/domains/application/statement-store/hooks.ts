@@ -1,22 +1,12 @@
-import { NoAllowanceError } from '@novasamatech/statement-store';
-import { useCallback, useEffect, useState } from 'react';
-
-import { useTranslation } from '@/shared/translation';
+import { useEffect, useState } from 'react';
 
 import { submitError$ } from './service';
 
-export type SubmitErrorInfo = {
-  title: string;
-  description: string;
-};
-
 /**
- * Subscribes to statement-store submit errors.
- * Returns mapped error info while `enabled` is `true`, resets on disable.
- * Known errors get user-friendly translations, unknown ones show the raw message.
+ * Subscribes to statement-store submit errors while `enabled`, resetting on
+ * disable. Returns the raw domain `Error`; the consuming UI maps it to copy.
  */
-export const useSubmitError = (enabled: boolean) => {
-  const { t } = useTranslation();
+export const useSubmitError = (enabled: boolean): Error | null => {
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
@@ -31,22 +21,5 @@ export const useSubmitError = (enabled: boolean) => {
     return () => subscription.unsubscribe();
   }, [enabled]);
 
-  const mapError = useCallback(
-    (e: Error): SubmitErrorInfo => {
-      if (e instanceof NoAllowanceError) {
-        return {
-          title: t('feature.browser.noAllowanceErrorTitle'),
-          description: t('feature.browser.noAllowanceErrorDescription'),
-        };
-      }
-
-      return {
-        title: t('feature.browser.statementStoreErrorTitle'),
-        description: e.message,
-      };
-    },
-    [t],
-  );
-
-  return error ? mapError(error) : null;
+  return error;
 };

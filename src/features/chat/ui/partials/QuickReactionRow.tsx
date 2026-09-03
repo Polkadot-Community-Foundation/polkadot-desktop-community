@@ -13,7 +13,7 @@ export const QuickReactionRow = ({ onSelectEmoji, onOpenFullPicker }: QuickReact
   return (
     <div
       data-testid={TEST_IDS.chatQuickReactionsRow}
-      className="flex items-center gap-0.5 rounded-full border border-[#e5e5e5] bg-white px-1.5 py-1 shadow-[0px_4px_12px_rgba(0,0,0,0.12)]"
+      className="flex items-center gap-0.5 rounded-full border border-stroke-primary bg-bg-surface-container px-1.5 py-1 shadow-[0px_4px_12px_var(--shadow-soft)]"
     >
       {QUICK_REACTIONS.map(emoji => (
         <button
@@ -25,10 +25,11 @@ export const QuickReactionRow = ({ onSelectEmoji, onOpenFullPicker }: QuickReact
         </button>
       ))}
       <button
-        className="flex size-8 items-center justify-center rounded-full transition-colors hover:bg-[#f0f0f0]"
+        data-testid={TEST_IDS.chatEmojiPickerOpenButton}
+        className="flex size-8 items-center justify-center rounded-full transition-colors hover:bg-bg-selection-container-hover"
         onClick={onOpenFullPicker}
       >
-        <Plus className="size-4 text-[#a3a3a3]" />
+        <Plus className="size-4 text-fg-secondary" />
       </button>
     </div>
   );

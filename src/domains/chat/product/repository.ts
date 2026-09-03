@@ -18,3 +18,12 @@ export const chatDatabase = createDexieDatabase<{
 export const clearAllProductChatStorage = async (): Promise<void> => {
   await Promise.all([chatDatabase.messages.clear(), chatDatabase.rooms.clear()]);
 };
+
+/** Full-table read for the chat search use case. */
+export function listAllProductMessages(): Promise<ChatMessage[]> {
+  return chatDatabase.messages.toArray();
+}
+
+export function findProductRoomBySessionId(sessionId: string): Promise<ProductChatRoom | undefined> {
+  return chatDatabase.rooms.where('sessionId').equals(sessionId).first();
+}

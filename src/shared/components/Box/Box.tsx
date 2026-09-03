@@ -7,8 +7,7 @@ import { gridSpaceConverter } from '../_helpers/gridSpaceConverter';
 type SpacingUnit = number;
 
 type BoxPadding =
-  | SpacingUnit
-  | [verticalTop: SpacingUnit, horizontalRight: SpacingUnit, bottom?: SpacingUnit, right?: SpacingUnit];
+  SpacingUnit | [verticalTop: SpacingUnit, horizontalRight: SpacingUnit, bottom?: SpacingUnit, right?: SpacingUnit];
 
 type BoxMargin = BoxPadding;
 

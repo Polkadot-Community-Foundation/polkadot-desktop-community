@@ -6,13 +6,11 @@ import { deleteLegacyDatabases } from '@/shared/database';
 import { isDev, isElectron, isProductionBuild, isWeb } from '@/shared/env';
 import { registerFeatures } from '@/shared/feature';
 import {
-  environmentService,
+  ensurePappProvider,
   environmentUseCase,
   failActivePeopleChain,
   hydrateUserIdentity,
-  lazyClient,
   loadDeviceIdentity,
-  migrateLegacySsoSessions,
   setActivePeopleChain,
   watchHostPappSessionTeardown,
   web3SummitGateModeSchema,
@@ -38,14 +36,19 @@ import { userIdentity$ } from '@/domains/sso';
 import { productManagementUseCase } from '@/aggregates/product-management';
 import { appShellFeature } from '@/features/app-shell';
 import { browserFeature } from '@/features/browser';
+import { callFeature } from '@/features/call';
 import { chatFeature } from '@/features/chat';
 import { customChainsFeature } from '@/features/custom-chains';
 import { dashboardFeature } from '@/features/dashboard';
+import { favoritesFeature } from '@/features/favorites';
+import { inputModalityFeature } from '@/features/input-modality';
+import { languageSettingsFeature } from '@/features/language-settings';
 import { bootstrapNotifications, notificationsFeature } from '@/features/notifications';
 import { offlineAccessFeature } from '@/features/offline-access';
 import { onboardingFeature } from '@/features/onboarding';
 import { permissionSettingsFeature } from '@/features/permission-settings';
 import { productActionsMenuFeature } from '@/features/product-actions-menu';
+import { productDashboardFeature } from '@/features/product-dashboard';
 import { productSettingsFeature } from '@/features/product-settings';
 import { productWidgetFeature } from '@/features/product-widget';
 import { productWorkerFeature } from '@/features/product-worker';
@@ -74,7 +77,7 @@ const runBootstrap = async (): Promise<BootstrapOutcome> => {
     projectId: import.meta.env['VITE_FIREBASE_PROJECT_ID'],
     appId: import.meta.env['VITE_FIREBASE_APP_ID'],
     // Selects the RC channel via the `environment` custom signal.
-    environment: environmentService.getActiveId(),
+    environment: environmentUseCase.getActiveId(),
     minimumFetchIntervalMillis: isDev() ? 0 : undefined,
   });
   await remoteConfigReady;
@@ -106,8 +109,6 @@ const runBootstrap = async (): Promise<BootstrapOutcome> => {
     throw error;
   }
 
-  migrateLegacySsoSessions();
-
   // Wire the product domain's host IPC handlers up front, before any product can
   // run. Test runs deny unmatched remote-URL requests instead of prompting.
   bootstrapProduct({ promptForUnmatchedRemoteAccess: !AUTOTEST_ENABLED && !E2E_TEST_ENABLED });
@@ -120,16 +121,10 @@ const runBootstrap = async (): Promise<BootstrapOutcome> => {
   // V2 multi-device identity is owned by the SDK (host-papp); the app reads it
   // back via `@/domains/application`. The device-sync/SSO stack is Electron-only.
   if (isElectron()) {
-    const peerResolver = await peerGateway.createPeerResolver(lazyClient, environmentService.getActiveId());
+    const papp = await ensurePappProvider();
+    const peerResolver = peerGateway.createPeerResolver(papp.identity, activeEnvironment.backendUrl);
 
-    const resolveConsumerInfo: ConsumerInfoLookup = async accountId => {
-      const [chatKey, username] = await Promise.all([
-        peerResolver.getPeerP256Key(accountId),
-        peerResolver.getUsername(accountId),
-      ]);
-      if (!chatKey || !username) return null;
-      return { chatKey, username };
-    };
+    const resolveConsumerInfo: ConsumerInfoLookup = accountId => peerResolver.getPeerContact(accountId);
 
     // React to identity establishment / rotation / logout. A fresh SSO V2
     // handshake mid-session emits a new userIdentity here, so the orchestrator
@@ -201,14 +196,19 @@ const runBootstrap = async (): Promise<BootstrapOutcome> => {
   registerFeatures([
     appShellFeature,
     dashboardFeature,
+    favoritesFeature,
+    productDashboardFeature,
     browserFeature,
     productActionsMenuFeature,
     offlineAccessFeature,
     chatFeature,
+    callFeature,
     settingsFeature,
     productWidgetFeature,
     productWorkerFeature,
     userManagerFeature,
+    languageSettingsFeature,
+    inputModalityFeature,
     themeToggleFeature,
     productSettingsFeature,
     permissionSettingsFeature,
@@ -222,8 +222,13 @@ const runBootstrap = async (): Promise<BootstrapOutcome> => {
   bootstrapNotifications();
 
   // First run only: give a brand-new user the default dashboard (layout +
-  // default product). No-op once a dashboard exists.
-  void productManagementUseCase.ensureDefaultDashboard();
+  // default product). No-op once a dashboard exists. The seeded card is named
+  // after the network's TLD, so an unreachable dotNS endpoint rejects here —
+  // leave the dashboard unseeded rather than write a name that resolves nowhere,
+  // and the next launch reseeds.
+  productManagementUseCase.ensureDefaultDashboard().catch(() => {
+    console.warn('[bootstrap] default dashboard not seeded — the network TLD could not be read');
+  });
 
   // Refresh metadata for installed *unpinned* products against the chain on
   // launch — the explicit, owned trigger for keeping unpinned rows fresh

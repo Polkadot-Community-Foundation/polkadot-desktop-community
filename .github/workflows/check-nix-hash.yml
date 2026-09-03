@@ -4,15 +4,18 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   check-nix-hash:
     name: Check nix hash is up-to-date
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
-      - uses: cachix/install-nix-action@v31
+      - uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
           extra_nix_config: "experimental-features = nix-command flakes"

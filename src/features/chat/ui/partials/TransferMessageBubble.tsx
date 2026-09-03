@@ -4,7 +4,7 @@ import { type MouseEvent } from 'react';
 import { useTranslation } from '@/shared/translation';
 import { amountToString, cnTw } from '@/shared/utils';
 import { type ChatMessage, type TransferContent } from '@/domains/chat';
-import { formatMessageDate } from '../helpers/message';
+import { chatService } from '../../service';
 
 import { StatusIcon } from './MessageBubble';
 
@@ -31,14 +31,14 @@ export const TransferMessageBubble = ({ message, content, isMe, onContextMenu }:
   return (
     <div
       className={cnTw(
-        'flex flex-col items-start gap-2 pt-3 pr-2 pb-2 pl-3.5',
+        'flex flex-col items-start gap-2 ps-3.5 pe-2 pt-3 pb-2',
         isMe
-          ? 'rounded-tl-[14px] rounded-tr-[14px] rounded-br-[4px] rounded-bl-[14px] bg-bg-surface-container-inverted'
-          : 'rounded-tl-[14px] rounded-tr-[14px] rounded-br-[14px] rounded-bl-[4px] bg-bg-surface-nested',
+          ? 'rounded-ss-[14px] rounded-se-[14px] rounded-ee-sm rounded-es-[14px] bg-bg-surface-container-inverted'
+          : 'rounded-ss-[14px] rounded-se-[14px] rounded-ee-[14px] rounded-es-sm bg-bg-surface-nested',
       )}
       onContextMenu={onContextMenu}
     >
-      <div className="flex w-full flex-col items-start gap-2 pr-1">
+      <div className="flex w-full flex-col items-start gap-2 pe-1">
         <p className={cnTw('w-full text-sm leading-5', isMe ? 'text-fg-secondary-inverted' : 'text-fg-secondary')}>
           {headerLabel}
         </p>
@@ -50,7 +50,7 @@ export const TransferMessageBubble = ({ message, content, isMe, onContextMenu }:
         >
           <p
             className={cnTw(
-              'text-[32px] leading-[38px] font-semibold whitespace-nowrap',
+              'text-[32px] leading-9.5 font-semibold whitespace-nowrap',
               isMe ? 'text-fg-primary-inverted' : 'text-fg-primary',
             )}
           >
@@ -65,10 +65,8 @@ export const TransferMessageBubble = ({ message, content, isMe, onContextMenu }:
         </p>
       </div>
       <div className="flex w-full items-center justify-end gap-0.5">
-        <span
-          className={cnTw('text-xs leading-[18px] whitespace-nowrap', isMe ? 'text-fg-secondary-inverted' : 'text-fg-tertiary')}
-        >
-          {formatMessageDate(message.timestamp)}
+        <span className={cnTw('text-xs leading-4.5 whitespace-nowrap', isMe ? 'text-fg-secondary-inverted' : 'text-fg-tertiary')}>
+          {chatService.formatMessageDate(message.timestamp)}
         </span>
         {isMe && (
           <div className="flex size-3.5 items-center justify-center">

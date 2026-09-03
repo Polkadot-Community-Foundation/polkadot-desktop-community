@@ -1,7 +1,5 @@
 import { type ResizeHandleAxis } from 'react-grid-layout';
 
-export type FolderItemPositions = Record<string, { x: number; y: number }>;
-
 export type WidgetSizeKey = 'ICON' | 'HALF' | 'FULL';
 
 export type WidgetSizeIconVariant = 'small' | 'medium' | 'large' | 'horizontal';
@@ -16,20 +14,21 @@ export type WidgetSizeHints = {
   width?: number;
 };
 
-// Layout rules govern resize/placement constraints + the resize-menu options
-// for one card. Each card kind contributes these via DI; the dashboard treats
-// the result as opaque from the layout-math side.
+// Layout rules govern resize/placement constraints for one card. Each card kind
+// contributes these via DI; the dashboard treats the result as opaque from the
+// layout-math side. These are semantic constraints — how a consumer surfaces
+// them (a size menu, a picker, hiding an empty section) is the feature's call.
 export type DashboardCardLayoutRules = {
   minH?: number;
   maxH?: number;
   minW?: number;
   maxW?: number;
-  // Options shown in the topbar's size-picker menu. Empty/undefined → menu
-  // size section hidden.
-  menuSizes?: WidgetSizeIconVariant[];
-  // When true, the card is locked to its current size: the size menu shows only
-  // the current size (checked, non-switchable) and ignores `menuSizes`. Used for
-  // cards whose manifest declares no supported sizes but are already placed.
+  // The sizes this card can be switched to. Empty/undefined means the card is
+  // not size-switchable.
+  switchableSizes?: WidgetSizeIconVariant[];
+  // When true, the card's size is locked to its current size and cannot be
+  // switched (`switchableSizes` is ignored). Used for cards whose manifest
+  // declares no supported sizes but are already placed.
   lockSizeToCurrent?: boolean;
   // Hints used by the Add Widget flow (install-time picker, not the resize
   // menu). Optional — only relevant for cards launched via that flow.
@@ -37,26 +36,26 @@ export type DashboardCardLayoutRules = {
   defaultSize?: WidgetSizeKey;
 };
 
-// Opaque per-card payload. `kind` identifies which feature's handlers process
-// this card; the rest of the fields are owned by that feature. The dashboard
-// renders the card through DI handlers keyed on `kind` and has no awareness
-// of payload internals — the index signature lets each kind store its own
-// fields without polluting this type.
-export type DashboardCardPayload = {
-  kind: string;
-  [key: string]: unknown;
-};
-
 // Folder-specific payload. Defined here (rather than inside the dashboard
 // feature) because the dashboard-layout domain service has built-in folder
-// operations (`addIconToFavorites`, `removeIconFromFolder`, etc.) that read
+// operations (`addToFavorites`, `removeItemFromFolder`, etc.) that read
 // and write folder items. External callers should still treat folders as
 // opaque payloads — this type is the internal handshake.
+// `items` order IS the placement: both the Favorites widget and the Favorites SPA
+// derive icon position from this array's index, so a reorder in either surface is
+// visible in the other.
 export type FolderCardPayload = {
   kind: 'folder';
   items: string[];
-  positions?: FolderItemPositions;
 };
+
+// Opaque per-card content. `kind` selects the SDK handlers that render/add it;
+// the dashboard domain stores and returns the rest verbatim and never reads it.
+export type ContentCardPayload = { kind: string; [key: string]: unknown };
+export type DashboardCardPayload = FolderCardPayload | ContentCardPayload;
+
+// Card-kind predicates live on `dashboardLayoutService` (service.ts) — they are
+// stateless runtime helpers, not types.
 
 // A placed card on the dashboard grid. Same grid fields as the legacy
 // `ExtendedLayoutItem` so layout math stays payload-agnostic.

@@ -1,10 +1,11 @@
 import { Button, Dialog, ScrollArea, toastSuccess } from '@novasamatech/tr-ui';
 import { useNavigate } from '@tanstack/react-router';
-import { ChevronLeft, ChevronRight, Grid2X2, Link2 } from 'lucide-react';
+import { ChevronLeft, ExternalLink, Grid2X2, Link2, Paintbrush, Trash2 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 
 import { Slot } from '@/shared/di';
 import { useTranslation } from '@/shared/translation';
+import { formatBytes } from '@/shared/utils';
 import {
   type AliasPermission,
   type PermissionStatus,
@@ -14,6 +15,7 @@ import {
   productService,
   useAllAliasPermissions,
   useDisplayedProduct,
+  useOfflineCacheSize,
   useProductPermissions,
 } from '@/domains/product';
 import { onProductRefreshRequestedSideEffect } from '@/aggregates/product-loading';
@@ -35,6 +37,7 @@ export const ProductSettingsPage = ({ productId, backLabel, onBack }: Props) => 
   const { forgetProduct } = useForgetProduct();
   const { data: permissions } = useProductPermissions(productId);
   const { data: allAliasPermissions } = useAllAliasPermissions();
+  const cacheSize = useOfflineCacheSize(productId);
   const [forgetDialogOpen, setForgetDialogOpen] = useState(false);
   const [clearCacheDialogOpen, setClearCacheDialogOpen] = useState(false);
 
@@ -90,18 +93,32 @@ export const ProductSettingsPage = ({ productId, backLabel, onBack }: Props) => 
               </div>
 
               <div className="flex flex-col gap-2">
-                <p className="text-2xl leading-8 font-semibold text-fg-primary">{productName}</p>
+                <div className="flex items-center gap-3">
+                  <p className="text-2xl leading-8 font-semibold text-fg-primary">{productName}</p>
+                  {cacheSize > 0 ? (
+                    <span className="rounded-md border border-stroke-secondary px-2 py-0.5 text-xs leading-4 text-fg-tertiary-inverted">
+                      {formatBytes(cacheSize)}
+                    </span>
+                  ) : null}
+                </div>
+                {product?.description ? (
+                  <p className="text-sm leading-5 font-medium text-fg-primary">{product.description}</p>
+                ) : null}
               </div>
 
               <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setClearCacheDialogOpen(true)}>
+                <Button variant="outline" size="sm" onClick={() => setClearCacheDialogOpen(true)}>
+                  <Paintbrush size={16} />
                   {t('feature.productSettings.clearCache')}
                 </Button>
-                <Button variant="outline" onClick={() => setForgetDialogOpen(true)}>
+                <Button variant="outline" size="sm" onClick={() => setForgetDialogOpen(true)}>
+                  <Trash2 size={16} />
                   {t('feature.productSettings.forgetApp')}
                 </Button>
               </div>
             </div>
+
+            <Slot id={productSettingsSectionsSlot} props={{ productId }} />
 
             <div className="flex flex-col">
               <div className="py-2 text-base leading-6 font-semibold text-fg-primary">
@@ -114,7 +131,7 @@ export const ProductSettingsPage = ({ productId, backLabel, onBack }: Props) => 
                 {requestedPermissions.map(({ id, label, icon: permIcon, statusText }) => (
                   <button
                     key={id}
-                    className="flex w-full items-center gap-4 rounded-xl p-3 text-left transition-colors hover:bg-bg-selection-container-hover"
+                    className="flex w-full items-center gap-4 rounded-xl p-3 text-start transition-colors hover:bg-bg-selection-container-hover"
                     onClick={() =>
                       navigate({
                         to: '/settings/privacy/apps/$productId/$permissionId',
@@ -123,7 +140,7 @@ export const ProductSettingsPage = ({ productId, backLabel, onBack }: Props) => 
                     }
                   >
                     <div className="flex min-w-0 flex-1 items-center gap-3">
-                      <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-bg-illustration-light text-primary">
+                      <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-bg-illustration-light text-fg-primary">
                         {permIcon}
                       </div>
                       <div className="flex min-w-0 flex-1 flex-col items-start">
@@ -131,13 +148,11 @@ export const ProductSettingsPage = ({ productId, backLabel, onBack }: Props) => 
                         <span className="truncate text-xs text-fg-tertiary">{statusText}</span>
                       </div>
                     </div>
-                    <ChevronRight size={16} className="shrink-0 text-fg-tertiary" />
+                    <ExternalLink size={16} className="shrink-0 text-fg-tertiary" />
                   </button>
                 ))}
               </div>
             </div>
-
-            <Slot id={productSettingsSectionsSlot} props={{ productId }} />
           </div>
         </div>
       </ScrollArea>
@@ -189,7 +204,7 @@ const ConfirmDialog = ({
   <Dialog open={open} onOpenChange={onOpenChange}>
     <Dialog.Content showCloseButton>
       <Dialog.Header>
-        <div className="w-full text-left">
+        <div className="w-full text-start">
           <Dialog.Title>
             <span className="mb-3 block text-2xl leading-8 font-semibold text-fg-primary">{title}</span>
           </Dialog.Title>
@@ -265,12 +280,12 @@ function buildRequestedPermissions(
 
   const aliasEntries = aliasPermissions.filter(entry => entry.requesterProductId === productId);
   if (aliasEntries.length > 0) {
-    const hasGranted = aliasEntries.some(entry => entry.status === 'granted');
+    const aliasStatus = permissionsService.rollupPermissionStatus(aliasEntries.map(entry => entry.status));
     result.push({
       id: 'Alias',
       label: t('feature.productSettings.aliasPermission.label'),
       icon: <Link2 size={20} />,
-      statusText: t(STATUS_LABEL_KEYS[hasGranted ? 'granted' : 'denied']),
+      statusText: t(STATUS_LABEL_KEYS[aliasStatus]),
     });
   }
 

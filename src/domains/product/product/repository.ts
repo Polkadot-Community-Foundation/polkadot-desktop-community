@@ -4,7 +4,8 @@ import { type Observable } from 'rxjs';
 import { type ProductRow, database, streamTable } from '@/shared/database';
 import { toError } from '@/shared/utils';
 
-import { type ProductExecutables } from './manifest/types';
+import { type ExecutableKind } from './manifest/constants';
+import { type Executable, type ProductExecutables } from './manifest/types';
 import { type Product } from './types';
 
 // Persisted shape of a committed Product. Existence of the row IS the
@@ -83,6 +84,25 @@ export const productDb = {
           createdAt: existing?.createdAt ?? now,
           updatedAt: now,
         };
+        await table.put(record);
+        return record;
+      }),
+      toError,
+    );
+  },
+
+  // Re-freeze a SINGLE executable kind: re-read + merge + write in one transaction
+  // so concurrent per-modality updates can't clobber each other's `executables`
+  // slot. The caller resolves the fresh executable from chain first — a network
+  // await inside a Dexie transaction would auto-commit it.
+  updateExecutable(baseName: string, kind: ExecutableKind, executable: Executable): ResultAsync<PersistedProduct, Error> {
+    return ResultAsync.fromPromise(
+      table.db.transaction('rw', table, async () => {
+        const existing = await table.get(baseName);
+        if (!existing) throw new Error(`Product with baseName ${baseName} not found`);
+        const merged = rowToPersisted(existing);
+        const executables = { ...merged.executables, [kind]: executable };
+        const record: PersistedProduct = { ...merged, executables, updatedAt: Date.now() };
         await table.put(record);
         return record;
       }),

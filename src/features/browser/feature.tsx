@@ -8,6 +8,7 @@ import { addressBarProductTrailingSlot, tabContentSlot, tabHoverSlot } from './d
 import { NEW_TAB, PRODUCT } from './tabs/helpers';
 import { AddressBar } from './ui/AddressBar';
 import { AddressBarRefreshButton } from './ui/AddressBarRefreshButton';
+import { AppModalityOpenBinding } from './ui/AppModalityOpenBinding';
 import { BrowserTabBinding } from './ui/BrowserTabBinding';
 import { NavigationButtons } from './ui/NavigationButtons';
 import { NewTabButton } from './ui/NewTabButton';
@@ -21,13 +22,13 @@ export const browserFeature = createFeature({
   name: 'browser/root-presentation',
 });
 
-browserFeature.inject(topBarCenterSlot, { order: 0, render: () => <AddressBar listenForFocus /> });
+browserFeature.inject(topBarCenterSlot, { order: 0, render: () => <AddressBar /> });
 browserFeature.inject(topBarCenterTrailingSlot, { order: 0, render: () => <NewTabButton /> });
 browserFeature.inject(tabBarSlot, { order: 0, render: () => <Tabs /> });
 browserFeature.inject(topBarLeadingSlot, { order: 1, render: () => <NavigationButtons /> });
 browserFeature.inject(addressBarProductTrailingSlot, {
   order: 0,
-  render: ({ product, isFocused }) => (product ? <AddressBarRefreshButton product={product} isFocused={isFocused} /> : null),
+  render: ({ product }) => (product ? <AddressBarRefreshButton product={product} /> : null),
 });
 browserFeature.inject(lifecycleUseCase.onProductForgottenSideEffect, ({ productId }) => {
   browserTabs.removeAliveTabId(productId);
@@ -52,5 +53,6 @@ browserFeature.inject(persistentSlot, () => (
   <>
     <BrowserTabBinding />
     <BrowserTabsNavigationBinding />
+    <AppModalityOpenBinding />
   </>
 ));

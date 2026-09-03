@@ -2,7 +2,7 @@ import { AccountFullError, ExpiryTooLowError } from '@novasamatech/statement-sto
 
 /**
  * Whether a failed submit attempt belongs on the UI error stream
- * (`submitError$` → `useSubmitError` → SignPolkadotAppModal).
+ * (`submitError$` → `useSubmitError` → `SignPolkadotApp.SubmitError`).
  *
  * AccountFull / ExpiryTooLow are per-attempt sync artifacts: every submit
  * path (library session, chat p2p, device-sync) retries them after raising

@@ -6,31 +6,47 @@ import { type ReactionAggregate } from '@/domains/chat';
 
 type ReactionPillsProps = {
   reactions: ReactionAggregate[];
+  // Reactions render inverted (dark) on the sender's own dark bubbles, light on incoming ones.
+  isMe: boolean;
   onToggleReaction: (emoji: string) => void;
 };
 
-export const ReactionPills = ({ reactions, onToggleReaction }: ReactionPillsProps) => {
+export const ReactionPills = ({ reactions, isMe, onToggleReaction }: ReactionPillsProps) => {
   if (reactions.length === 0) return null;
 
   return (
     <Tooltip.Provider delayDuration={300}>
-      <div className="flex gap-1 px-2">
+      <div className="flex gap-1">
         {reactions.map(reaction => (
           <Tooltip key={reaction.emoji}>
             <Tooltip.Trigger asChild>
               <button
                 data-testid={TEST_IDS.chatReactionPill}
                 className={cnTw(
-                  'flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs transition-colors',
-                  'border shadow-xs',
-                  reaction.reactedByMe
-                    ? 'border-bg-surface-container-inverted bg-bg-surface-container-inverted text-fg-primary-inverted'
-                    : 'border-border-primary bg-bg-surface-nested text-fg-primary hover:bg-bg-selection-container-hover',
+                  'flex items-center gap-1 rounded-full border px-2 py-1 transition-colors',
+                  isMe
+                    ? cnTw(
+                        'border-stroke-primary-inverted hover:bg-bg-selection-container-hover-inverted',
+                        reaction.reactedByMe ? 'bg-bg-action-secondary-inverted' : 'bg-bg-surface-container-inverted',
+                      )
+                    : cnTw(
+                        'border-stroke-secondary hover:bg-bg-selection-container-hover',
+                        reaction.reactedByMe ? 'bg-bg-action-secondary' : 'bg-bg-surface-container',
+                      ),
                 )}
                 onClick={() => onToggleReaction(reaction.emoji)}
               >
-                <span>{reaction.emoji}</span>
-                {reaction.count > 1 && <span className="min-w-3 text-center text-[11px] leading-4">{reaction.count}</span>}
+                <span className="text-[20px] leading-none">{reaction.emoji}</span>
+                {reaction.count > 1 && (
+                  <span
+                    className={cnTw(
+                      'min-w-3 text-center text-sm leading-5',
+                      isMe ? 'text-fg-secondary-inverted' : 'text-fg-secondary',
+                    )}
+                  >
+                    {reaction.count}
+                  </span>
+                )}
               </button>
             </Tooltip.Trigger>
             <Tooltip.Content side="top" sideOffset={4}>

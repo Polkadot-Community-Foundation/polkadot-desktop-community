@@ -1,8 +1,3 @@
-export {
-  type DeviceSessionChannel,
-  type DeviceSessionDeps,
-  type SyncSignalingEnvelope,
-  createDeviceSessionChannel,
-} from './channel';
-export { decryptDeviceSessionPayload, encryptDeviceSessionPayload } from './session';
-export { deriveDeviceSessionTopic } from './topics';
+export { type DeviceSessionChannel, type DeviceSessionDeps, type SyncSignalingEnvelope } from './types';
+export { deviceSessionUseCase } from './$usecase/session';
+export { deviceSessionService } from './service';

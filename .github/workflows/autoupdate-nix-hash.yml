@@ -9,15 +9,18 @@ permissions:
 jobs:
   autoupdate-nix-hash:
     name: Auto-update npmDepsHash
+    # Only same-repository pull requests. A fork PR gets a read-only token, so the push at the end
+    # would fail anyway — skipping keeps the failure out of every external contributor's checks.
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ github.head_ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: cachix/install-nix-action@v31
+      - uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
           extra_nix_config: "experimental-features = nix-command flakes"

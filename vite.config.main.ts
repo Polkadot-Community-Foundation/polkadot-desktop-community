@@ -2,7 +2,7 @@ import { resolve } from 'path';
 
 import { type UserConfigFn } from 'vite';
 
-import { folders, title, updateServerUrl, version } from './config/index.js';
+import { autoUpdateUrl, folders, title, updateRepo, version } from './config/index.js';
 
 const config: UserConfigFn = async ({ mode }) => {
   const { defineConfig } = await import('vite');
@@ -20,8 +20,10 @@ const config: UserConfigFn = async ({ mode }) => {
     define: {
       'process.env.PRODUCT_NAME': JSON.stringify(title),
       'process.env.VERSION': JSON.stringify(version),
-      'process.env.BUILD_SOURCE': JSON.stringify(process.env['BUILD_SOURCE']),
-      'process.env.AUTO_UPDATE_URL': JSON.stringify(updateServerUrl),
+      'process.env.ENABLE_AUTO_UPDATE': JSON.stringify(process.env['ENABLE_AUTO_UPDATE'] ?? ''),
+      'process.env.AUTO_UPDATE_URL': JSON.stringify(autoUpdateUrl),
+      'process.env.UPDATE_REPO_OWNER': JSON.stringify(updateRepo.owner),
+      'process.env.UPDATE_REPO_NAME': JSON.stringify(updateRepo.name),
       'process.env.RENDERER_SOURCE': JSON.stringify(rendererSource),
       'process.env.LOGGER': JSON.stringify(process.env['LOGGER']),
       'process.env.SENTRY_DSN': JSON.stringify(process.env['SENTRY_DSN'] ?? ''),
@@ -30,6 +32,8 @@ const config: UserConfigFn = async ({ mode }) => {
     },
     resolve: {
       tsconfigPaths: true,
+      // output format is cjs — resolve deps to their cjs builds so `import.meta` never reaches the bundle
+      conditions: ['node', 'require'],
     },
     build: {
       sourcemap: isDev ? undefined : 'hidden',

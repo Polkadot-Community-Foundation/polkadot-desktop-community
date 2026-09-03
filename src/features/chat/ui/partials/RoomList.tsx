@@ -1,34 +1,27 @@
 import { MessagesSquare } from 'lucide-react';
-import { useMemo } from 'react';
-import { useObservable } from 'react-rx';
-import { combineLatest, map, of } from 'rxjs';
 
 import { useTranslation } from '@/shared/translation';
 import { type ChatSession } from '@/domains/chat';
+import { useSortedSessions } from '../../hooks/useSortedSessions';
+import { type ChatItemDensity } from '../../service';
 
 import { ChatItem } from './ChatItem';
 import { NoData } from './NoData';
-
-const useSortedSessions = (sessions: ChatSession[]): ChatSession[] => {
-  const sorted$ = useMemo(() => {
-    if (sessions.length === 0) return of([]);
-
-    return combineLatest(
-      sessions.map(s => s.lastMessage.pipe(map(msg => ({ session: s, timestamp: msg?.timestamp ?? 0 })))),
-    ).pipe(map(items => [...items].sort((a, b) => b.timestamp - a.timestamp).map(i => i.session)));
-  }, [sessions]);
-
-  return useObservable(sorted$, sessions);
-};
 
 type Props = {
   sessions: ChatSession[];
   selected: ChatSession | null;
   onSelect: (session: ChatSession) => void;
   hideEmpty?: boolean;
+  // Cap the number of rendered items. Undefined renders all (QuickChat / fullscreen).
+  visibleCount?: number;
+  // Item density + fixed per-item height, forwarded to each ChatItem for the
+  // non-scrolling dashboard widget. Defaults preserve the natural rich layout.
+  density?: ChatItemDensity;
+  itemHeight?: number;
 };
 
-export const RoomList = ({ sessions, selected, onSelect, hideEmpty }: Props) => {
+export const RoomList = ({ sessions, selected, onSelect, hideEmpty, visibleCount, density, itemHeight }: Props) => {
   const { t } = useTranslation();
   const sortedSessions = useSortedSessions(sessions);
 
@@ -41,14 +34,18 @@ export const RoomList = ({ sessions, selected, onSelect, hideEmpty }: Props) => 
     );
   }
 
+  const visibleSessions = visibleCount != null ? sortedSessions.slice(0, visibleCount) : sortedSessions;
+
   return (
     <>
-      {sortedSessions.map((session, index) => (
+      {visibleSessions.map((session, index) => (
         <ChatItem
           key={session.sessionId}
           session={session}
-          isLast={index === sortedSessions.length - 1}
+          isLast={index === visibleSessions.length - 1}
           isSelected={selected?.sessionId === session.sessionId}
+          density={density}
+          itemHeight={itemHeight}
           onClick={() => onSelect(session)}
         />
       ))}

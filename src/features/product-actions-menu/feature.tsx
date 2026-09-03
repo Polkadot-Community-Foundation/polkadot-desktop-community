@@ -9,6 +9,5 @@ export const productActionsMenuFeature = createFeature({
 
 productActionsMenuFeature.inject(addressBarProductLeadingSlot, {
   order: 0,
-  render: ({ product, isFocused }) =>
-    product ? <ProductActionsMenu productId={product.baseName} isFocused={isFocused} /> : null,
+  render: ({ product }) => (product ? <ProductActionsMenu productId={product.baseName} /> : null),
 });

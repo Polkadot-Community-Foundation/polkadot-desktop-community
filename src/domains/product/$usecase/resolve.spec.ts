@@ -11,9 +11,13 @@ vi.mock('../product/repository', () => ({
 
 vi.mock('../dotns/service', () => ({
   dotNsService: {
-    baseNameOf: vi.fn((id: string) => (id.endsWith('.dot') ? id : `${id}.dot`)),
+    baseNameOf: vi.fn((id: string, tld: string) => (id.endsWith(tld) ? id : `${id}${tld}`)),
     subnameOf: vi.fn((base: string, sub: string) => `${sub}.${base}`),
   },
+}));
+
+vi.mock('./dotns', () => ({
+  dotNsUseCase: { getActiveTld: vi.fn().mockResolvedValue('.dot') },
 }));
 
 vi.mock('../dotns/gateway', () => ({
@@ -30,13 +34,17 @@ vi.mock('../product/manifest/service', () => ({
   manifestService: {
     parseRootManifest: vi.fn(),
     parseExecutableManifest: vi.fn(),
+    legacyApp: vi.fn(),
+    executableFromManifest: vi.fn(),
     assembleProduct: vi.fn(),
     executablesFromManifests: vi.fn(),
   },
 }));
 
 import { dotNsGateway } from '../dotns/gateway';
+import { type AppManifest } from '../product/manifest/schemas';
 import { manifestService } from '../product/manifest/service';
+import { type AppExecutable, type WidgetExecutable } from '../product/manifest/types';
 import { type PersistedProduct, productDb } from '../product/repository';
 import { type Product } from '../product/types';
 
@@ -168,5 +176,94 @@ describe('reconcileUnpinnedProducts', () => {
     await expect(resolveProductUseCase.reconcileUnpinnedProducts()).resolves.toBeUndefined();
     expect(productDb.update).not.toHaveBeenCalled();
     warn.mockRestore();
+  });
+});
+
+describe('resolveFreshExecutable', () => {
+  const frozenApp: AppExecutable = { kind: 'app', identifier: 'app.dot', contenthash: '0xold', appVersion: [2, 1, 0] };
+  const frozenWidget: WidgetExecutable = {
+    kind: 'widget',
+    identifier: 'widget.app.dot',
+    contenthash: '0xold',
+    appVersion: [1, 0, 0],
+    dimensions: { height: [400] },
+  };
+
+  it('builds a fresh executable from a parseable manifest', async () => {
+    const manifest: AppManifest = { $v: 1, kind: 'app', appVersion: [2, 1, 1] };
+    const built: AppExecutable = { kind: 'app', identifier: 'app.dot', contenthash: '0xnew', appVersion: [2, 1, 1] };
+    vi.mocked(dotNsGateway.readResolver).mockResolvedValue('0xresolver');
+    vi.mocked(dotNsGateway.readContentHashAt).mockResolvedValue('0xnew');
+    vi.mocked(dotNsGateway.readText).mockResolvedValue('{json}');
+    vi.mocked(manifestService.parseExecutableManifest).mockReturnValue(manifest);
+    vi.mocked(manifestService.executableFromManifest).mockReturnValue(built);
+
+    const result = await resolveProductUseCase.resolveFreshExecutable('app.dot', frozenApp);
+
+    expect(result).toBe(built);
+    expect(manifestService.executableFromManifest).toHaveBeenCalledWith('app.dot', manifest, '0xnew');
+  });
+
+  it('synthesizes an app executable via legacyApp when the manifest is unparseable', async () => {
+    const legacyBuilt: AppExecutable = { kind: 'app', identifier: 'app.dot', appVersion: [0, 0, 0], contenthash: '0xnew' };
+    vi.mocked(dotNsGateway.readResolver).mockResolvedValue('0xresolver');
+    vi.mocked(dotNsGateway.readContentHashAt).mockResolvedValue('0xnew');
+    vi.mocked(dotNsGateway.readText).mockResolvedValue('garbage');
+    vi.mocked(manifestService.parseExecutableManifest).mockReturnValue(null);
+    vi.mocked(manifestService.legacyApp).mockReturnValue(legacyBuilt);
+
+    const result = await resolveProductUseCase.resolveFreshExecutable('app.dot', frozenApp);
+
+    expect(result).toBe(legacyBuilt);
+    expect(manifestService.legacyApp).toHaveBeenCalledWith('app.dot', '0xnew');
+  });
+
+  it('returns null for a widget whose manifest will not parse (needs manifest-only fields)', async () => {
+    vi.mocked(dotNsGateway.readResolver).mockResolvedValue('0xresolver');
+    vi.mocked(dotNsGateway.readContentHashAt).mockResolvedValue('0xnew');
+    vi.mocked(dotNsGateway.readText).mockResolvedValue('garbage');
+    vi.mocked(manifestService.parseExecutableManifest).mockReturnValue(null);
+
+    const result = await resolveProductUseCase.resolveFreshExecutable('app.dot', frozenWidget);
+
+    expect(result).toBeNull();
+    expect(manifestService.legacyApp).not.toHaveBeenCalled();
+  });
+
+  it('does not lose the contenthash drift signal when the manifest text read fails', async () => {
+    const legacyBuilt: AppExecutable = { kind: 'app', identifier: 'app.dot', appVersion: [0, 0, 0], contenthash: '0xnew' };
+    vi.mocked(dotNsGateway.readResolver).mockResolvedValue('0xresolver');
+    vi.mocked(dotNsGateway.readContentHashAt).mockResolvedValue('0xnew');
+    // A text-record read/decode failure must degrade to "no manifest", not reject.
+    vi.mocked(dotNsGateway.readText).mockRejectedValue(new Error('decode'));
+    vi.mocked(manifestService.parseExecutableManifest).mockReturnValue(null);
+    vi.mocked(manifestService.legacyApp).mockReturnValue(legacyBuilt);
+
+    const result = await resolveProductUseCase.resolveFreshExecutable('app.dot', frozenApp);
+
+    expect(result).toBe(legacyBuilt);
+    expect(manifestService.parseExecutableManifest).toHaveBeenCalledWith(null, 'app');
+  });
+
+  it('falls back to the legacy contenthash when the node carries no registry resolver', async () => {
+    const legacyBuilt: AppExecutable = { kind: 'app', identifier: 'app.dot', appVersion: [0, 0, 0], contenthash: '0xlegacy' };
+    vi.mocked(dotNsGateway.readResolver).mockResolvedValue(null);
+    vi.mocked(dotNsGateway.readLegacyContentHash).mockResolvedValue('0xlegacy');
+    vi.mocked(manifestService.parseExecutableManifest).mockReturnValue(null);
+    vi.mocked(manifestService.legacyApp).mockReturnValue(legacyBuilt);
+
+    const result = await resolveProductUseCase.resolveFreshExecutable('app.dot', frozenApp);
+
+    expect(dotNsGateway.readLegacyContentHash).toHaveBeenCalled();
+    expect(result).toBe(legacyBuilt);
+  });
+
+  it('returns null when no contenthash exists on chain at all', async () => {
+    vi.mocked(dotNsGateway.readResolver).mockResolvedValue(null);
+    vi.mocked(dotNsGateway.readLegacyContentHash).mockResolvedValue(null);
+
+    const result = await resolveProductUseCase.resolveFreshExecutable('app.dot', frozenApp);
+
+    expect(result).toBeNull();
   });
 });

@@ -1,6 +1,5 @@
 import { type Container, createContainer, createWebviewProvider } from '@novasamatech/host-container';
 import { useSession } from '@novasamatech/host-papp-react-ui';
-import { useTheme } from '@novasamatech/tr-ui';
 import { type DidFailLoadEvent, type DidNavigateInPageEvent, type WebviewTag, type WillNavigateEvent } from 'electron';
 import { type ReactNode, memo, useEffect, useMemo, useRef, useState } from 'react';
 import { type Observable } from 'rxjs';
@@ -16,6 +15,7 @@ import {
   normalizeLocalhostUrl,
   permissionsService,
   useDisplayedProduct,
+  useDotNsTld,
   useExecutableArchive,
 } from '@/domains/product';
 import { useFindInPageExecutor } from '@/aggregates/find-in-page';
@@ -83,10 +83,15 @@ type Props = {
  */
 export const Webview = memo(
   ({ identifier, kind, pathname, loader, reloadTrigger$, onPathnameChange, onCrossProductLink, visible }: Props) => {
-    const { mode } = useTheme();
     const { t } = useTranslation();
     const onPathnameChangeRef = useLooseRef(onPathnameChange);
     const onCrossProductLinkRef = useLooseRef(onCrossProductLink);
+    // Read through a ref: the navigation listeners below are registered once per
+    // webview, so a TLD captured at first render would freeze at the fallback.
+    // Null while unsettled because these handlers must answer synchronously — a
+    // `preventDefault` cannot wait for a read.
+    const tld = useDotNsTld();
+    const tldRef = useLooseRef(tld.pending || tld.error !== null ? null : tld.data);
 
     const localhost = isLocalhostUrl(identifier);
     // Single chokepoint for the kind → modality rule (worker enforces against 'app').
@@ -285,7 +290,16 @@ export const Webview = memo(
       if (!webviewRef || !ready) return;
       if (prevSession === session) return;
 
-      webviewRef.reload();
+      // A localhost product is `ready` synchronously (no archive to resolve), so this effect
+      // can fire on the initial null→restored session transition before the guest webview has
+      // attached / emitted dom-ready — at which point reload() throws. Swallow that: the guest
+      // is still doing its first load and will pick up the current session on its own. Genuine
+      // post-load session changes (login/logout while open) reload normally, after dom-ready.
+      try {
+        webviewRef.reload();
+      } catch {
+        /* webview not attached yet — its in-flight load already carries the current session */
+      }
     }, [webviewRef, ready, prevSession, session]);
 
     useEffect(() => {
@@ -297,7 +311,8 @@ export const Webview = memo(
       setContainer(container);
 
       let onConsoleMessage: ((e: Electron.ConsoleMessageEvent) => void) | null = null;
-      if (localhost || dotNsService.isDotDomain(identifier)) {
+      const consoleTld = tldRef();
+      if (localhost || (consoleTld !== null && dotNsService.isDotDomain(identifier, consoleTld))) {
         onConsoleMessage = e => {
           const methods = [console.debug, console.info, console.warn, console.error] as const;
           const log = methods[e.level] ?? console.info;
@@ -319,7 +334,7 @@ export const Webview = memo(
       };
 
       const onWillNavigate = (e: WillNavigateEvent) => {
-        const decision = decideWillNavigate({ url: e.url, identifier: navIdentifier, localhost });
+        const decision = decideWillNavigate({ url: e.url, identifier: navIdentifier, localhost, tld: tldRef() });
         switch (decision.type) {
           case 'allow':
             return;
@@ -348,6 +363,7 @@ export const Webview = memo(
           identifier: navIdentifier,
           localhost,
           isMainFrame: e.isMainFrame,
+          tld: tldRef(),
         });
 
         if (decision.type === 'sync-pathname') emitPathnameChange(decision.pathname, decision.track);
@@ -366,7 +382,7 @@ export const Webview = memo(
       };
 
       const onDidNavigate = (e: { url: string }) => {
-        const decision = decideDidNavigate({ url: e.url, identifier: navIdentifier });
+        const decision = decideDidNavigate({ url: e.url, identifier: navIdentifier, tld: tldRef() });
 
         if (decision.type === 'revert-to-desired') revertToDesired();
       };
@@ -413,15 +429,11 @@ export const Webview = memo(
 
     return (
       <div className="h-full w-full overflow-hidden select-none">
-        <div className="relative flex h-full w-full flex-col overflow-hidden bg-general-muted">
+        <div className="relative flex h-full w-full flex-col overflow-hidden bg-bg-surface-nested">
           {(ready || wasReady) && src ? (
             <webview
               className={cnTw(
                 'relative h-full w-full grow overflow-hidden transition-[filter] duration-200',
-                {
-                  'scheme-light': mode === 'light',
-                  'scheme-dark': mode === 'dark',
-                },
                 unresponsive && !crash && 'pointer-events-none blur-sm grayscale',
               )}
               data-testid="webview-host"

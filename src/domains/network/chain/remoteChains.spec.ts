@@ -98,6 +98,33 @@ describe('chainService.fromRemoteChains', () => {
   });
 });
 
+// The preview channel serves unset asset fields as explicit `null` (e.g. the
+// `preview-bulletin` UNIT and `preview-people` PAS assets carry `"priceId": null`).
+// A schema rejecting them fails the whole catalog and blocks bootstrap.
+describe('chainService.fromRemoteChains null-tolerant asset fields', () => {
+  it('accepts a null priceId / icon and normalizes them away in the transformed asset', () => {
+    const raw = v.parse(remoteChainsSchema, [
+      {
+        chainId: 'alpha-bulletin',
+        genesisHash: '5834e1351afe7f3954319a71012ae70e852ddade3ab59835ae68a3394d6731a9',
+        parentId: null,
+        name: 'Alpha Bulletin',
+        addressPrefix: 42,
+        nodes: [{ url: 'wss://alpha-bulletin.example/rpc', name: 'RPC' }],
+        assets: [
+          { assetId: 0, symbol: 'UNIT', precision: 12, priceId: null, name: null, type: null, typeExtras: null, icon: null },
+        ],
+      },
+    ]);
+
+    const asset = chainService.fromRemoteChains(raw)[0]?.assets[0];
+
+    expect(asset?.symbol).toBe('UNIT');
+    expect(asset?.priceId).toBeUndefined();
+    expect(asset?.icon).toEqual({ monochrome: '', colored: '' });
+  });
+});
+
 describe('chainService role selectors', () => {
   const raw = v.parse(remoteChainsSchema, ALPHA_RAW);
   const chains = chainService.fromRemoteChains(raw);

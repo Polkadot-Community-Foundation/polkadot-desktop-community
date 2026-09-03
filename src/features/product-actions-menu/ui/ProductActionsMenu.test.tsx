@@ -37,7 +37,7 @@ describe('ProductActionsMenu', () => {
     const user = userEvent.setup();
     render(
       <TranslationProvider>
-        <ProductActionsMenu productId="a.dot" isFocused={false} />
+        <ProductActionsMenu productId="a.dot" />
       </TranslationProvider>,
     );
 

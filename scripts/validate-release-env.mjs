@@ -8,7 +8,13 @@
  * backstop for that: it does not rely on `--mode production` alone.
  *
  * It reads the ephemeral `.env` the release workflow writes on the runner (never a
- * committed file) and asserts:
+ * committed file), overlaid with `process.env` — Vite resolves process-env variables
+ * ahead of the `.env` file, so that is the value the build actually compiles. Reading the
+ * file alone would silently pass a near-empty `.env` while the build compiled a
+ * different, unvalidated catalog injected through a step-level `env:` block (which is how
+ * upstream's `release-pipeline.yml` feeds its build — it writes no `.env` at all).
+ *
+ * It asserts:
  *   - VITE_ENVIRONMENTS is present, valid JSON, and defines EXACTLY ONE channel
  *   - that channel is the declared default channel
  *   - the Firebase web ids required to bootstrap Remote Config are non-empty
@@ -28,12 +34,13 @@ const expectedChannel = process.argv[3] ?? process.env.EXPECTED_CHANNEL ?? '';
 
 // Firebase web ids the app needs to bootstrap Remote Config (which delivers the live
 // Paseo chain wiring). A build missing these boots into a broken state.
-const REQUIRED_KEYS = [
-  'VITE_FIREBASE_API_KEY',
-  'VITE_FIREBASE_AUTH_DOMAIN',
-  'VITE_FIREBASE_PROJECT_ID',
-  'VITE_FIREBASE_APP_ID',
-];
+//
+// These are exactly the three `src/bootstrap.ts` reads. VITE_FIREBASE_AUTH_DOMAIN used to
+// be asserted here too and is deliberately gone: it is read by nothing in `src/` or
+// `main/` on either side of the sync, so requiring it could only ever produce a false
+// release failure. VITE_FIREBASE_STORAGE_BUCKET and VITE_FIREBASE_MESSAGING_SENDER_ID are
+// equally unread and equally not required.
+const REQUIRED_KEYS = ['VITE_FIREBASE_API_KEY', 'VITE_FIREBASE_PROJECT_ID', 'VITE_FIREBASE_APP_ID'];
 
 function fail(msg) {
   console.error(`✗ release-env: ${msg}`);
@@ -58,14 +65,27 @@ function parseDotenv(text) {
   return out;
 }
 
-let env;
+/**
+ * Resolve a key the way the build will: `process.env` first (Vite gives it precedence
+ * over the `.env` file), then the file. A missing file is not fatal on its own — a
+ * pipeline that injects everything through a step `env:` writes none — but a run where
+ * NEITHER source carries the catalog still fails below on VITE_ENVIRONMENTS.
+ */
+let fileEnv = {};
+let fileError = null;
 try {
-  env = parseDotenv(readFileSync(envPath, 'utf8'));
+  fileEnv = parseDotenv(readFileSync(envPath, 'utf8'));
 } catch (e) {
-  fail(`cannot read ${envPath}: ${e.message}`);
+  fileError = e.message;
 }
 
-const rawCatalog = env['VITE_ENVIRONMENTS'];
+const read = key => {
+  const fromProcess = process.env[key];
+  return fromProcess !== undefined && fromProcess !== '' ? fromProcess : fileEnv[key];
+};
+
+const rawCatalog = read('VITE_ENVIRONMENTS');
+if (!rawCatalog && fileError) fail(`cannot read ${envPath} (${fileError}) and VITE_ENVIRONMENTS is not in the environment either`);
 if (!rawCatalog) fail('VITE_ENVIRONMENTS is missing or empty');
 
 let catalog;
@@ -87,7 +107,7 @@ if (expectedChannel && only !== expectedChannel) {
   fail(`expected the "${expectedChannel}" channel; got "${only}"`);
 }
 
-const missing = REQUIRED_KEYS.filter((k) => !env[k]);
+const missing = REQUIRED_KEYS.filter(k => !read(k));
 if (missing.length) fail(`missing required Firebase ids: ${missing.join(', ')}`);
 
 // Non-fatal advisories — the build still ships, but flag gaps operators usually want.
@@ -95,7 +115,7 @@ for (const [key, note] of [
   ['VITE_WEBRTC_TURN_SECRET', 'WebRTC TURN relay disabled (P2P may fail behind symmetric NAT)'],
   ['SENTRY_DSN', 'crash reporting disabled'],
 ]) {
-  if (!env[key]) console.warn(`⚠ release-env: ${key} unset — ${note}`);
+  if (!read(key)) console.warn(`⚠ release-env: ${key} unset — ${note}`);
 }
 
 console.log(`✓ release-env: single channel "${channels[0]}", Firebase ids present`);

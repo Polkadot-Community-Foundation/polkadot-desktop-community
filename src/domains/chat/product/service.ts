@@ -5,6 +5,12 @@ import * as v from 'valibot';
 
 import { accountId } from '@/domains/network';
 
+import { type ProductChatRoom } from './types';
+
+function belongsToProduct(room: ProductChatRoom, productId: string) {
+  return room.productId === productId;
+}
+
 function getUserId(session: UserSession) {
   return v.parse(accountId, toHex(session.localAccount.accountId));
 }
@@ -14,6 +20,7 @@ function getSessionId(productId: string, roomId: string, userId: string) {
 }
 
 export const productChatService = {
+  belongsToProduct,
   getUserId,
   getSessionId,
 };

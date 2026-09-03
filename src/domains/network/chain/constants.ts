@@ -21,7 +21,8 @@ export const WellKnownChains = {
   polkadotRelay: v.parse(genesisHash, '0x91b171bb158e2d3848fa23a9f1c25182fb8e20313b2c1eb49219da7a70ce90c3'),
   kusamaRelay: v.parse(genesisHash, '0xb0a8d493285c2df73290dfb7e61f870f17b41801197a149ca93654499ea3dafe'),
   westendRelay: v.parse(genesisHash, '0xe143f23803ac50e8f6f8e62695d1ce9e4e1d68aa36c1cd2cfd15340213f3423e'),
-  // Relay hosting the paseo-next system chains (paras 1500/1501/1502) the app
-  // targets; supersedes the original Paseo relay (0x77afd619…).
+  // Verified live against wss://paseo-rpc.n.dwellir.com (specName `paseo`, spec 2003001).
+  // Upstream still carries the pre-reset value 0x77afd619…, which that endpoint no longer
+  // serves; restoring the fork's 940a150. Keep in sync with summit-net-deployments/DEVNET.md.
   paseoRelay: v.parse(genesisHash, '0x374057be67b355151f271ff70c3db98308c62c8adc48dc6724b6a009a1a014fd'),
 } satisfies Record<string, GenesisHash>;

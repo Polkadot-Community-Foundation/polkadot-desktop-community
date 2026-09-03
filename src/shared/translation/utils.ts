@@ -1,4 +1,9 @@
-import { type FlatMessages, type TranslationMessages } from './types';
+import { RTL_LOCALES } from './constants';
+import { type Direction, type FlatMessages, type Locale, type TranslationMessages } from './types';
+
+export function localeDirection(locale: Locale): Direction {
+  return RTL_LOCALES.includes(locale) ? 'rtl' : 'ltr';
+}
 
 /**
  * Flattens nested translation messages into a flat structure with dot-notation keys

@@ -6,11 +6,11 @@ import { test as bddTest } from 'playwright-bdd';
 
 import { e2eConfig } from '../config';
 import { attachFailureScreenshot, attachRecordedVideo, shutdownElectronApp } from '../helpers/artifacts';
-import { BotUserSession, makeBotUsername } from '../helpers/bot-user';
+import { BotUserSession, makeBotUsername, permanentBotUsername } from '../helpers/bot-user';
 import { clearAppData } from '../helpers/cleanup';
 import { registerProductDialogHandlers } from '../helpers/dialogs';
 import { type ElectronAppContext, launchElectronApp } from '../helpers/electron';
-import { isPoolRole, readPoolUser } from '../setup/bot-user-pool';
+import { readPoolUserForSlot } from '../setup/bot-user-pool';
 
 import { setupPlatformParameter } from './allure-metadata';
 
@@ -56,18 +56,40 @@ export type WorkerFixtures = {
   workerFixture: void;
 };
 
+/** Projects whose worker-scoped session uses a permanent cross-run identity. */
+const PERMANENT_WORKER_BASES: Partial<Record<string, string>> = {
+  authenticated: 'desktopauthd',
+  'product-sdk': 'desktopsdk',
+};
+
 /**
  * Extended test with custom fixtures
  */
 export const test = bddTest.extend<TestFixtures, WorkerFixtures>({
-  // Per-project bot identity from the pool provisioned by `setup-bot-users`.
-  // Fallback is a random name + on-the-fly attest via `ensure()` — only hit
-  // when running without the setup project (local debugging).
+  // Worker identity resolution, by project:
+  //  - `BOT_USERNAME_<ROLE>` env pins any role for manual repro.
+  //  - authenticated / product-sdk → PERMANENT deterministic user per worker
+  //    slot (base + parallelIndex letter + OS suffix): attested once ever,
+  //    instant ensure() afterwards. No setup project needed.
+  //  - chat → per-run singleton from the setup-chat pool (worker 0), fresh
+  //    random beyond it. Chat state must not bleed between runs.
+  //  - auth (and anything else) → fresh random; auth scenarios that want the
+  //    permanent identity declare it in the .feature via `as "desktopauth"`.
   botUsername: [
     // eslint-disable-next-line no-empty-pattern -- Playwright fixture signature requires destructuring
     async ({}, use, workerInfo) => {
-      const name = workerInfo.project.name;
-      const pooled = isPoolRole(name) ? await readPoolUser(name) : undefined;
+      const role = workerInfo.project.name;
+      const override = process.env[`BOT_USERNAME_${role.toUpperCase().replace(/-/g, '_')}`];
+      if (override) {
+        await use(override);
+        return;
+      }
+      const permanentBase = PERMANENT_WORKER_BASES[role];
+      if (permanentBase) {
+        await use(permanentBotUsername(permanentBase, workerInfo.parallelIndex));
+        return;
+      }
+      const pooled = role === 'chat' ? await readPoolUserForSlot('chat', workerInfo.parallelIndex) : undefined;
       await use(pooled ?? makeBotUsername());
     },
     { scope: 'worker' },

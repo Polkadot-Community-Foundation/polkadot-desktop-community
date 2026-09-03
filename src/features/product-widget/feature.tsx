@@ -1,19 +1,19 @@
+import { DropdownMenu } from '@novasamatech/tr-ui';
 import { useNavigate } from '@tanstack/react-router';
-import { Maximize2, RefreshCw } from 'lucide-react';
+import { Maximize2, RotateCw } from 'lucide-react';
 
 import { isElectron } from '@/shared/env';
 import { createFeature } from '@/shared/feature';
 import { TEST_IDS } from '@/shared/test-ids';
 import { useTranslation } from '@/shared/translation';
-import { cnTw } from '@/shared/utils';
 import {
   type DashboardCardLayoutRules,
   type DashboardCardPayload,
   type WidgetSizeHints,
   dashboardLayoutService,
 } from '@/domains/application';
-import { productService, useDisplayedProduct, usePersistedProductById } from '@/domains/product';
-import { onProductRefreshRequestedSideEffect, useProductRefreshing } from '@/aggregates/product-loading';
+import { productService, useDisplayedProduct, useExecutableArchive, usePersistedProductById } from '@/domains/product';
+import { onProductRefreshRequestedSideEffect } from '@/aggregates/product-loading';
 import {
   type CardRenderProps,
   DashboardCardChrome,
@@ -45,7 +45,7 @@ const PRODUCT_WIDGET_FALLBACK_LAYOUT_RULES: DashboardCardLayoutRules = {
   maxH: 8,
   minW: 1,
   maxW: 2,
-  menuSizes: ['small', 'medium', 'large', 'horizontal'],
+  switchableSizes: ['small', 'medium', 'large', 'horizontal'],
   availableSizes: ['ICON', 'HALF', 'FULL'],
   defaultSize: 'ICON',
 };
@@ -67,7 +67,11 @@ const ProductWidgetContent = (props: CardRenderProps) => {
   // Resolve committed-or-chain so the size menu reflects the manifest even for
   // products that aren't committed to the DB. The resolved rules are passed to
   // `DashboardCardChrome` via the `layoutRules` prop below.
-  const { data: product } = useDisplayedProduct(productId);
+  const { data: product, pending: productPending } = useDisplayedProduct(productId);
+  // Single source of product resolution + loading for the widget: the chrome
+  // pulses on `isLoading`, and the body receives `product`/`content` as props.
+  const { data: content, pending: archivePending } = useExecutableArchive(product ? { product, kind: 'widget' } : null);
+  const isLoading = productPending || (Boolean(product) && archivePending);
 
   if (productId === null) return null;
   if (props.height === 1) return <ProductShortcutCard productId={productId} />;
@@ -78,13 +82,25 @@ const ProductWidgetContent = (props: CardRenderProps) => {
       width={props.width}
       height={props.height}
       layoutRules={productWidgetLayoutRules(product?.executables.widget?.dimensions)}
+      testId={TEST_IDS.dashboardProductWidget}
+      isLoading={isLoading}
       isMenuOpen={props.isMenuOpen}
       onMenuOpenChange={open => props.onMenuOpenChange(props.menuId, open)}
       onResizeCard={props.onResizeCard}
       onRemoveCard={props.onRemoveCard}
       onCleanupCards={props.onCleanupCards}
     >
-      {isElectron() ? <ProductWidgetBody productId={productId} /> : <WebFallback />}
+      {isElectron() ? (
+        <ProductWidgetBody
+          productId={productId}
+          product={product}
+          hasContent={Boolean(content)}
+          pending={isLoading}
+          onRemoveCard={props.onRemoveCard}
+        />
+      ) : (
+        <WebFallback />
+      )}
     </DashboardCardChrome>
   );
 };
@@ -106,10 +122,15 @@ dashboardCardSDK(productWidgetFeature, {
     if (productId === null) return null;
     return (
       <div className="flex shrink-0 items-center gap-2">
-        <ReloadAction productId={productId} />
         <FullscreenAction productId={productId} />
       </div>
     );
+  },
+
+  menuItems: ({ payload }) => {
+    const productId = productIdOf(payload);
+    if (productId === null) return null;
+    return <WidgetMenuItems productId={productId} />;
   },
 });
 
@@ -129,23 +150,19 @@ const ProductLabelIcon = ({ productId }: { productId: string }) => {
   );
 };
 
-const ReloadAction = ({ productId }: { productId: string }) => {
+const WidgetMenuItems = ({ productId }: { productId: string }) => {
   const { t } = useTranslation();
-  const { isRefreshing } = useProductRefreshing(productId);
 
   return (
-    <span className={widgetTopbarActionVisibilityClass}>
-      <button
-        type="button"
-        data-testid={TEST_IDS.productWidgetReloadButton}
-        aria-label={t('common.aria.reloadWidget')}
-        className={widgetTopbarActionButtonClass}
-        onClick={() => void onProductRefreshRequestedSideEffect.apply({ identifier: productId })}
-        onMouseDown={event => event.stopPropagation()}
-      >
-        <RefreshCw className={cnTw('size-4', isRefreshing && 'animate-spin')} aria-hidden />
-      </button>
-    </span>
+    <DropdownMenu.Item
+      data-testid={TEST_IDS.productWidgetReloadButton}
+      onClick={() => void onProductRefreshRequestedSideEffect.apply({ identifier: productId })}
+    >
+      <div className="flex h-8 w-full items-center gap-2 rounded-md">
+        <RotateCw className="size-4" />
+        <span className="flex-1 text-sm leading-5 font-medium text-fg-primary">{t('feature.dashboard.widgetMenu.reload')}</span>
+      </div>
+    </DropdownMenu.Item>
   );
 };
 
@@ -159,6 +176,7 @@ const FullscreenAction = ({ productId }: { productId: string }) => {
     <span className={widgetTopbarActionVisibilityClass}>
       <button
         type="button"
+        data-testid={TEST_IDS.dashboardWidgetFullscreenButton}
         aria-label={t('common.aria.openFullscreen')}
         className={widgetTopbarActionButtonClass}
         onClick={() => navigate({ to: '/product/$id/{-$route}', params: { id: product.baseName } })}
@@ -173,7 +191,7 @@ const FullscreenAction = ({ productId }: { productId: string }) => {
 const WebFallback = () => {
   const { t } = useTranslation();
   return (
-    <div className="flex h-full w-full items-center justify-center p-4 text-center text-sm text-muted-foreground">
+    <div className="flex h-full w-full items-center justify-center p-4 text-center text-sm text-fg-secondary">
       {t('feature.browser.webVersionNotification')}
     </div>
   );

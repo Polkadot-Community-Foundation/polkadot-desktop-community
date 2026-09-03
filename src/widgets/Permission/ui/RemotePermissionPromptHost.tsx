@@ -1,6 +1,6 @@
 import { toastError } from '@novasamatech/tr-ui';
 import { useEffect, useRef, useState } from 'react';
-import { useObservable } from 'react-rx';
+import { useSyncObservable } from 'react-rx';
 
 import { useLooseRef } from '@/shared/hooks';
 import { useTranslation } from '@/shared/translation';
@@ -34,7 +34,7 @@ export const RemotePermissionPromptHost = () => {
   const setRemote = useSetRemotePermission();
   const setRemoteRef = useLooseRef(setRemote);
 
-  const pending = useObservable(pendingRemotePermissionRequests$, []);
+  const pending = useSyncObservable(pendingRemotePermissionRequests$, []);
   const head = pending[0] ?? null;
 
   const [shown, setShown] = useState<PendingRemotePermissionRequest | null>(null);

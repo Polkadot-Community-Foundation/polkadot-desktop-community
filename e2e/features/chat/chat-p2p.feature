@@ -11,8 +11,12 @@ Feature: P2P Chat — contact search (PB-217)
     And the chat peer bot is ready and listening
     And no chat session exists with the peer bot
 
-  @skip # flaky: peer-bot attestation on paseo-next intermittently 500s (on-chain extrinsic doesn't land)
-  Scenario: Contact search finds the peer bot by username
+  # @skip: blocked by the paseo-next identity-backend attestation outage
+  # (attest(desktoptest-chatpeer@paseo-next) → 500 "On-chain confirmation timed
+  # out … extrinsic did not land"). Body is verified-ready; un-skip when the
+  # backend recovers and re-run twice-green.
+  @allure.id:14815 @skip
+  Scenario: TC-7.1.2 Contact search finds the peer bot by username
     When the user opens the chat as a tab
     And the user opens the contact search
     And the user types the peer bot's lite username into the contact search

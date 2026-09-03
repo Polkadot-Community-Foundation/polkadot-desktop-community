@@ -1,13 +1,16 @@
 import { Button, DropdownMenu } from '@novasamatech/tr-ui';
-import { Ban, Ellipsis, LogOut, Pencil, Reply, Search, ShieldOff, X } from 'lucide-react';
+import { Ban, Ellipsis, LogOut, Search, ShieldOff } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useObservable } from 'react-rx';
 import { of } from 'rxjs';
 
+import { Slot } from '@/shared/di';
+import { TEST_IDS } from '@/shared/test-ids';
 import { useTranslation } from '@/shared/translation';
-import { type ChatMessage, type ChatSession, type MessageContent, uploadChatFile } from '@/domains/chat';
+import { type ChatMessage, type ChatSession, type MessageContent, fileTransferUseCase, useCurrentUserPeer } from '@/domains/chat';
+import { chatRoomBannerSlot, chatRoomHeaderActionsSlot } from '../../di';
+import { chatService } from '../../service';
 import { deriveLatestEdits, getMessagePreview, getPlainText } from '../helpers/message';
-import { formatPeerName } from '../helpers/peerName';
 
 import { type SelectedAttachment } from './AttachmentPreview';
 import { Avatar } from './Avatar';
@@ -18,14 +21,17 @@ import { MessageInput } from './MessageInput';
 
 type ChatConversationViewProps = {
   session: ChatSession;
+  // Set when opened from a global "Messages" hit: pre-fills in-room search and activates the matched result.
+  initialSearch?: { query: string; messageId: string };
   onDeleted?: VoidFunction;
 };
 
-export const Room = ({ session, onDeleted }: ChatConversationViewProps) => {
+export const Room = ({ session, initialSearch, onDeleted }: ChatConversationViewProps) => {
   const { t } = useTranslation();
 
   const rawSessionName = useObservable(session.name, '');
-  const sessionName = formatPeerName(rawSessionName, session.roomId);
+  const sessionName = chatService.formatPeerName(rawSessionName, session.roomId);
+  const { data: currentUserPeer } = useCurrentUserPeer();
   const blockedStream = useMemo(() => session.isBlocked ?? of(false), [session.isBlocked]);
   const isBlocked = useObservable(blockedStream, false);
   const canBlock = typeof session.setBlocked === 'function';
@@ -63,6 +69,30 @@ export const Room = ({ session, onDeleted }: ChatConversationViewProps) => {
     setSearchOpen(false);
     setSearchQuery('');
   }, [session.sessionId]);
+
+  // Runs after the session-change reset above, so it wins and leaves the search open.
+  useEffect(() => {
+    if (!initialSearch) return;
+    setSearchOpen(true);
+    setSearchQuery(initialSearch.query);
+  }, [initialSearch]);
+
+  // Activate the matched result only ONCE per jump: `searchResults` gets a fresh array reference on every
+  // `session.messages` emission, so without this guard it would keep clobbering manual nav or a retyped query.
+  const appliedJumpIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!initialSearch) {
+      appliedJumpIdRef.current = null;
+
+      return;
+    }
+    if (appliedJumpIdRef.current === initialSearch.messageId) return;
+    const idx = searchResults.findIndex(m => m.messageId === initialSearch.messageId);
+    if (idx >= 0) {
+      setResultIndex(idx);
+      appliedJumpIdRef.current = initialSearch.messageId;
+    }
+  }, [initialSearch, searchResults]);
 
   useEffect(() => {
     if (searchOpen) searchInputRef.current?.focus();
@@ -175,7 +205,7 @@ export const Room = ({ session, onDeleted }: ChatConversationViewProps) => {
               : a.file.type.startsWith('video/')
                 ? { type: 'video' as const, mimeType: a.file.type, fileSize: a.file.size, duration: 0 }
                 : { type: 'general' as const, mimeType: a.file.type || 'application/octet-stream', fileSize: a.file.size };
-            return uploadChatFile({ file: a.file, meta });
+            return fileTransferUseCase.uploadChatFile({ file: a.file, meta });
           }),
         );
 
@@ -211,33 +241,35 @@ export const Room = ({ session, onDeleted }: ChatConversationViewProps) => {
   );
 
   return (
-    <div className="flex min-w-111 flex-1 flex-col overflow-hidden rounded-xl border border-border-primary bg-bg-surface-container">
-      <div className="h-14 shrink-0 border-b border-border-primary">
-        <div className="flex h-full items-center gap-2 py-2 pr-0 pl-4">
+    <div className="flex min-w-111 flex-1 flex-col overflow-hidden rounded-xl border border-stroke-primary bg-bg-surface-container">
+      <Slot id={chatRoomBannerSlot} props={{ session }} />
+      <div className="h-14 shrink-0 border-b border-stroke-primary">
+        <div className="flex h-full items-center gap-2 py-2 ps-4 pe-0">
           <Avatar name={sessionName} size="chat-header" />
-          <div className="flex min-w-0 flex-1 items-center gap-2 pr-4">
+          <div className="flex min-w-0 flex-1 items-center gap-2 pe-4">
             <div className="flex min-w-0 flex-1 flex-col items-start justify-center">
               <span className="w-full min-w-0 truncate text-base leading-6 font-semibold text-fg-primary">{sessionName}</span>
             </div>
             <div className="flex shrink-0 items-center gap-2">
+              <Slot id={chatRoomHeaderActionsSlot} props={{ session }} />
               <Button variant="ghost" size="icon-sm" onClick={handleOpenSearch}>
                 <Search strokeWidth={1.75} className="size-5" />
               </Button>
               <DropdownMenu>
                 <DropdownMenu.Trigger asChild>
-                  <Button variant="ghost" size="icon-sm">
+                  <Button data-testid={TEST_IDS.chatRoomHeaderMenuTrigger} variant="ghost" size="icon-sm">
                     <Ellipsis strokeWidth={1.75} className="size-5" />
                   </Button>
                 </DropdownMenu.Trigger>
                 <DropdownMenu.Content align="end">
                   {canBlock && (
                     <DropdownMenu.Item onClick={handleToggleBlocked}>
-                      {isBlocked ? <ShieldOff className="mr-2 size-4" /> : <Ban className="mr-2 size-4" />}
+                      {isBlocked ? <ShieldOff className="me-2 size-4" /> : <Ban className="me-2 size-4" />}
                       {isBlocked ? t('feature.chat.unblockUser') : t('feature.chat.blockUser')}
                     </DropdownMenu.Item>
                   )}
-                  <DropdownMenu.Item variant="destructive" onClick={handleDelete}>
-                    <LogOut className="mr-2 size-4" />
+                  <DropdownMenu.Item data-testid={TEST_IDS.chatRoomHeaderMenuDelete} variant="destructive" onClick={handleDelete}>
+                    <LogOut className="me-2 size-4" />
                     {t('feature.chat.leaveChat')}
                   </DropdownMenu.Item>
                 </DropdownMenu.Content>
@@ -265,68 +297,50 @@ export const Room = ({ session, onDeleted }: ChatConversationViewProps) => {
           query={searchQuery}
           results={searchResults}
           activeMessageId={activeResultId}
+          peerName={sessionName}
+          currentUserName={currentUserPeer?.name ?? ''}
           onSelect={handleSelectResult}
         />
       ) : (
         <MessageFlow session={session} onReply={handleReply} onEdit={handleEdit} />
       )}
 
-      <div className="shrink-0 border-t border-border-primary">
+      <div className="shrink-0 border-t border-stroke-primary">
         {isBlocked ? (
           <div className="flex items-center justify-between gap-3 p-3">
-            <p className="text-sm leading-[18px] text-fg-secondary">{t('feature.chat.blockedNotice', { name: sessionName })}</p>
+            <p className="text-sm leading-4.5 text-fg-secondary">{t('feature.chat.blockedNotice', { name: sessionName })}</p>
             <Button variant="ghost" size="sm" onClick={handleToggleBlocked}>
               {t('feature.chat.unblock')}
             </Button>
           </div>
         ) : (
           <div className="flex flex-col gap-2 p-2">
-            {replyingTo && (
-              <div className="flex w-full items-center gap-2">
-                <div className="flex min-w-0 flex-1 items-start gap-0 rounded-2xl bg-bg-surface-nested pt-3 pr-3.5 pb-2 pl-3.5">
-                  <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    <div className="flex w-full items-center gap-1">
-                      <Reply className="size-4 shrink-0 text-fg-primary" />
-                      <span className="truncate text-sm leading-5 font-medium text-fg-primary">
-                        {replyingTo.status.direction === 'outgoing'
-                          ? t('feature.chat.replyToYourself')
-                          : t('feature.chat.replyTo', { name: sessionName })}
-                      </span>
-                    </div>
-                    <p className="w-full truncate text-sm leading-[18px] text-fg-secondary">{getMessagePreview(replyingTo)}</p>
-                  </div>
-                </div>
-                <button
-                  className="shrink-0 rounded p-1 transition-colors hover:bg-bg-selection-container-hover"
-                  onClick={handleCancelReply}
-                >
-                  <X className="size-6 text-fg-secondary" />
-                </button>
-              </div>
-            )}
-            {editingMessage && (
-              <div className="flex w-full items-center gap-2">
-                <div className="flex min-w-0 flex-1 items-start gap-0 rounded-2xl bg-bg-surface-nested pt-3 pr-3.5 pb-2 pl-3.5">
-                  <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    <div className="flex w-full items-center gap-1">
-                      <Pencil className="size-4 shrink-0 text-fg-primary" />
-                      <span className="truncate text-sm leading-5 font-medium text-fg-primary">
-                        {t('feature.chat.editingMessage')}
-                      </span>
-                    </div>
-                    <p className="w-full truncate text-sm leading-[18px] text-fg-secondary">{editingMessage.text}</p>
-                  </div>
-                </div>
-                <button
-                  className="shrink-0 rounded p-1 transition-colors hover:bg-bg-selection-container-hover"
-                  onClick={handleCancelEdit}
-                >
-                  <X className="size-6 text-fg-secondary" />
-                </button>
-              </div>
-            )}
             {sendError && <p className="px-1 text-xs text-fg-error">{sendError}</p>}
-            <MessageInput ref={inputRef} initialText={editingMessage?.text} submitAction={handleSendMessage} />
+            <MessageInput
+              ref={inputRef}
+              initialText={editingMessage?.text}
+              preview={
+                replyingTo
+                  ? {
+                      testId: TEST_IDS.chatReplyComposer,
+                      title:
+                        replyingTo.status.direction === 'outgoing'
+                          ? t('feature.chat.replyToYourself')
+                          : t('feature.chat.replyTo', { name: sessionName }),
+                      text: getMessagePreview(replyingTo),
+                      onClose: handleCancelReply,
+                    }
+                  : editingMessage
+                    ? {
+                        testId: TEST_IDS.chatEditComposer,
+                        title: t('feature.chat.editingMessage'),
+                        text: editingMessage.text,
+                        onClose: handleCancelEdit,
+                      }
+                    : undefined
+              }
+              submitAction={handleSendMessage}
+            />
           </div>
         )}
       </div>

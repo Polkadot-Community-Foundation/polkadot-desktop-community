@@ -37,7 +37,31 @@ export const DOTNS_REGISTRY_ABI = [
     stateMutability: 'view',
     type: 'function',
   },
+  // Public state variable, so the registry address already in `dot_ns_config`
+  // is enough to reach the TLD authority — no second address to configure.
+  {
+    inputs: [],
+    name: 'protocolRegistry',
+    outputs: [{ name: '', type: 'address' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
 ] as const;
+
+// `DotnsProtocolRegistry` — the per-network TLD authority (paritytech/dotns#201).
+export const DOTNS_PROTOCOL_REGISTRY_ABI = [
+  {
+    inputs: [],
+    name: 'tld',
+    outputs: [{ name: '', type: 'string' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+] as const;
+
+// Used when a network's protocol registry reports no TLD — deployments predating
+// the per-network TLD answer `tld()` with empty data.
+export const DEFAULT_DOTNS_TLD = '.dot';
 
 export const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 

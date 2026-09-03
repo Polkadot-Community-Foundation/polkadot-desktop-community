@@ -37,3 +37,21 @@ Then('the authenticated session data exists in localStorage', async ({ authentic
   const pappKeys = await authenticatedApp.window.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('polkadot_')));
   expect(pappKeys.length).toBeGreaterThan(0);
 });
+
+Then('the SSO session and identity keys are persisted in localStorage', async ({ authenticatedApp }) => {
+  // host-papp persists the SSO root session + per-session identity secrets under
+  // the `polkadot_Polkadot Desktop_` appId prefix once pairing succeeds (these are
+  // exactly the blobs logout later clears). Their presence proves the SSO root &
+  // identity keys were fetched from the PApp on sign-in. Match by substring so a
+  // future SDK version bump (UserSecretsV2 → V3, SsoSessionsV3 → V4) doesn't break
+  // the assertion.
+  const keys = await authenticatedApp.window.evaluate(() => Object.keys(localStorage));
+
+  const hasIdentitySecrets = keys.some(k => k.includes('Polkadot Desktop_UserSecrets'));
+  const hasRootSession = keys.some(
+    k => k.includes('Polkadot Desktop_SsoSessions') || k.includes('Polkadot Desktop_DeviceIdentity'),
+  );
+
+  expect(hasIdentitySecrets, `expected per-session UserSecrets (identity keys); keys=${keys.join(',')}`).toBe(true);
+  expect(hasRootSession, `expected an SSO root session / device-identity blob; keys=${keys.join(',')}`).toBe(true);
+});

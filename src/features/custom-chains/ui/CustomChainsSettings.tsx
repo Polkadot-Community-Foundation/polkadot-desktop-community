@@ -112,12 +112,13 @@ export const CustomChainsSettings = memo(() => {
                 <div
                   key={hash}
                   data-testid={TEST_IDS.customChainsEntry}
-                  className="flex items-center justify-between gap-2 rounded-md border border-general-border p-3"
+                  className="flex items-center justify-between gap-2 rounded-md border border-stroke-primary p-3"
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium text-text-primary">{entry.name}</div>
-                    <div className="truncate text-xs text-text-tertiary">{entry.endpoints[0]}</div>
-                    <div className="truncate font-mono text-xs text-text-tertiary">{hash.slice(0, 18)}…</div>
+                    <div className="truncate text-sm font-medium text-fg-primary">{entry.name}</div>
+                    <div className="truncate text-xs text-fg-tertiary">{entry.endpoints[0]}</div>
+                    {/* eslint-disable-next-line formatjs/no-literal-string-in-jsx */}
+                    <div className="truncate font-mono text-xs text-fg-tertiary">{hash.slice(0, 18)}…</div>
                   </div>
                   <Button
                     data-testid={TEST_IDS.customChainsRemoveButton}
@@ -134,9 +135,7 @@ export const CustomChainsSettings = memo(() => {
           </SettingsSection>
         )}
 
-        {entryList.length === 0 && (
-          <p className="text-center text-sm text-text-tertiary">{t('feature.customChains.emptyState')}</p>
-        )}
+        {entryList.length === 0 && <p className="text-center text-sm text-fg-tertiary">{t('feature.customChains.emptyState')}</p>}
       </div>
     </SettingsList>
   );

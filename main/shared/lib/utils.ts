@@ -1,10 +1,16 @@
-const SUPPORTED_BUILD_SOURCES = ['github', 's3'] as const;
-
-export function checkAutoUpdateSupported(): boolean {
-  const buildSource = process.env['BUILD_SOURCE'];
-
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  return !!buildSource && SUPPORTED_BUILD_SOURCES.includes(buildSource as (typeof SUPPORTED_BUILD_SOURCES)[number]);
+/**
+ * The single source of truth for whether auto-update can actually run. The updater (which drives
+ * the checks) and the renderer settings (which show/hide the toggle, via sync IPC) must agree,
+ * otherwise the UI offers a check that silently resolves to a fake "up to date".
+ * Pure over its inputs so the gate is unit-testable.
+ *
+ * `enabledInBuild` is the explicit ENABLE_AUTO_UPDATE build-time opt-in set only by the release
+ * pipeline. `hasUpdateFeed` stays a separate input because an enabled build with nothing to query —
+ * neither a static feed URL nor an owner/repo — is a pipeline misconfiguration (setFeedURL would
+ * build an unresolvable feed), not a valid state.
+ */
+export function computeAutoUpdateSupported(params: { enabledInBuild: boolean; hasUpdateFeed: boolean }): boolean {
+  return params.enabledInBuild && params.hasUpdateFeed;
 }
 
 /**

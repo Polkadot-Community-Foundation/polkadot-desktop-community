@@ -13,7 +13,7 @@ test.describe('IPC Store Access Control', { tag: ['@security'] }, () => {
   test('allows reading an authorized key (autoUpdate)', async ({ electronApp }) => {
     const { window } = electronApp;
 
-    const value = await window.evaluate(async () => {
+    const value = await window.evaluate(() => {
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return (globalThis as any).App.getStoreValue('autoUpdate');
     });
@@ -22,10 +22,10 @@ test.describe('IPC Store Access Control', { tag: ['@security'] }, () => {
     expect(typeof value === 'boolean' || typeof value === 'undefined').toBe(true);
   });
 
-  test('blocks reading an unauthorized key', async ({ electronApp }) => {
+  test('blocks reading an unauthorized key', { tag: ['@allure.id:14946'] }, async ({ electronApp }) => {
     const { window } = electronApp;
 
-    const value = await window.evaluate(async () => {
+    const value = await window.evaluate(() => {
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return (globalThis as any).App.getStoreValue('malicious_key');
     });
@@ -37,13 +37,13 @@ test.describe('IPC Store Access Control', { tag: ['@security'] }, () => {
     const { window } = electronApp;
 
     // Attempt to write an unauthorized key
-    await window.evaluate(async () => {
+    await window.evaluate(() => {
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return (globalThis as any).App.setStoreValue('injected_key', 'evil_payload');
     });
 
     // Verify the key was not written by trying to read it back
-    const value = await window.evaluate(async () => {
+    const value = await window.evaluate(() => {
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return (globalThis as any).App.getStoreValue('injected_key');
     });
@@ -54,7 +54,7 @@ test.describe('IPC Store Access Control', { tag: ['@security'] }, () => {
   test('blocks reading __proto__ key', async ({ electronApp }) => {
     const { window } = electronApp;
 
-    const value = await window.evaluate(async () => {
+    const value = await window.evaluate(() => {
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return (globalThis as any).App.getStoreValue('__proto__');
     });

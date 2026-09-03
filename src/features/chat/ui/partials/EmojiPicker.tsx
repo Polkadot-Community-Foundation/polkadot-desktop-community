@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
+import { TEST_IDS } from '@/shared/test-ids';
 import { cnTw } from '@/shared/utils';
 
 import { EMOJI_CATEGORIES } from './emoji-data';
@@ -45,10 +46,11 @@ export const EmojiPicker = ({ onSelect, onClose }: EmojiPickerProps) => {
     <div
       ref={pickerRef}
       data-emoji-picker
-      className="flex h-96 w-80 flex-col overflow-hidden rounded-xl border border-border-primary bg-bg-surface-container shadow-lg"
+      data-testid={TEST_IDS.chatEmojiPicker}
+      className="flex h-96 w-80 flex-col overflow-hidden rounded-xl border border-stroke-primary bg-bg-surface-container shadow-lg"
     >
       {/* Header with category tabs and close button */}
-      <div className="flex shrink-0 items-center border-b border-border-primary px-2 py-1.5">
+      <div className="flex shrink-0 items-center border-b border-stroke-primary px-2 py-1.5">
         <div className="flex flex-1 gap-0.5 overflow-x-auto">
           {EMOJI_CATEGORIES.map((category, index) => (
             <button
@@ -66,7 +68,7 @@ export const EmojiPicker = ({ onSelect, onClose }: EmojiPickerProps) => {
           ))}
         </div>
         <button
-          className="ml-1 flex size-6 shrink-0 items-center justify-center rounded transition-colors hover:bg-bg-selection-container-hover"
+          className="ms-1 flex size-6 shrink-0 items-center justify-center rounded transition-colors hover:bg-bg-selection-container-hover"
           onClick={onClose}
         >
           <X className="size-3.5 text-fg-tertiary" />

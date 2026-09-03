@@ -15,6 +15,7 @@ import { FEATURE_FLAGS } from '@/shared/featureFlags';
 import { type DeviceIdentity, type UserIdentity } from '@/domains/device';
 
 import { type DeviceSyncOrchestratorParams, startDeviceSyncOrchestrator } from './orchestrator';
+import { setTrackedSyncPeer } from './resource';
 
 export type DeviceSyncWiringDeps = {
   device: DeviceIdentity | null;
@@ -36,6 +37,10 @@ export async function startDeviceSyncIfReady(deps: DeviceSyncWiringDeps): Promis
   if (!deps.device || !deps.userIdentity) {
     return () => {};
   }
+
+  // The orchestrator is peer-agnostic; tell the consumer-side status surface which
+  // peer (the authorising PApp/mobile device) the UI should reflect.
+  setTrackedSyncPeer(toHex(deps.userIdentity.peerDeviceStatementAccountId));
 
   const handle = await startDeviceSyncOrchestrator({
     ownDevice: {
@@ -92,7 +97,6 @@ export function startDeviceSyncOnIdentity(params: {
       distinctUntilChanged(sameUserIdentity),
       switchMap(identity => {
         if (!identity) return EMPTY;
-        console.info('WEBRTC [device-sync] identity settled — (re)starting orchestrator');
         return runDeviceSync$(signal => params.start(identity, signal));
       }),
     )
