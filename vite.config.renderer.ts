@@ -2,7 +2,7 @@ import { resolve } from 'node:path';
 
 import { type UserConfigFn } from 'vite';
 
-import { folders, renderer, title, version } from './config/index.js';
+import { folders, isProductionRelease, renderer, title, version } from './config/index.js';
 
 const config: UserConfigFn = async ({ mode, command }) => {
   const { defineConfig } = await import('vite');
@@ -39,10 +39,13 @@ const config: UserConfigFn = async ({ mode, command }) => {
       // remapped (staging -> production) for Vite, so import.meta.env.MODE cannot
       // distinguish a staging build from a production one — this define can.
       'process.env.BUILD_MODE': JSON.stringify(mode),
-      // Packaging channel, independent of `mode`. The DEV distribution is built
-      // in production mode, so the renderer cannot infer it from MODE — without
-      // this define it would show the production favicon.
-      'process.env.BUILD_CHANNEL': JSON.stringify(process.env['BUILD_CHANNEL'] ?? ''),
+      // Which distribution this build is, independent of `mode`. The develop
+      // distribution is compiled with `npm run build` — production mode — so the
+      // renderer cannot infer it from MODE, and without this define anything that
+      // should look different in the shipped DEV build (the favicon, for one) would
+      // take the production answer. Read through `isDevelopRelease()` in
+      // src/shared/env.
+      'process.env.BUILD_TYPE': JSON.stringify(process.env['BUILD_TYPE'] ?? ''),
       'process.env.PRODUCT_NAME': JSON.stringify(title),
       'process.env.VERSION': JSON.stringify(version),
       'process.env.BUILD_TIME': JSON.stringify(new Date().toISOString()),
@@ -147,11 +150,12 @@ const config: UserConfigFn = async ({ mode, command }) => {
         },
       }),
       favicons(
-        // Same reason as the BUILD_CHANNEL define above: the DEV distribution is
-        // built in production mode, so `mode` alone would give it prod favicons.
-        mode === 'development' || process.env['BUILD_CHANNEL'] === 'dev'
-          ? resolve(folders.rendererRoot, 'favicon.dev.png')
-          : resolve(folders.rendererRoot, 'favicon.png'),
+        // Same switch the app icon and the bundle id are chosen with, and for the
+        // same reason: `mode` alone reports the develop distribution as production
+        // and would hand it the production favicons. Unset resolves to develop, so
+        // the generated icons in a build nobody configured say "test network"
+        // rather than claiming to be the real app.
+        isProductionRelease ? resolve(folders.rendererRoot, 'favicon.png') : resolve(folders.rendererRoot, 'favicon.dev.png'),
         {
           appName: 'Polkadot Desktop',
           appShortName: 'Dot Desktop',

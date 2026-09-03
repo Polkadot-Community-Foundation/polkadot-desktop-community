@@ -21,7 +21,12 @@ export const electronProtocol = 'polkadot';
 // cannot overwrite a release one — configures the `_DEVELOP` variants. One that needs a single
 // identity, because its installed users already have one, configures only the base variables and
 // gets it for every build type.
-const isProductionRelease = process.env.BUILD_TYPE === 'production';
+//
+// Exported because the identity is not the only thing that has to follow it. `electron-builder.js`
+// picks the app icon off this flag and `vite.config.renderer.ts` the favicon, so the artwork a
+// build ships cannot disagree with the bundle id and display name it ships under — which is what
+// makes a side-by-side develop install recognisable as one.
+export const isProductionRelease = process.env.BUILD_TYPE === 'production';
 
 function pick(base, develop) {
   const baseValue = (process.env[base] ?? '').trim();

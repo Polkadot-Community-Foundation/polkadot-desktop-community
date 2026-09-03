@@ -131,6 +131,12 @@ jobs:
       # Variable is unset, so packaging cannot hard-fail on a missing Variable and an
       # existing install slot / userData directory is never orphaned by a typo. Set the
       # repo Variables to override.
+      #
+      # BUILD_TYPE also picks the artwork, not just the identity: electron-builder.js
+      # takes the app icon off it and vite.config.renderer.ts the favicon, so the DEV
+      # distribution ships the white "DEV" tile and cannot end up wearing the production
+      # icon while installed under the develop bundle id. Setting BUILD_TYPE=production
+      # here therefore changes what the installer looks like as well as what it is.
       BUILD_TYPE: ${{ vars.BUILD_TYPE || 'dev' }}
       APP_ID_DEVELOP: ${{ vars.APP_ID_DEVELOP || 'com.polkadot.desktop.dev' }}
       PRODUCT_NAME_DEVELOP: ${{ vars.PRODUCT_NAME_DEVELOP || 'Polkadot Desktop Dev' }}

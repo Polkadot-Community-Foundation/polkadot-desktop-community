@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-import { isDev, isDevChannel } from '@/shared/env';
+import { isDevelopRelease } from '@/shared/env';
 import { useBrowserTheme } from '@/shared/hooks';
 import { useFavicon } from '../context/FaviconContext';
 
@@ -64,16 +64,15 @@ export const Favicon = () => {
     const link = getFaviconLink();
     if (!link) return;
 
-    // isDev() alone misses the shipped DEV build, which is compiled in production
-    // mode; isDevChannel() covers it. Both get the devnet favicon.
-    const faviconSrc =
-      isDev() || isDevChannel()
-        ? browserTheme === 'dark'
-          ? faviconDevDark
-          : faviconDev
-        : browserTheme === 'dark'
-          ? faviconProdDark
-          : faviconProd;
+    // Not isDev(): that reads the Vite mode, and the shipped DEV build is compiled in
+    // production mode, so it would take the production favicon here.
+    const faviconSrc = isDevelopRelease()
+      ? browserTheme === 'dark'
+        ? faviconDevDark
+        : faviconDev
+      : browserTheme === 'dark'
+        ? faviconProdDark
+        : faviconProd;
 
     if (!hasBadge) {
       link.href = faviconSrc;

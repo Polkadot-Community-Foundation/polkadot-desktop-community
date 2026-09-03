@@ -40,12 +40,18 @@ export const isDev = () => {
   return import.meta.env.MODE === 'development';
 };
 
-// True for the public DEV distribution. This is NOT the same as isDev(): the DEV
-// installers are built with `npm run build` (production mode), so isDev() is false
-// in them. Anything that should look different in the shipped DEV build — the
-// favicon, for one — has to key off the channel, not the Vite mode.
-export const isDevChannel = () => {
-  return process.env['BUILD_CHANNEL'] === 'dev';
+// True for anything that is not the production distribution — the public DEV build,
+// and local development. Reads the BUILD_TYPE define (see vite.config.renderer.ts),
+// which mirrors `isProductionRelease` in config/index.js, the flag the bundle id and
+// the app icon are already chosen with.
+//
+// It is NOT interchangeable with isDev() or isProductionBuild(), both of which
+// describe the Vite mode: the DEV installers are compiled with `npm run build`, so by
+// mode alone they are production builds and would take the production artwork. Unset
+// answers develop, deliberately — a build that has not said which distribution it is
+// has not earned the production mark.
+export const isDevelopRelease = () => {
+  return process.env['BUILD_TYPE'] !== 'production';
 };
 
 // True only for `npm run build` (vite --mode production). Reads the BUILD_MODE
