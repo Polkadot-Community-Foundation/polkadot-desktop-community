@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-import { isDev } from '@/shared/env';
+import { isDevelopRelease } from '@/shared/env';
 import { useBrowserTheme } from '@/shared/hooks';
 import { useFavicon } from '../context/FaviconContext';
 
@@ -64,7 +64,9 @@ export const Favicon = () => {
     const link = getFaviconLink();
     if (!link) return;
 
-    const faviconSrc = isDev()
+    // Not isDev(): that reads the Vite mode, and the shipped DEV build is compiled in
+    // production mode, so it would take the production favicon here.
+    const faviconSrc = isDevelopRelease()
       ? browserTheme === 'dark'
         ? faviconDevDark
         : faviconDev
