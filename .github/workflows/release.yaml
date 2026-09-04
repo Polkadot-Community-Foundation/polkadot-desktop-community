@@ -34,8 +34,27 @@ name: Release (Paseo / DEV)
 #     new v* tag every weekday and publish a GitHub Release off it unattended, and then
 #     `gh workflow run release-pipeline.yml` on top.
 #
-# Releases in this fork are cut by pushing a v* tag by hand. If upstream's pipeline is
-# ever wanted here, reconcile the two paths deliberately — do not restore the files.
+# Versioned releases in this fork are cut by pushing a v* tag by hand. If upstream's
+# pipeline is ever wanted here, reconcile the two paths deliberately — do not restore the
+# files.
+#
+# WEEKLY TRACK — this workflow does carry a schedule of its own (Thursday 18:00 UTC), and
+# it is deliberately NOT the thing deleted above. The differences are the whole point:
+#   - it publishes a dated `dev-weekly-YYYY-MM-DD` PRE-release, not a v* version tag, so
+#     the version line stays hand-cut and `latest` never moves on a cron;
+#   - it reuses this one guarded build path (single-channel validation, packaging identity
+#     assertion), rather than dispatching upstream's unguarded pipeline;
+#   - it ships to GitHub Releases only — no Telegram, no S3.
+# ⚠️ It is only safe while the auto-update feed stays off. `AUTO_UPDATE_URL` /
+# `UPDATE_REPO_*` are currently unset, so nothing pulls these builds into installed
+# clients. If the feed is ever enabled, confirm electron-updater is not configured with
+# `allowPrerelease` before leaving this cron armed — otherwise every Thursday ships itself
+# to every install unattended, which is exactly the failure mode create-release-tag.yml
+# was deleted for.
+#
+# Cron is UTC and does NOT follow DST: 18:00 UTC is 20:00 CEST in summer, 19:00 CET in
+# winter. GitHub only runs schedules on the DEFAULT BRANCH, and suspends them after 60
+# days of repository inactivity.
 #
 # CONFIG SOURCE — repo Variables & Secrets, NOT a committed file. No .env* is ever
 # committed to this repo (.gitignore blocks it). The runner writes an ephemeral .env
@@ -79,6 +98,10 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+  schedule:
+    # Weekly devnet build — Thursday 18:00 UTC (20:00 CEST / 19:00 CET; cron has no DST).
+    # Publishes a dated pre-release, never a v* tag. See the WEEKLY TRACK note above.
+    - cron: '0 18 * * 4'
 
 permissions:
   contents: write
@@ -332,7 +355,10 @@ jobs:
   # set — and a single publisher avoids three matrix legs racing on the same Release.
   release:
     needs: [prepare, build]
-    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    # A v* tag push publishes a version release; the weekly cron publishes a dated
+    # pre-release. A plain workflow_dispatch stays build-only — it uploads artifacts and
+    # publishes nothing, so a manual smoke build can never mint a release by accident.
+    if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'schedule' }}
     runs-on: ubuntu-latest
     steps:
       # Needed for `.github/release-notes-macos-unsigned.md` — the release job does not
@@ -361,6 +387,31 @@ jobs:
           fi
           sha256sum "${files[@]}" | tee SHA256SUMS.txt
 
+      # A tag run publishes under its own v* tag as a full release. A scheduled run has no
+      # tag, so mint a dated one and mark it a PRE-release — that is what keeps the weekly
+      # cadence off the version line and out of any future auto-update `latest`.
+      - name: Resolve release channel
+        id: channel
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            DATE=$(date -u +%Y-%m-%d)
+            {
+              echo "tag=dev-weekly-${DATE}"
+              echo "name=Weekly devnet build ${DATE} (Desktop)"
+              echo "prerelease=true"
+              echo "weekly=true"
+            } >> "$GITHUB_OUTPUT"
+          else
+            {
+              echo "tag=${GITHUB_REF_NAME}"
+              echo "name=${GITHUB_REF_NAME}"
+              echo "prerelease=false"
+              echo "weekly=false"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
       # When the mac build is NOT signed+notarized, Gatekeeper blocks it ("Apple could not
       # verify … is free of malware"). Prepend the quarantine workaround (a committed
       # template) so users can self-remediate; omit it entirely once signing is configured.
@@ -369,6 +420,15 @@ jobs:
         run: |
           set -euo pipefail
           : > NOTES.md
+          if [ "${{ steps.channel.outputs.weekly }}" = "true" ]; then
+            {
+              echo "Weekly Polkadot Desktop devnet build — commit \`${GITHUB_SHA:0:8}\`, run ${GITHUB_RUN_NUMBER}."
+              echo
+              echo "This is a **devnet** build for testing only; state may be wiped. Found a"
+              echo "problem? [Report it](https://github.com/Polkadot-Community-Foundation/products-devnet-issues/issues/new/choose)."
+              echo
+            } >> NOTES.md
+          fi
           if [ "${{ needs.prepare.outputs.signed }}" != "true" ]; then
             cat .github/release-notes-macos-unsigned.md >> NOTES.md
           fi
@@ -377,7 +437,9 @@ jobs:
         # Third-party action pinned to a commit SHA (supply-chain hardening) — v2.
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
         with:
-          name: ${{ github.ref_name }}
+          tag_name: ${{ steps.channel.outputs.tag }}
+          name: ${{ steps.channel.outputs.name }}
+          prerelease: ${{ steps.channel.outputs.prerelease }}
           body_path: NOTES.md
           # latest*.yml only exists when an auto-update feed is configured (publish
           # block in electron-builder.js). Don't fail the release when it's absent —
