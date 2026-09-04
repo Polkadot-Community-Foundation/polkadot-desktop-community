@@ -2,7 +2,7 @@
   "name": "polkadot-desktop",
   "description": "Polkadot Desktop application",
   "type": "module",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "main": "./release/build/main.cjs",
   "repository": "https://github.com/paritytech/polkadot-desktop-community",
   "license": "GPL-3.0-only",
