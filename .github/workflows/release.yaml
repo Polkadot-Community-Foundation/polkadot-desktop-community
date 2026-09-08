@@ -360,6 +360,16 @@ jobs:
     # publishes nothing, so a manual smoke build can never mint a release by accident.
     if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'schedule' }}
     runs-on: ubuntu-latest
+    # MANUAL APPROVAL GATE. `tester-distribution` is a protected environment with a required
+    # reviewer, so this job PAUSES here — after every platform has built and uploaded its
+    # installers as artifacts — until a reviewer approves it in the Actions UI. Nothing is
+    # published (no GitHub Release, no `latest`, no weekly pre-release) without that click;
+    # rejecting simply leaves the artifacts on the run. The gate lives in the environment's
+    # protection rules, not in this file: if the environment is ever deleted GitHub recreates
+    # it UNPROTECTED on first use and the cron ships unattended again.
+    environment:
+      name: tester-distribution
+      url: ${{ github.server_url }}/${{ github.repository }}/releases
     steps:
       # Needed for `.github/release-notes-macos-unsigned.md` — the release job does not
       # build, but the "Compose release notes" step reads a committed template.
