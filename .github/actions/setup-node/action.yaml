@@ -1,3 +1,5 @@
+name: Setup Node
+description: Install the Node.js version pinned by package.json, with the npm cache enabled.
 runs:
   using: 'composite'
   steps:
