@@ -5,8 +5,17 @@ name: Build (Production)
 # This is PCF-232 / PCF-239. It exists beside `release.yaml` (the DEV/devnet lane) rather
 # than inside it, because that lane is load-bearing today and a shared file is a shared
 # blast radius. The two lanes must be runnable AT THE SAME TIME, so everything that could
-# collide is different here: the concurrency group, the artifact names, and the packaged
+# collide is different here: the concurrency group, the output location, and the packaged
 # application identity.
+#
+# ── Private output ───────────────────────────────────────────────────────────────────
+# This repository is public, and its Actions artifacts can be downloaded by any signed-in
+# GitHub user, so this lane uploads NO Actions artifact. Installers go to a private Cloud
+# Storage bucket (`vars.BUILD_BUCKET`, prefix `desktop/<run>/<os>/`) through a keyless
+# sign-in (GitHub OIDC -> Workload Identity Federation) that is only issued to this
+# repository's production environments and can only create and read under `desktop/`.
+# `build-app` is called with `upload_build_output: 'false'` so the compiled bundle is not
+# uploaded either.
 #
 # ── What this workflow does NOT do ───────────────────────────────────────────────────
 #   - no GitHub Release (there is no `softprops/action-gh-release` step, and
@@ -52,7 +61,7 @@ name: Build (Production)
 #
 #   concurrency group   build-production-<ref>        (devnet lane: release-<ref>)
 #   installers          polkadot-desktop-production-* (devnet lane: polkadot-desktop-dev-*)
-#   compiled bundle     build-output-production-*     (build-pr lane: build-output-<OS>)
+#   compiled bundle     not uploaded                  (build-pr lane: build-output-<OS>)
 #   application id      vars.APP_ID                   (devnet lane: APP_ID_DEVELOP,
 #                                                      com.polkadot.desktop.dev)
 #
@@ -165,6 +174,9 @@ jobs:
     # value here ships inside the installer and is public. The material that could put
     # something in front of a user lives in `production-distribution` above.
     environment: production
+    permissions:
+      contents: read
+      id-token: write
     env:
       # ── Packaged application identity. No fallbacks: see the header. ─────────────
       APP_ID: ${{ vars.APP_ID }}
@@ -181,6 +193,22 @@ jobs:
       # single *devnet* channel would otherwise sail through.
       EXPECTED_CHANNEL: ${{ vars.PRODUCTION_CHANNEL_ID || 'polkadot' }}
     steps:
+      # Installers go to a private bucket. Refuse to build without one.
+      - name: Require the private output configuration
+        shell: bash
+        env:
+          BUILD_BUCKET: ${{ vars.BUILD_BUCKET }}
+          GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          GCP_SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
+        run: |
+          missing=0
+          for name in BUILD_BUCKET GCP_WORKLOAD_IDENTITY_PROVIDER GCP_SERVICE_ACCOUNT; do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name is not set in the production environment; refusing to build without a private output"
+              missing=1
+            fi
+          done
+          exit "$missing"
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -275,8 +303,8 @@ jobs:
           sentry_dsn: ${{ secrets.SENTRY_DSN }}
           sentry_required: 'false'
           include_dist_artifacts: false
-          # Distinct from every other lane's: the action's own `build-output-*` upload
-          # would otherwise collide with build-pr.yml's when both run.
+          # The compiled bundle carries every production value; never an Actions artifact.
+          upload_build_output: 'false'
           artifact_suffix: production-${{ runner.os }}
 
       # ── Package. Every invocation carries `-p never`. ────────────────────────────
@@ -342,16 +370,33 @@ jobs:
 
       # `latest*.yml` is electron-updater FEED METADATA. electron-builder writes it because
       # electron-builder.js always carries a `publish` block, but this lane publishes no
-      # feed and auto-update is off, so it is deliberately left out of the artifact: an
-      # artifact is not a feed, and the surest way to keep it from becoming one is not to
-      # hand anyone the file.
-      - name: Upload installers
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+      # feed and auto-update is off, so it is deliberately not uploaded: an upload is not a
+      # feed, and the surest way to keep it from becoming one is not to hand anyone the file.
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
         with:
-          name: polkadot-desktop-production-${{ matrix.os }}
-          path: |
-            release/dist/*.dmg
-            release/dist/*.zip
-            release/dist/*.AppImage
-            release/dist/*.exe
-          if-no-files-found: error
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+
+      - name: Upload installers to the private bucket
+        shell: bash
+        env:
+          BUILD_BUCKET: ${{ vars.BUILD_BUCKET }}
+          OS: ${{ matrix.os }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(release/dist/*.dmg release/dist/*.zip release/dist/*.AppImage release/dist/*.exe)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::error::no installers found in release/dist"
+            exit 1
+          fi
+          PREFIX="desktop/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/${OS}"
+          gcloud storage cp --if-generation-match=0 "${files[@]}" "gs://${BUILD_BUCKET}/${PREFIX}/"
+          {
+            echo "### Installers stored privately"
+            echo '```'
+            for f in "${files[@]}"; do echo "gs://${BUILD_BUCKET}/${PREFIX}/$(basename "$f")"; done
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

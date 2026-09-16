@@ -127,6 +127,10 @@ inputs:
   artifact_suffix:
     description: Suffix for artifact name to avoid collisions (e.g. Linux-arm64). When empty, uses runner.os.
     required: false
+  upload_build_output:
+    description: Upload release/build as an Actions artifact (needed by E2E). The production lane sets false, since this repository's artifacts are downloadable by any signed-in GitHub user.
+    required: false
+    default: 'true'
   sentry_dsn:
     description: Sentry DSN. Required when sentry_required is true.
     required: false
@@ -308,6 +312,7 @@ runs:
           release/dist/latest-linux*.yml
 
     - name: Upload build output for E2E
+      if: inputs.upload_build_output == true || inputs.upload_build_output == 'true'
       uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
       with:
         name: build-output-${{ inputs.artifact_suffix || runner.os }}
