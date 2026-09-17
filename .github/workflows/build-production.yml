@@ -31,24 +31,26 @@ name: Build (Production)
 # `production`              UNGATED. Holds production *configuration* — application ids,
 #                           product names, the channel catalog, Firebase web ids, the
 #                           update-feed owner. All of it ships inside the artifact and is
-#                           public. Declared by the `build` job below, so a production
-#                           build needs no approval click and can run beside a devnet one.
-# `production-distribution` GATED (required reviewers). Holds production *secrets* —
-#                           signing certificates, notarization credentials, store API
-#                           keys. Declared by the `signing-preflight` job, which runs ONLY
-#                           for `signing: production`.
+#                           public. Declared by the `config` job below, which exports it as
+#                           job outputs.
+# `production-distribution` GATED (required reviewers). Holds the signing material — the
+#                           Cloud KMS key ring and alias, the certificate chain, the signing
+#                           service account. Declared by the `build` job, but ONLY when it
+#                           is dispatched with `signing: production`.
 #
-# 🔴 DEVIATION FROM THE SHARED SPEC, stated deliberately. The spec asks for the signing
-# STEP to declare `production-distribution`. GitHub Actions has no such thing: `environment:`
-# is a JOB-level key only, there is no step-level equivalent. Resolving the build job's own
-# environment conditionally (`environment: ${{ inputs.signing == 'production' && ... }}`)
-# would work syntactically but would then hide the `production` CONFIGURATION variables
-# from the very build that needs them, because `vars` resolve from exactly one environment.
-# So the gate is expressed as a separate preflight job that the build depends on. Today
-# that job's only work is to fail loudly and name the missing material — PCF holds no Apple
-# Developer ID (PCF-29) and no Windows code-signing certificate — which is also the honest
-# state of `signing: production` until those land. When the material exists, this is the
-# job that acquires it and hands it to the build.
+# Signing has to happen INSIDE the build: electron-builder signs the application executable
+# before NSIS wraps it, so an installer signed afterwards would carry an unsigned program.
+# A job declares exactly one environment, so the build cannot read configuration from
+# `production` and signing material from `production-distribution` at the same time. The
+# configuration is public by definition — every value ships inside the installer — so it
+# travels as job outputs from the ungated `config` job, and the build switches its own
+# environment to the gated one when, and only when, it signs. An unsigned production build
+# still needs no approval click.
+#
+# Windows signs through Cloud HSM (jsign + Cloud KMS, see scripts/sign-windows-kms.js): the
+# private key is generated in hardware and cannot be exported, so the runner holds nothing
+# but a one-hour token. macOS stays unsigned until PCF holds an Apple Developer ID (PCF-29),
+# Linux until a GPG signing key exists; both say so in the run summary.
 #
 # ── Lane isolation, verifiable ───────────────────────────────────────────────────────
 # GitHub resolves `vars.X` as ENVIRONMENT, then repository, then organisation. `release.yaml`
@@ -115,96 +117,140 @@ env:
   CLOUDSDK_STORAGE_PARALLEL_COMPOSITE_UPLOAD_ENABLED: "False"
 
 jobs:
-  # Runs ONLY for `signing: production`. Declaring the gated environment here is what makes
-  # a reviewer approve before any signing material is read. For `signing: none` this job is
-  # skipped entirely, so an unsigned production build needs no approval — which is the whole
-  # point of splitting the two environments.
-  signing-preflight:
-    name: Signing material preflight
-    if: ${{ inputs.signing == 'production' }}
+  # Production CONFIGURATION, read once and handed to the build as job outputs. Every value here
+  # ships inside the installer and is public, so passing it through outputs leaks nothing — and it
+  # is what lets the build job declare the GATED environment when it signs (a job has exactly one
+  # `environment:`, and the signing material and the configuration live in different ones).
+  config:
+    name: Production configuration
     runs-on: ubuntu-latest
-    environment: production-distribution
+    environment: production
+    outputs:
+      app_id: ${{ steps.export.outputs.app_id }}
+      product_name: ${{ steps.export.outputs.product_name }}
+      app_name: ${{ steps.export.outputs.app_name }}
+      app_author: ${{ steps.export.outputs.app_author }}
+      environments: ${{ steps.export.outputs.environments }}
+      firebase_api_key: ${{ steps.export.outputs.firebase_api_key }}
+      firebase_project_id: ${{ steps.export.outputs.firebase_project_id }}
+      firebase_app_id: ${{ steps.export.outputs.firebase_app_id }}
+      expected_channel: ${{ steps.export.outputs.expected_channel }}
+      update_repo_owner: ${{ steps.export.outputs.update_repo_owner }}
+      update_repo_name: ${{ steps.export.outputs.update_repo_name }}
+      turn_host: ${{ steps.export.outputs.turn_host }}
+      turn_ttl: ${{ steps.export.outputs.turn_ttl }}
+      sandbox_ipfs_allowlist: ${{ steps.export.outputs.sandbox_ipfs_allowlist }}
+      sandbox_relay_allowlist: ${{ steps.export.outputs.sandbox_relay_allowlist }}
+      build_bucket: ${{ steps.export.outputs.build_bucket }}
+      wif_provider: ${{ steps.export.outputs.wif_provider }}
+      service_account: ${{ steps.export.outputs.service_account }}
     steps:
-      - name: Require real signing material
+      # Fail here, naming every missing variable, rather than forty minutes later inside
+      # electron-builder or at the upload with nowhere private to put the installers.
+      - name: Export the production configuration
+        id: export
         shell: bash
         env:
-          # macOS: a Developer ID Application certificate plus notarytool credentials.
-          CERTIFICATE_OSX_APPLICATION: ${{ secrets.CERTIFICATE_OSX_APPLICATION }}
-          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
-          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
-          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # Windows: no code-signing configuration exists in electron-builder.js at all,
-          # so this one needs a repository change as well as a certificate.
-          WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+          APP_ID: ${{ vars.APP_ID }}
+          PRODUCT_NAME: ${{ vars.PRODUCT_NAME }}
+          APP_NAME: ${{ vars.APP_NAME }}
+          APP_AUTHOR: ${{ vars.APP_AUTHOR }}
+          VITE_ENVIRONMENTS: ${{ vars.VITE_ENVIRONMENTS }}
+          VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
+          EXPECTED_CHANNEL: ${{ vars.PRODUCTION_CHANNEL_ID || 'polkadot' }}
+          UPDATE_REPO_OWNER: ${{ vars.UPDATE_REPO_OWNER || github.repository_owner }}
+          UPDATE_REPO_NAME: ${{ vars.UPDATE_REPO_NAME || github.event.repository.name }}
+          VITE_WEBRTC_TURN_HOST: ${{ vars.VITE_WEBRTC_TURN_HOST }}
+          VITE_WEBRTC_TURN_TTL: ${{ vars.VITE_WEBRTC_TURN_TTL }}
+          SANDBOX_IPFS_ALLOWLIST: ${{ vars.SANDBOX_IPFS_ALLOWLIST }}
+          SANDBOX_RELAY_ALLOWLIST: ${{ vars.SANDBOX_RELAY_ALLOWLIST }}
+          BUILD_BUCKET: ${{ vars.BUILD_BUCKET }}
+          GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          GCP_SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
         run: |
           set -euo pipefail
           missing=()
-          for name in CERTIFICATE_OSX_APPLICATION CERTIFICATE_PASSWORD \
-                      APPLE_API_KEY_P8_BASE64 APPLE_API_KEY_ID APPLE_API_ISSUER APPLE_TEAM_ID \
-                      WINDOWS_CERTIFICATE_BASE64; do
+          for name in APP_ID PRODUCT_NAME APP_NAME APP_AUTHOR VITE_ENVIRONMENTS \
+                      VITE_FIREBASE_API_KEY VITE_FIREBASE_PROJECT_ID VITE_FIREBASE_APP_ID \
+                      BUILD_BUCKET GCP_WORKLOAD_IDENTITY_PROVIDER GCP_SERVICE_ACCOUNT; do
             [ -z "${!name-}" ] && missing+=("${name}")
           done
           if [ ${#missing[@]} -gt 0 ]; then
             {
-              echo "### ❌ signing: production — required material is missing"
+              echo "### ❌ the \`production\` environment is missing configuration"
               echo
-              echo "Not present in the \`production-distribution\` environment:"
               for name in "${missing[@]}"; do echo "- \`${name}\`"; done
               echo
-              echo "PCF holds no Apple Developer account (PCF-29) and no Windows code-signing"
-              echo "certificate today; Windows would additionally need a \`win.certificateFile\` /"
-              echo "\`certificateSubjectName\` block in \`electron-builder.js\`, which does not exist."
-              echo "Re-run with \`signing: none\` for an unsigned production build."
+              echo "These are environment Variables, never repository Variables — a repo-level"
+              echo "value would leak into the devnet lane in \`release.yaml\`."
             } | tee -a "$GITHUB_STEP_SUMMARY" >&2
             exit 1
           fi
-          echo "All signing material present." | tee -a "$GITHUB_STEP_SUMMARY"
+          emit() {
+            printf '%s<<__PCF_EOF__\n%s\n__PCF_EOF__\n' "$1" "${2-}" >> "$GITHUB_OUTPUT"
+          }
+          emit app_id "${APP_ID}"
+          emit product_name "${PRODUCT_NAME}"
+          emit app_name "${APP_NAME}"
+          emit app_author "${APP_AUTHOR}"
+          emit environments "${VITE_ENVIRONMENTS}"
+          emit firebase_api_key "${VITE_FIREBASE_API_KEY}"
+          emit firebase_project_id "${VITE_FIREBASE_PROJECT_ID}"
+          emit firebase_app_id "${VITE_FIREBASE_APP_ID}"
+          emit expected_channel "${EXPECTED_CHANNEL}"
+          emit update_repo_owner "${UPDATE_REPO_OWNER}"
+          emit update_repo_name "${UPDATE_REPO_NAME}"
+          emit turn_host "${VITE_WEBRTC_TURN_HOST}"
+          emit turn_ttl "${VITE_WEBRTC_TURN_TTL}"
+          emit sandbox_ipfs_allowlist "${SANDBOX_IPFS_ALLOWLIST}"
+          emit sandbox_relay_allowlist "${SANDBOX_RELAY_ALLOWLIST}"
+          emit build_bucket "${BUILD_BUCKET}"
+          emit wif_provider "${GCP_WORKLOAD_IDENTITY_PROVIDER}"
+          emit service_account "${GCP_SERVICE_ACCOUNT}"
+          echo "Production configuration present."
 
   build:
     name: Build (${{ matrix.os }})
-    needs: signing-preflight
-    # `signing-preflight` is SKIPPED for `signing: none`, which would normally skip this job
-    # too. Run whenever nothing upstream failed or was cancelled — so a failed preflight
-    # still stops the build, which is the behaviour that matters.
-    if: ${{ !failure() && !cancelled() }}
+    needs: config
     strategy:
       fail-fast: false
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
-    # UNGATED, on purpose (PCF-239). This carries production CONFIGURATION only — every
-    # value here ships inside the installer and is public. The material that could put
-    # something in front of a user lives in `production-distribution` above.
-    environment: production
+    # GATED only when it signs. `signing: none` runs in the ungated `production` environment and
+    # needs no approval; `signing: production` runs in `production-distribution`, so a reviewer
+    # approves before the build can reach any signing key. Configuration comes from `needs.config`
+    # either way, so the gated run is not missing anything the ungated one had.
+    environment: ${{ inputs.signing == 'production' && 'production-distribution' || 'production' }}
     permissions:
       contents: read
       id-token: write
     env:
       # ── Packaged application identity. No fallbacks: see the header. ─────────────
-      APP_ID: ${{ vars.APP_ID }}
-      PRODUCT_NAME: ${{ vars.PRODUCT_NAME }}
-      APP_NAME: ${{ vars.APP_NAME }}
-      APP_AUTHOR: ${{ vars.APP_AUTHOR }}
+      APP_ID: ${{ needs.config.outputs.app_id }}
+      PRODUCT_NAME: ${{ needs.config.outputs.product_name }}
+      APP_NAME: ${{ needs.config.outputs.app_name }}
+      APP_AUTHOR: ${{ needs.config.outputs.app_author }}
       # ── Channel catalog + public Firebase web ids ────────────────────────────────
-      VITE_ENVIRONMENTS: ${{ vars.VITE_ENVIRONMENTS }}
-      VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
-      VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
-      VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
+      VITE_ENVIRONMENTS: ${{ needs.config.outputs.environments }}
+      VITE_FIREBASE_API_KEY: ${{ needs.config.outputs.firebase_api_key }}
+      VITE_FIREBASE_PROJECT_ID: ${{ needs.config.outputs.firebase_project_id }}
+      VITE_FIREBASE_APP_ID: ${{ needs.config.outputs.firebase_app_id }}
       # The channel id the guard pins the catalog to. A production build must ship exactly
       # one channel AND it must be the production one — a catalog that validly contains a
       # single *devnet* channel would otherwise sail through.
-      EXPECTED_CHANNEL: ${{ vars.PRODUCTION_CHANNEL_ID || 'polkadot' }}
+      EXPECTED_CHANNEL: ${{ needs.config.outputs.expected_channel }}
     steps:
       # Installers go to a private bucket. Refuse to build without one.
       - name: Require the private output configuration
         shell: bash
         env:
-          BUILD_BUCKET: ${{ vars.BUILD_BUCKET }}
-          GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          GCP_SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          BUILD_BUCKET: ${{ needs.config.outputs.build_bucket }}
+          GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ needs.config.outputs.wif_provider }}
+          GCP_SERVICE_ACCOUNT: ${{ needs.config.outputs.service_account }}
         run: |
           missing=0
           for name in BUILD_BUCKET GCP_WORKLOAD_IDENTITY_PROVIDER GCP_SERVICE_ACCOUNT; do
@@ -219,8 +265,8 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
 
-      # Fail before doing any work, naming every variable the `production` environment is
-      # missing, rather than failing forty minutes later inside electron-builder.
+      # The configuration arrives as job outputs, so assert it survived the hand-off rather than
+      # discovering an empty application id inside electron-builder.
       - name: Preflight — production configuration present
         shell: bash
         run: |
@@ -231,17 +277,46 @@ jobs:
             [ -z "${!name-}" ] && missing+=("${name}")
           done
           if [ ${#missing[@]} -gt 0 ]; then
-            {
-              echo "### ❌ the \`production\` environment is missing configuration"
-              echo
-              for name in "${missing[@]}"; do echo "- \`${name}\`"; done
-              echo
-              echo "These are environment Variables, never repository Variables — a repo-level"
-              echo "value would leak into the devnet lane in \`release.yaml\`."
-            } | tee -a "$GITHUB_STEP_SUMMARY" >&2
+            printf '::error::empty after the config hand-off: %s\n' "${missing[*]}"
             exit 1
           fi
           echo "Production configuration present."
+
+      # What `signing: production` can actually sign today. Windows signs through Cloud HSM;
+      # macOS needs an Apple Developer ID (PCF-29) and Linux a detached GPG signature, neither of
+      # which exists yet, so those two stay unsigned and say so rather than failing the build.
+      - name: Signing material preflight
+        if: ${{ inputs.signing == 'production' }}
+        shell: bash
+        env:
+          KEYSTORE: ${{ vars.WINDOWS_CODESIGN_KEYSTORE }}
+          ALIAS: ${{ vars.WINDOWS_CODESIGN_ALIAS }}
+          CERT_CHAIN: ${{ vars.WINDOWS_CODESIGN_CERT_CHAIN }}
+          SIGNER_SERVICE_ACCOUNT: ${{ vars.WINDOWS_CODESIGN_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          if [ "${RUNNER_OS}" != "Windows" ]; then
+            echo "::warning::${RUNNER_OS} artifacts are UNSIGNED — no Apple Developer ID (PCF-29), no Linux GPG key yet"
+            exit 0
+          fi
+          missing=()
+          for name in KEYSTORE ALIAS CERT_CHAIN SIGNER_SERVICE_ACCOUNT; do
+            [ -z "${!name-}" ] && missing+=("WINDOWS_CODESIGN_${name}")
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            {
+              echo "### ❌ signing: production — Windows signing material is missing"
+              echo
+              echo "Not present in the \`production-distribution\` environment:"
+              for name in "${missing[@]}"; do echo "- \`${name}\`"; done
+              echo
+              echo "The HSM key exists (terraform/production/client_signing.tf); the certificate"
+              echo "chain is issued by a CA against that key. Re-run with \`signing: none\` for an"
+              echo "unsigned production build."
+            } | tee -a "$GITHUB_STEP_SUMMARY" >&2
+            exit 1
+          fi
+          echo "Windows signing material present."
 
       - name: Node
         uses: ./.github/actions/setup-node
@@ -287,30 +362,76 @@ jobs:
           # community. Even with the updater off, the feed owner is baked into the packaged
           # config, so pin it to PCF's repository: a build that ever has auto-update turned
           # on must not offer Parity's releases to PCF's users.
-          update_repo_owner: ${{ vars.UPDATE_REPO_OWNER || github.repository_owner }}
-          update_repo_name: ${{ vars.UPDATE_REPO_NAME || github.event.repository.name }}
-          app_id: ${{ vars.APP_ID }}
-          product_name: ${{ vars.PRODUCT_NAME }}
-          app_name: ${{ vars.APP_NAME }}
-          app_author: ${{ vars.APP_AUTHOR }}
+          update_repo_owner: ${{ needs.config.outputs.update_repo_owner }}
+          update_repo_name: ${{ needs.config.outputs.update_repo_name }}
+          app_id: ${{ needs.config.outputs.app_id }}
+          product_name: ${{ needs.config.outputs.product_name }}
+          app_name: ${{ needs.config.outputs.app_name }}
+          app_author: ${{ needs.config.outputs.app_author }}
           # The `_DEVELOP` identity is left empty on purpose. BUILD_TYPE=production never
           # reads it, and passing it would invite a future edit to make this lane packageable
           # as dev.
-          environments: ${{ vars.VITE_ENVIRONMENTS }}
-          firebase_api_key: ${{ vars.VITE_FIREBASE_API_KEY }}
-          firebase_project_id: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
-          firebase_app_id: ${{ vars.VITE_FIREBASE_APP_ID }}
-          webrtc_turn_host: ${{ vars.VITE_WEBRTC_TURN_HOST }}
+          environments: ${{ needs.config.outputs.environments }}
+          firebase_api_key: ${{ needs.config.outputs.firebase_api_key }}
+          firebase_project_id: ${{ needs.config.outputs.firebase_project_id }}
+          firebase_app_id: ${{ needs.config.outputs.firebase_app_id }}
+          webrtc_turn_host: ${{ needs.config.outputs.turn_host }}
           webrtc_turn_secret: ${{ secrets.VITE_WEBRTC_TURN_SECRET }}
-          webrtc_turn_ttl: ${{ vars.VITE_WEBRTC_TURN_TTL }}
-          sandbox_ipfs_allowlist: ${{ vars.SANDBOX_IPFS_ALLOWLIST }}
-          sandbox_relay_allowlist: ${{ vars.SANDBOX_RELAY_ALLOWLIST }}
+          webrtc_turn_ttl: ${{ needs.config.outputs.turn_ttl }}
+          sandbox_ipfs_allowlist: ${{ needs.config.outputs.sandbox_ipfs_allowlist }}
+          sandbox_relay_allowlist: ${{ needs.config.outputs.sandbox_relay_allowlist }}
           sentry_dsn: ${{ secrets.SENTRY_DSN }}
           sentry_required: 'false'
           include_dist_artifacts: false
           # The compiled bundle carries every production value; never an Actions artifact.
           upload_build_output: 'false'
           artifact_suffix: production-${{ runner.os }}
+
+      # ── Windows signing material. Windows runner, `signing: production` only. ───
+      # The private key never leaves Cloud HSM; what is acquired here is a certificate chain
+      # (public), a jar, and an access token that expires in an hour.
+      - name: Java (jsign runtime)
+        if: ${{ inputs.signing == 'production' && matrix.os == 'windows-latest' }}
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Fetch jsign
+        if: ${{ inputs.signing == 'production' && matrix.os == 'windows-latest' }}
+        shell: pwsh
+        env:
+          JSIGN_VERSION: '7.5'
+          JSIGN_SHA256: 602a51c3545a6dc4fb99bd2ea7152b26d1345916d0c93ddfbd5936cb735af91c
+        run: |
+          $jar = Join-Path $env:RUNNER_TEMP "jsign.jar"
+          Invoke-WebRequest -Uri "https://github.com/ebourg/jsign/releases/download/$env:JSIGN_VERSION/jsign-$env:JSIGN_VERSION.jar" -OutFile $jar
+          $actual = (Get-FileHash $jar -Algorithm SHA256).Hash.ToLower()
+          if ($actual -ne $env:JSIGN_SHA256) { Write-Error "jsign checksum mismatch: $actual"; exit 1 }
+          "JSIGN_JAR=$jar" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Write the certificate chain
+        if: ${{ inputs.signing == 'production' && matrix.os == 'windows-latest' }}
+        shell: pwsh
+        env:
+          CERT_CHAIN: ${{ vars.WINDOWS_CODESIGN_CERT_CHAIN }}
+        run: |
+          $file = Join-Path $env:RUNNER_TEMP "codesign-chain.pem"
+          Set-Content -Path $file -Value $env:CERT_CHAIN -Encoding ascii
+          "WINDOWS_CODESIGN_CERT_FILE=$file" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      # A second, separate identity: this one may sign with the key and do nothing else, and its
+      # federation binding accepts only this repository running in `production-distribution`.
+      # The upload identity is acquired later and overwrites these credentials, which is fine —
+      # jsign uses the token captured here.
+      - name: Authenticate as the signing identity
+        id: signer-auth
+        if: ${{ inputs.signing == 'production' && matrix.os == 'windows-latest' }}
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ needs.config.outputs.wif_provider }}
+          service_account: ${{ vars.WINDOWS_CODESIGN_SERVICE_ACCOUNT }}
+          token_format: access_token
 
       # ── Package. Every invocation carries `-p never`. ────────────────────────────
       # macOS, unsigned — the only macOS path that exists today (PCF-29). Identical to the
@@ -338,6 +459,12 @@ jobs:
         shell: pwsh
         env:
           NODE_ENV: production
+          # Unset for `signing: none`, which is what leaves `win.signtoolOptions` undefined in
+          # electron-builder.js and packages unsigned.
+          WINDOWS_CODESIGN_KEYSTORE: ${{ inputs.signing == 'production' && vars.WINDOWS_CODESIGN_KEYSTORE || '' }}
+          WINDOWS_CODESIGN_ALIAS: ${{ vars.WINDOWS_CODESIGN_ALIAS }}
+          WINDOWS_CODESIGN_TOKEN: ${{ steps.signer-auth.outputs.access_token }}
+          WINDOWS_CODESIGN_TSA: ${{ vars.WINDOWS_CODESIGN_TSA }}
         run: |
           node node_modules\electron-builder\cli.js --config electron-builder.js -p never
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -345,12 +472,30 @@ jobs:
           if (-not $exe) { Write-Error "electron-builder produced no .exe in release/dist"; exit 1 }
           Get-ChildItem release\dist | Format-Table Name,Length
 
+      # Trust the operating system's own verdict rather than jsign's exit code: an installer that
+      # packaged cleanly but carries an unverifiable signature is exactly the artifact worth
+      # stopping here.
+      - name: Verify the Authenticode signature
+        if: ${{ inputs.signing == 'production' && matrix.os == 'windows-latest' }}
+        shell: pwsh
+        run: |
+          $failed = $false
+          foreach ($file in Get-ChildItem release\dist -Filter *.exe) {
+            $signature = Get-AuthenticodeSignature $file.FullName
+            "{0}: {1} ({2})" -f $file.Name, $signature.Status, $signature.SignerCertificate.Subject
+            if ($signature.Status -ne "Valid") { $failed = $true }
+          }
+          if ($failed) { Write-Error "at least one installer is not validly signed"; exit 1 }
+
       # Say loudly, in the run summary, what this artifact actually is. An unsigned build
       # that looks finished is the failure mode worth engineering against.
       - name: Report what was built
         shell: bash
         env:
-          SIGNING: ${{ inputs.signing }}
+          # Only Windows can be signed today, so report per platform rather than echoing the input:
+          # a run dispatched with `signing: production` still produces unsigned macOS and Linux
+          # artifacts, and the summary has to say which is which.
+          SIGNED: ${{ (inputs.signing == 'production' && matrix.os == 'windows-latest') && 'Cloud HSM (Authenticode)' || 'none' }}
         run: |
           set -euo pipefail
           {
@@ -363,11 +508,11 @@ jobs:
             echo "| product name | \`${PRODUCT_NAME}\` |"
             echo "| packaged name (userData dir) | \`${APP_NAME}\` |"
             echo "| network channel | \`${EXPECTED_CHANNEL}\` |"
-            echo "| signing | \`${SIGNING}\` |"
+            echo "| signing | \`${SIGNED}\` |"
             echo "| auto-update | **off** (ENABLE_AUTO_UPDATE unset) |"
             echo "| published | **nothing** — \`-p never\`, no release step, \`contents: read\` |"
             echo
-            if [ "${SIGNING}" != "production" ]; then
+            if [ "${SIGNED}" != "Cloud HSM (Authenticode)" ]; then
               echo "> ⚠️ **UNSIGNED.** macOS Gatekeeper will refuse this build and Windows SmartScreen"
               echo "> will warn. Do not hand it to anyone outside the build owners."
             fi
@@ -379,15 +524,15 @@ jobs:
       # feed, and the surest way to keep it from becoming one is not to hand anyone the file.
       - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
         with:
-          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ needs.config.outputs.wif_provider }}
+          service_account: ${{ needs.config.outputs.service_account }}
 
       - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
 
       - name: Upload installers to the private bucket
         shell: bash
         env:
-          BUILD_BUCKET: ${{ vars.BUILD_BUCKET }}
+          BUILD_BUCKET: ${{ needs.config.outputs.build_bucket }}
           OS: ${{ matrix.os }}
         run: |
           set -euo pipefail
