@@ -109,6 +109,11 @@ concurrency:
   group: build-production-${{ inputs.ref || github.ref }}
   cancel-in-progress: false
 
+env:
+  # Uploads to the private bucket must not use parallel composite uploads: their temporary parts live outside
+  # this repository's prefix and need delete to clean up, which the build identity deliberately lacks.
+  CLOUDSDK_STORAGE_PARALLEL_COMPOSITE_UPLOAD_ENABLED: "False"
+
 jobs:
   # Runs ONLY for `signing: production`. Declaring the gated environment here is what makes
   # a reviewer approve before any signing material is read. For `signing: none` this job is
