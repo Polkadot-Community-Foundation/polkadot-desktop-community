@@ -11,6 +11,7 @@ import {
   title,
   updateFeed,
 } from './config/index.js';
+import signWindowsWithCloudKms from './scripts/sign-windows-kms.js';
 
 // Packaging is the moment an identity starts to mean something to an operating system, so it is
 // also the moment a missing one has to stop the build.
@@ -118,6 +119,12 @@ export default {
   win: {
     icon: iconPath('win'),
     target: ['nsis'],
+    // Signing is configured only when the lane supplied a Cloud KMS key ring, so an unsigned build
+    // is unaffected. sha256 only: the dual sha1/sha256 default would call the hook twice and sha1
+    // Authenticode signatures are no longer accepted by Windows.
+    signtoolOptions: process.env.WINDOWS_CODESIGN_KEYSTORE
+      ? { sign: signWindowsWithCloudKms, signingHashAlgorithms: ['sha256'] }
+      : undefined,
   },
 
   publish: updateFeed,
