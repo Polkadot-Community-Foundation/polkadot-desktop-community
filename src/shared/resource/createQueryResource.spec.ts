@@ -1,5 +1,6 @@
 import { produce } from 'immer';
 import { firstValueFrom } from 'rxjs';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createQueryResource } from './createQueryResource';
 
@@ -216,6 +217,58 @@ describe('createQueryResource', () => {
       await firstValueFrom(resource.read$({ id: 'b' }));
 
       expect(fn).toHaveBeenCalledTimes(4);
+    });
+
+    it('aborts an in-flight request so the next read of the same key is not queued behind it', async () => {
+      let callCount = 0;
+      const fn = vi
+        .fn()
+        .mockImplementation(() => (++callCount === 1 ? new Promise<string>(() => {}) : Promise.resolve('recovered')));
+
+      const resource = createQueryResource<{ id: string }>({ key: ({ id }) => id })
+        .request(fn)
+        .build();
+
+      const hung = firstValueFrom(resource.read$({ id: '1' }));
+      hung.catch(() => null);
+      await flushPromises();
+      expect(callCount).toBe(1);
+
+      resource.invalidateAll();
+
+      const second = firstValueFrom(resource.read$({ id: '1' }));
+      await flushPromises();
+
+      expect(callCount).toBe(2);
+      await expect(second).resolves.toBe('recovered');
+    });
+
+    it('aborts every in-flight request of a key, not only the last one issued', async () => {
+      let callCount = 0;
+      const fn = vi
+        .fn()
+        .mockImplementation(() => (++callCount === 1 ? new Promise<string>(() => {}) : Promise.resolve('recovered')));
+
+      const resource = createQueryResource<{ id: string }>({ key: ({ id }) => id })
+        .request(fn)
+        .build();
+
+      // Two reads in one tick both miss the in-flight map and each issue a request;
+      // the first hangs in the pool slot, the second queues behind it.
+      const first = firstValueFrom(resource.read$({ id: '1' }));
+      const second = firstValueFrom(resource.read$({ id: '1' }));
+      first.catch(() => null);
+      second.catch(() => null);
+      await flushPromises();
+      expect(callCount).toBe(1);
+
+      resource.invalidateAll();
+
+      const third = firstValueFrom(resource.read$({ id: '1' }));
+      await flushPromises();
+
+      expect(callCount).toBe(2);
+      await expect(third).resolves.toBe('recovered');
     });
 
     it('should reset cache$ to initial', async () => {

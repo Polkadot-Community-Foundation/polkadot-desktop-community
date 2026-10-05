@@ -1,120 +1,109 @@
 // @vitest-environment happy-dom
 
-import type * as hostPappReactUi from '@novasamatech/host-papp-react-ui';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { Outlet, RouterProvider, createMemoryHistory, createRootRoute, createRoute, createRouter } from '@tanstack/react-router';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { type PropsWithChildren } from 'react';
+import { type PropsWithChildren, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TEST_IDS } from '@/shared/test-ids';
 import { TranslationProvider } from '@/shared/translation';
-import type * as applicationModule from '@/domains/application';
+import { sessionUseCase } from '@/domains/application';
+import { browserTabs } from '@/aggregates/browser-tabs';
+import { truapiRuntimeUseCase } from '@/aggregates/truapi-runtime';
 
 import { type UserPopoverConnectionState, UserInfoPopover } from './UserInfoPopover';
 
-const { navigateMock, disconnectMock, addTabMock, selectTabMock, performUserLogoutMock } = vi.hoisted(() => ({
-  navigateMock: vi.fn(),
-  disconnectMock: vi.fn().mockResolvedValue(undefined),
-  addTabMock: vi.fn(),
-  selectTabMock: vi.fn(),
-  performUserLogoutMock: vi.fn().mockResolvedValue(undefined),
-}));
+// Both writes are use-case methods on plain objects, spied in place: the core session
+// is never reached and the logout never tears anything down.
+const disconnectMock = vi.spyOn(truapiRuntimeUseCase, 'disconnectSession').mockResolvedValue();
+const performUserLogoutMock = vi.spyOn(sessionUseCase, 'performUserLogout').mockResolvedValue();
 
-vi.mock('@tanstack/react-router', () => ({
-  useNavigate: () => navigateMock,
-}));
-
-vi.mock('@/domains/application', async () => {
-  const actual = await vi.importActual<typeof applicationModule>('@/domains/application');
-  return {
-    ...actual,
-    sessionUseCase: { ...actual.sessionUseCase, performUserLogout: performUserLogoutMock },
-  };
-});
-
-vi.mock('@/features/settings', () => ({
-  SETTINGS: 'settings',
-}));
-
-vi.mock('@/aggregates/browser-tabs', () => ({
-  browserTabs: {
-    addTab: addTabMock,
-    selectTab: selectTabMock,
-  },
-}));
-
-vi.mock('@novasamatech/host-papp-react-ui', async () => {
-  const actual = await vi.importActual<typeof hostPappReactUi>('@novasamatech/host-papp-react-ui');
-  return {
-    ...actual,
-    useAuthentication: () => ({ disconnect: disconnectMock }),
-    useSessionIdentity: () => [{ fullUsername: 'Goldie.89', liteUsername: 'Goldie' }],
-  };
-});
-
-// Stable session fixture; UserInfoPopover treats it as opaque
-const fakeSession = { id: 'session-1' } as NonNullable<Parameters<typeof UserInfoPopover>[0]['session']>;
+// Stable session fixture; the popover reads only the username fields.
+const fakeSession: NonNullable<Parameters<typeof UserInfoPopover>[0]['session']> = {
+  publicKey: `0x${'11'.repeat(32)}`,
+  fullUsername: 'Goldie.89',
+  liteUsername: 'Goldie',
+};
 
 const Providers = ({ children }: PropsWithChildren) => <TranslationProvider>{children}</TranslationProvider>;
 
-const renderOpen = (
+// The popover navigates through `useNavigate`, so it renders inside a real router over
+// an in-memory history; assertions read where the router went and what the tabs hold.
+const renderOpen = async (
   state: UserPopoverConnectionState | 'no-connection',
   networkName = 'Paseo Next',
   session: Parameters<typeof UserInfoPopover>[0]['session'] = fakeSession,
-) =>
-  render(
+  username = 'Goldie.89',
+) => {
+  const subject: ReactNode = (
     <Providers>
-      <UserInfoPopover session={session} connectionState={state} networkName={networkName} defaultOpen>
+      <UserInfoPopover session={session} username={username} connectionState={state} networkName={networkName} defaultOpen>
         <button>trigger</button>
       </UserInfoPopover>
-    </Providers>,
+    </Providers>
   );
+  const rootRoute = createRootRoute({
+    component: () => (
+      <>
+        {subject}
+        <Outlet />
+      </>
+    ),
+  });
+  const routeTree = rootRoute.addChildren(
+    ['/', '/settings', '/onboarding'].map(path => createRoute({ getParentRoute: () => rootRoute, path })),
+  );
+  const router = createRouter({ routeTree, history: createMemoryHistory({ initialEntries: ['/'] }) });
+  // A RouterProvider renders nothing until the router has matched its first location.
+  await router.load();
+  const { unmount } = render(<RouterProvider router={router} />);
+
+  return { router, unmount };
+};
 
 describe('UserInfoPopover', () => {
   beforeEach(() => {
-    navigateMock.mockClear();
     disconnectMock.mockClear();
-    addTabMock.mockClear();
-    selectTabMock.mockClear();
     performUserLogoutMock.mockClear();
   });
 
-  it('renders connected banner when state=connected', () => {
-    renderOpen('connected');
+  it('renders connected banner when state=connected', async () => {
+    await renderOpen('connected');
     const banner = screen.getByTestId(TEST_IDS.userPopoverBanner);
     expect(banner).toHaveTextContent('Connected to Paseo Next');
     expect(banner).toHaveTextContent('Desktop paired with Mobile');
   });
 
-  it('uses the provided networkName in the banner title', () => {
-    renderOpen('connected', 'Preview');
+  it('uses the provided networkName in the banner title', async () => {
+    await renderOpen('connected', 'Preview');
     expect(screen.getByTestId(TEST_IDS.userPopoverBanner)).toHaveTextContent('Connected to Preview');
   });
 
-  it('renders reconnecting banner when state=reconnecting', () => {
-    renderOpen('reconnecting');
+  it('renders reconnecting banner when state=reconnecting', async () => {
+    await renderOpen('reconnecting');
     const banner = screen.getByTestId(TEST_IDS.userPopoverBanner);
     expect(banner).toHaveTextContent(/Reconnecting to Paseo Next/);
     expect(banner).toHaveTextContent('Attempting to reach the node again');
   });
 
-  it('renders offline banner when state=offline', () => {
-    renderOpen('offline');
+  it('renders offline banner when state=offline', async () => {
+    await renderOpen('offline');
     const banner = screen.getByTestId(TEST_IDS.userPopoverBanner);
     expect(banner).toHaveTextContent("You're offline");
     expect(banner).toHaveTextContent('Check internet connection and try again');
   });
 
-  it('renders no-connection banner when state=no-connection', () => {
-    renderOpen('no-connection', 'Paseo Next', null);
+  it('renders no-connection banner when state=no-connection', async () => {
+    await renderOpen('no-connection', 'Paseo Next', null);
     const banner = screen.getByTestId(TEST_IDS.userPopoverBanner);
     expect(banner).toHaveTextContent('Not connected');
     expect(banner).toHaveTextContent('Log in to pair your account');
   });
 
-  it('shows the 48px avatar in every state', () => {
+  it('shows the 48px avatar in every state', async () => {
     for (const state of ['connected', 'reconnecting', 'offline'] as const) {
-      const { unmount } = renderOpen(state);
+      const { unmount } = await renderOpen(state);
       expect(screen.getByTestId(TEST_IDS.userDisplayName)).toHaveTextContent('Goldie.89');
       expect(screen.getAllByText('G').length).toBeGreaterThan(0);
       unmount();
@@ -123,31 +112,33 @@ describe('UserInfoPopover', () => {
 
   it('opens the Settings tab when Settings row is clicked', async () => {
     const user = userEvent.setup();
-    renderOpen('connected');
+    const { router } = await renderOpen('connected');
     await user.click(screen.getByTestId(TEST_IDS.userSettingsAction));
-    expect(addTabMock).toHaveBeenCalledWith({ id: 'settings', type: 'settings', deeplink: '' }, { persistable: true });
-    expect(selectTabMock).toHaveBeenCalledWith('settings');
-    expect(navigateMock).toHaveBeenCalledWith({ to: '/settings' });
+    expect(browserTabs.tabs$.get()).toContainEqual(
+      expect.objectContaining({ id: 'settings', type: 'settings', deeplink: '', persistable: true }),
+    );
+    expect(browserTabs.selectedTabId$.get()).toBe('settings');
+    await waitFor(() => expect(router.state.location.pathname).toBe('/settings'));
   });
 
-  it('disconnects the host-papp session when Log out is clicked; teardown is the watcher’s job on success', async () => {
+  it('disconnects the core session when Log out is clicked', async () => {
     const user = userEvent.setup();
-    renderOpen('connected');
+    const { router } = await renderOpen('connected');
     await user.click(screen.getByTestId(TEST_IDS.userLogoutButton));
-    // On success host-papp drops the session and the session-teardown watcher
+    // On success the core drops the session and the session-teardown watcher
     // runs the logout — the component itself does NOT call performUserLogout.
-    expect(disconnectMock).toHaveBeenCalledWith(fakeSession);
+    expect(disconnectMock).toHaveBeenCalled();
     expect(performUserLogoutMock).not.toHaveBeenCalled();
-    expect(navigateMock).not.toHaveBeenCalled();
+    expect(router.state.location.pathname).toBe('/');
   });
 
   it('leaves teardown to the watcher even when disconnect rejects', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     disconnectMock.mockRejectedValueOnce(new Error('offline'));
     const user = userEvent.setup();
-    renderOpen('connected');
+    await renderOpen('connected');
     await user.click(screen.getByTestId(TEST_IDS.userLogoutButton));
-    // host-papp purges the session whether or not the peer could be notified, so
+    // The core purges the session whether or not the wallet could be notified, so
     // a rejection here means the purge itself failed — reported, not worked
     // around. The component owns no teardown path of its own.
     await vi.waitFor(() => expect(consoleError).toHaveBeenCalled());
@@ -155,8 +146,8 @@ describe('UserInfoPopover', () => {
     consoleError.mockRestore();
   });
 
-  it('dismisses when the toolbar overlay is pressed', () => {
-    renderOpen('connected');
+  it('dismisses when the toolbar overlay is pressed', async () => {
+    await renderOpen('connected');
     expect(screen.getByTestId(TEST_IDS.userPopoverBanner)).toBeInTheDocument();
     // The overlay covers the toolbar's -webkit-app-region: drag area, which
     // otherwise swallows the press Radix needs to close the popover.
@@ -166,9 +157,9 @@ describe('UserInfoPopover', () => {
 
   it('navigates to /onboarding when Log in is clicked for anonymous session', async () => {
     const user = userEvent.setup();
-    renderOpen('no-connection', 'Paseo Next', null);
+    const { router } = await renderOpen('no-connection', 'Paseo Next', null);
     await user.click(screen.getByTestId(TEST_IDS.userLogoutButton));
     expect(disconnectMock).not.toHaveBeenCalled();
-    expect(navigateMock).toHaveBeenCalledWith({ to: '/onboarding' });
+    await waitFor(() => expect(router.state.location.pathname).toBe('/onboarding'));
   });
 });

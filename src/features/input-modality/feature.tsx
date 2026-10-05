@@ -24,14 +24,3 @@ inputModalityFeature.inject(focusAddressBarSideEffect, ({ initialText }) => {
 // PARKED — product querying. Restore with the rest of the `PARKED` blocks in
 // this feature. The surface asks nobody while its context set is empty, so this
 // would answer nothing even if it were registered; it stays commented so the
-// demo cannot reappear with the fan-out.
-//
-// DEMO ONLY. Delete this block and `./demoAnswers.ts` to remove it entirely —
-// with no handler registered the transformers answer nothing, so every product
-// declines and nothing draws, which is the shipped behaviour.
-// ---------------------------------------------------------------------------
-// import { answerQueryTransformer, renderCandidateTransformer } from '@/domains/input-routing';
-// import { demoAnswer, demoRenderCandidate } from './demoAnswers';
-//
-// inputModalityFeature.inject(answerQueryTransformer, demoAnswer);
-// inputModalityFeature.inject(renderCandidateTransformer, demoRenderCandidate);

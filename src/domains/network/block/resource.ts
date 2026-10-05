@@ -1,4 +1,4 @@
-import { interval, map, switchMap, throttle } from 'rxjs';
+import { interval, map, of, switchMap, throttle } from 'rxjs';
 import * as v from 'valibot';
 
 import { createQueryResource, createStreamResource } from '@/shared/resource';
@@ -20,6 +20,7 @@ export const finalizedBlockResource = createStreamResource<Chain>({
       map(b => v.parse(block, b)),
     );
   })
+  .mock(() => of(v.parse(block, { number: 0, hash: '0x00' })))
   .cache<Record<GenesisHash, Block>>({
     initial: {},
     map(cache, block, chain) {
@@ -37,6 +38,7 @@ export const bestBlockResource = createStreamResource<Chain>({
       map(b => v.parse(block, b.at(0))),
     );
   })
+  .mock(() => of(v.parse(block, { number: 0, hash: '0x00' })))
   .cache<Record<GenesisHash, Block>>({
     initial: {},
     map(cache, block, chain) {
@@ -88,6 +90,7 @@ export const blockTimeResource = createQueryResource<Chain>({
       return minBigInt(ONE_DAY, DEFAULT_TIME);
     });
   })
+  .mock(() => 6000n)
   .retry({ delay: 500, count: 5 })
   .cache<Record<GenesisHash, bigint>>({
     initial: {},

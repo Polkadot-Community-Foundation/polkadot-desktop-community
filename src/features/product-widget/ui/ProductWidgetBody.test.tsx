@@ -2,47 +2,17 @@
 
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TranslationProvider } from '@/shared/translation';
 import { type Product } from '@/domains/product';
-
-const { onRefreshApplyMock } = vi.hoisted(() => ({
-  onRefreshApplyMock: vi.fn(() => Promise.resolve()),
-}));
-
-vi.mock('@/domains/product', async importOriginal => {
-  const actual = await importOriginal<Record<string, unknown>>();
-  return {
-    ...actual,
-    productService: {
-      ...(actual['productService'] as object),
-      refreshTargetIdentifiers: () => new Set<string>(),
-    },
-  };
-});
-
-vi.mock('@/aggregates/product-loading', () => ({
-  onProductRefreshRequestedSideEffect: {
-    apply: onRefreshApplyMock,
-  },
-}));
-
-vi.mock('@/shared/di', async importOriginal => ({
-  ...(await importOriginal<object>()),
-  useSideEffect: vi.fn(),
-}));
-
-vi.mock('@/shared/components', async importOriginal => ({
-  ...(await importOriginal<object>()),
-  WidgetLoadingScreen: () => <div data-testid="widget-loading">Loading...</div>,
-}));
-
-vi.mock('@/widgets/Webview', () => ({
-  Webview: () => <div data-testid="webview-host">Webview</div>,
-}));
+import { onProductRefreshRequestedSideEffect } from '@/aggregates/product-loading';
 
 import { ProductWidgetBody } from './ProductWidgetBody';
+
+// The refresh request is a DI side effect: a handler registered on it observes the
+// real fan-out, so nothing has to stand in for the aggregate that declares it.
+const onRefreshApplyMock = vi.fn();
 
 // Tests are exempt from the no-`as` rule; only the fields the body reads matter.
 const someProduct = { baseName: 'app.dot' } as unknown as Product;
@@ -70,6 +40,11 @@ const renderBody = ({ product = null, hasContent = false, pending = false, onRem
 describe('ProductWidgetBody placeholders', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    onProductRefreshRequestedSideEffect.registerHandler({ available: () => true, body: onRefreshApplyMock });
+  });
+
+  afterEach(() => {
+    onProductRefreshRequestedSideEffect.resetHandlers();
   });
 
   it('renders "widget not found" placeholder and removes card on action click', async () => {
@@ -96,7 +71,8 @@ describe('ProductWidgetBody placeholders', () => {
   it('renders nothing (block pulse handles it) while phase-1 loading', () => {
     const { container } = renderBody({ product: someProduct, hasContent: false, pending: true });
 
-    expect(container.textContent).toBe('');
-    expect(screen.queryByTestId('widget-loading')).toBeNull();
+    // Empty, not merely text-free: `WidgetLoadingScreen` is a bare pulse div, so a
+    // textContent check would pass with it on screen.
+    expect(container).toBeEmptyDOMElement();
   });
 });

@@ -210,12 +210,11 @@ export const Dashboard = ({ initialPageIndex, onInitialPageIndexApplied }: Dashb
             onResizeCard={size => isActivePage && resizeWidget(card.i, size)}
             onRemoveCard={() => isActivePage && onRemove()}
             onCleanupCards={handleAutolayout}
-            onOpenAddWidgetModal={() => isActivePage && openAddModal()}
           />
         </div>
       );
     },
-    [removeWidget, resizeWidget, handleAutolayout, removeFolder, openMenuId, handleMenuOpenChange, openAddModal],
+    [removeWidget, resizeWidget, handleAutolayout, removeFolder, openMenuId, handleMenuOpenChange],
   );
 
   const renderPage = useCallback(

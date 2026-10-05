@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 
 import { type InputCandidateContent, routingUseCase } from '@/domains/input-routing';
-import { type SubscribeToNode, CustomRenderer } from '@/widgets/CustomRenderer';
+import { type SubscribeToNode, RendererTree } from '@/widgets/RendererTree';
 
 type Props = {
   productId: string;
@@ -18,7 +18,7 @@ type Props = {
  */
 export const CustomCandidate = ({ productId, content }: Props) => {
   const subscribe = useCallback<SubscribeToNode>(
-    onNode =>
+    ({ onNode }) =>
       routingUseCase.renderCandidate(
         { productId, candidateId: content.candidateId, contentType: content.contentType, payload: content.payload },
         onNode,
@@ -34,5 +34,5 @@ export const CustomCandidate = ({ productId, content }: Props) => {
     [productId],
   );
 
-  return <CustomRenderer subscribe={subscribe} onAction={onAction} />;
+  return <RendererTree productId={productId} subscribe={subscribe} onAction={onAction} />;
 };

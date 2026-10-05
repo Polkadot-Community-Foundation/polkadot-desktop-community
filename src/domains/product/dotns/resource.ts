@@ -14,21 +14,25 @@ function tldCacheKey({ environment }: Params): string {
 }
 
 /**
- * The active network's dotNS TLD. A network that reports none — every deployment
+ * Reads the network's dotNS TLD. A network that reports none — every deployment
  * predating paritytech/dotns#201 — resolves to `DEFAULT_DOTNS_TLD` rather than
  * failing, so the app stays usable there.
  */
+async function readTldWithFallback({ environment }: Params): Promise<string> {
+  const tld = await dotNsGateway.readTld(environment);
+  if (!tld) {
+    console.warn(`[dotns] "${environment.id}" reported no TLD; falling back to ${DEFAULT_DOTNS_TLD}`);
+  }
+
+  return tld ?? DEFAULT_DOTNS_TLD;
+}
+
+/** The active network's dotNS TLD, cached per deployment. */
 export const dotNsTldResource = createQueryResource<Params>({
   key: tldCacheKey,
 })
-  .request<string>(async ({ environment }) => {
-    const tld = await dotNsGateway.readTld(environment);
-    if (!tld) {
-      console.warn(`[dotns] "${environment.id}" reported no TLD; falling back to ${DEFAULT_DOTNS_TLD}`);
-    }
-
-    return tld ?? DEFAULT_DOTNS_TLD;
-  })
+  .request<string>(readTldWithFallback)
+  .mock(() => DEFAULT_DOTNS_TLD)
   // A hang here stalls every surface gated on the suffix, input routing included.
   // The bound is generous because timing out yields the *fallback*, which is wrong
   // rather than merely late on any other network — it exists to stop a hang, not to

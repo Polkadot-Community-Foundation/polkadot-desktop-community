@@ -5,6 +5,7 @@ export {
   openDotNsUrlSideEffect,
   productAddToDashboardSideEffect,
   resolveAddressBarProductIconTransformer,
+  resolveProductLoaderTransformer,
   tabContentSlot,
   tabHoverSlot,
 } from './di';

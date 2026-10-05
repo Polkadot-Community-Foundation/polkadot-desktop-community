@@ -5,14 +5,15 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { TranslationProvider } from '@/shared/translation';
+// eslint-disable-next-line boundaries/dependencies -- the test observes the write where it lands; the barrel exposes no seam for it
+import { requestPreferencesRepository } from '@/domains/chat/request-preferences/repository';
 
 import { ChatSettingsPage } from './ChatSettingsPage';
 
-const runMock = vi.fn();
-vi.mock('@/domains/chat', () => ({
-  useHideRequestsByDefault: () => ({ data: true, pending: false }),
-  useSetHideRequestsByDefault: () => ({ run: runMock }),
-}));
+// `useHideRequestsByDefault` needs no stub: `hideRequestsByDefaultResource`'s mock
+// already answers HIDE_REQUESTS_BY_DEFAULT. The write lands in the repository, a plain
+// object spied in place, so the real hook and mutation run up to that point.
+const setHideRequestsByDefault = vi.spyOn(requestPreferencesRepository, 'setHideRequestsByDefault');
 
 describe('ChatSettingsPage', () => {
   it('reflects the preference and toggles it off', async () => {
@@ -26,6 +27,6 @@ describe('ChatSettingsPage', () => {
     expect(toggle).toBeChecked();
 
     await userEvent.click(toggle);
-    expect(runMock).toHaveBeenCalledWith({ value: false });
+    expect(setHideRequestsByDefault).toHaveBeenCalledWith(false);
   });
 });

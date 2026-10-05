@@ -189,8 +189,30 @@ runs:
         npm version "${{ inputs.version }}" --no-git-tag-version --allow-same-version
         echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
 
-    - name: Add MacOS certs
-      if: runner.os == 'macOS' && inputs.apple_certificate_base64 != ''
+    - name: Verify macOS signing inputs
+      if: runner.os == 'macOS' && (inputs.include_dist_artifacts == true || inputs.include_dist_artifacts == 'true')
+      shell: bash
+      env:
+        APPLE_ID: ${{ inputs.apple_id }}
+        APPLE_APP_SPECIFIC_PASSWORD: ${{ inputs.apple_app_specific_password }}
+        APPLE_TEAM_ID: ${{ inputs.apple_team_id }}
+        CERTIFICATE_OSX_APPLICATION: ${{ inputs.apple_certificate_base64 }}
+        CERTIFICATE_PASSWORD: ${{ inputs.apple_certificate_password }}
+      run: |
+        set -euo pipefail
+        missing=()
+        [ -z "$APPLE_ID" ] && missing+=(APPLE_ID)
+        [ -z "$APPLE_APP_SPECIFIC_PASSWORD" ] && missing+=(APPLE_APP_SPECIFIC_PASSWORD)
+        [ -z "$APPLE_TEAM_ID" ] && missing+=(APPLE_TEAM_ID)
+        [ -z "$CERTIFICATE_OSX_APPLICATION" ] && missing+=(CERTIFICATE_OSX_APPLICATION)
+        [ -z "$CERTIFICATE_PASSWORD" ] && missing+=(CERTIFICATE_PASSWORD)
+        if [ ${#missing[@]} -gt 0 ]; then
+          echo "A packaged macOS build must be signed and notarized. Missing: ${missing[*]}" >&2
+          exit 1
+        fi
+
+    - name: Add macOS certificate
+      if: runner.os == 'macOS' && (inputs.include_dist_artifacts == true || inputs.include_dist_artifacts == 'true')
       shell: bash
       run: chmod +x .github/add_cert_in_keychain.sh && .github/add_cert_in_keychain.sh
       env:
@@ -280,6 +302,38 @@ runs:
         APP_NAME_DEVELOP: ${{ inputs.app_name_develop }}
         APP_AUTHOR: ${{ inputs.app_author }}
 
+    - name: Verify macOS signature and notarization
+      if: runner.os == 'macOS' && (inputs.include_dist_artifacts == true || inputs.include_dist_artifacts == 'true')
+      shell: bash
+      env:
+        EXPECTED_TEAM_ID: ${{ inputs.apple_team_id }}
+      run: |
+        set -euo pipefail
+        apps=()
+        while IFS= read -r -d '' app; do
+          apps+=("$app")
+        done < <(find release/dist -mindepth 2 -maxdepth 2 -type d -name '*.app' -print0)
+
+        if [ ${#apps[@]} -eq 0 ]; then
+          echo "No packaged macOS application was found under release/dist." >&2
+          exit 1
+        fi
+
+        for app in "${apps[@]}"; do
+          echo "Verifying $app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+
+          signing_info="$(codesign --display --verbose=4 "$app" 2>&1)"
+          printf '%s\n' "$signing_info"
+          if ! grep -Fq "TeamIdentifier=$EXPECTED_TEAM_ID" <<< "$signing_info"; then
+            echo "Unexpected or missing TeamIdentifier for $app." >&2
+            exit 1
+          fi
+
+          xcrun stapler validate "$app"
+          spctl --assess --type execute --verbose=2 "$app"
+        done
+
     - name: Prepare Linux update metadata for multi-arch
       if: runner.os == 'Linux' && (inputs.include_dist_artifacts == true || inputs.include_dist_artifacts == 'true')
       shell: bash
@@ -312,3 +366,8 @@ runs:
       with:
         name: build-output-${{ inputs.artifact_suffix || runner.os }}
         path: release/build
+
+    - name: Remove macOS signing keychain
+      if: always() && runner.os == 'macOS' && (inputs.include_dist_artifacts == true || inputs.include_dist_artifacts == 'true')
+      shell: bash
+      run: bash .github/remove_cert_keychain.sh

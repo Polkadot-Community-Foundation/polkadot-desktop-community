@@ -1,28 +1,33 @@
 // @vitest-environment happy-dom
 
 import { renderHook } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { applyMock } = vi.hoisted(() => ({ applyMock: vi.fn() }));
-
-vi.mock('@/domains/product', () => ({
-  onProductModalityOpenedSideEffect: { apply: applyMock },
-}));
+import { onProductModalityOpenedSideEffect } from '@/domains/product';
 
 import { useAnnounceWidgetOpen } from './useAnnounceWidgetOpen';
 
+// The announce is a DI side effect: a handler registered on it observes the real
+// fan-out, so nothing has to stand in for the domain that declares it.
+const announced = vi.fn();
+
+beforeEach(() => {
+  onProductModalityOpenedSideEffect.registerHandler({ available: () => true, body: announced });
+});
+
 afterEach(() => {
+  onProductModalityOpenedSideEffect.resetHandlers();
   vi.clearAllMocks();
 });
 
 describe('useAnnounceWidgetOpen', () => {
   it('fires widget-open on mount for a product', () => {
     renderHook(() => useAnnounceWidgetOpen('app.dot'));
-    expect(applyMock).toHaveBeenCalledWith({ productId: 'app.dot', kind: 'widget' });
+    expect(announced).toHaveBeenCalledWith({ productId: 'app.dot', kind: 'widget' });
   });
 
   it('does not fire when productId is null', () => {
     renderHook(() => useAnnounceWidgetOpen(null));
-    expect(applyMock).not.toHaveBeenCalled();
+    expect(announced).not.toHaveBeenCalled();
   });
 });

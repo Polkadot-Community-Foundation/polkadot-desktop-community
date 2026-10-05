@@ -1,13 +1,13 @@
 import { createSideEffect } from '@/shared/di';
 import { isElectron } from '@/shared/env';
-import { deleteAliasPermissionsByRequester } from '../alias-permissions/resource';
 import { productLocalStorageRepository } from '../local-storage/repository';
-import { deleteProductPermissions } from '../permissions/resource';
 import { EXECUTABLE_KINDS, invalidateExecutableArchive, productDb } from '../product';
 import { declinedUpdatesRepository } from '../product/declined-updates/repository';
 
+import { coreStorageUseCase } from './coreStorage';
 import { dotNsUseCase } from './dotns';
 import { offlineCacheUseCase } from './offlineCache';
+import { permissionsUseCase } from './permissions';
 
 const onProductForgottenSideEffect = createSideEffect<{ productId: string }>({
   name: 'onProductForgotten',
@@ -38,8 +38,11 @@ async function purgeProduct(productId: string): Promise<boolean> {
   const tld = await dotNsUseCase.getActiveTld();
 
   const [, , deleteResult] = await Promise.all([
-    deleteProductPermissions(productId, tld),
-    deleteAliasPermissionsByRequester(productId, tld),
+    permissionsUseCase.clearProductPermissions({ productId, tld }),
+    // Permissions go through the core so its in-memory copy drops with the slot. The
+    // sweep then catches what no core API clears: AutoSigningKey and ProductSubtree
+    // slots, plus any permission slot for a product the core never opened this run.
+    coreStorageUseCase.clearProductSlots({ productId, tld }),
     productDb.delete(productId),
     offlineCacheUseCase.evictArchives(productId),
     // Best-effort: a failing local-storage wipe must not abort the rest of the

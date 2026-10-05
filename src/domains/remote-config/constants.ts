@@ -19,3 +19,9 @@ export const REMOTE_CONFIG_MIN_FETCH_INTERVAL_MS = 60 * 60 * 1000;
 
 // Per-fetch network timeout; on timeout the SDK keeps the last-activated values.
 export const REMOTE_CONFIG_FETCH_TIMEOUT_MS = 10_000;
+
+// The app's boot-time self-heal (`src/bootstrap.ts`) hangs off a single forced
+// refresh, so one dropped request must not be terminal. Attempts are spaced
+// `attempt * BACKOFF_MS` apart, keeping the worst case well inside a boot.
+export const REMOTE_CONFIG_REFRESH_ATTEMPTS = 3;
+export const REMOTE_CONFIG_REFRESH_BACKOFF_MS = 500;

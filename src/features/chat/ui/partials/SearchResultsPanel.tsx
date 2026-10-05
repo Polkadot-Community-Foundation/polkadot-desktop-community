@@ -66,7 +66,7 @@ export const SearchResultsPanel = ({
   // Existing chats already surface under matched sessions; drop contacts that
   // are already a chat so the section doesn't list the same peer twice.
   const newContacts = useMemo(
-    () => contactResults.filter(result => !connectedIds.has(result.candidateAccountId)),
+    () => contactResults.filter(result => !connectedIds.has(result.accountId)),
     [contactResults, connectedIds],
   );
 
@@ -107,11 +107,11 @@ export const SearchResultsPanel = ({
           ))}
           {newContacts.map(result => (
             <ContactResultRow
-              key={result.candidateAccountId + result.username + result.status}
+              key={result.accountId + result.username + result.status}
               username={result.username}
               query={query}
               disabled={contactsDisabled}
-              onSelect={() => onSelectContact(result.candidateAccountId, result.username)}
+              onSelect={() => onSelectContact(result.accountId, result.username)}
             />
           ))}
         </>

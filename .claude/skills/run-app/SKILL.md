@@ -118,8 +118,8 @@ turns, not milliseconds. In order of leverage:
    PNG**. A blank frame means it didn't render, not that it passed.
 2. `console` after the interaction — a silent visual pass with a `[pageerror]` in the log is a fail.
 3. For flows the BDD suite already covers, run that instead of hand-driving:
-   `npm run test:e2e:smoke` / `:browser` / `:authenticated` (see `e2e/CLAUDE.md`). Sign-in needs
-   the signing bot, which only the suite's fixtures set up — the driver has no auth.
+   `npm run test:e2e:smoke` / `:browser` / `:authenticated` (see `e2e/CLAUDE.md`). Sign-in needs a
+   `truapi-host` signer, which only the suite's fixtures spawn — the driver has no auth.
 4. Clean up when done: `pkill -f e2e/driver.ts; pkill -f release/build/main.cjs; pkill -f renderer:dev`.
 
 ## Gotchas

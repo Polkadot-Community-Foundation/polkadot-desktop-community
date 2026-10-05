@@ -3,7 +3,7 @@
 import { toast, toastError, toastSuccess } from '@novasamatech/tr-ui';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { type Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TranslationProvider } from '@/shared/translation';
 import {
@@ -64,7 +64,9 @@ const CheckButton = () => {
   return <button onClick={openUpdateCheck}>Check</button>;
 };
 
-// Renders and flushes the async getHostMetadata() startup effect.
+// The startup reconciliation hangs off `getHostMetadata()`. Await that one promise
+// so the state it sets lands inside `act`, rather than draining whatever happens to
+// be queued.
 async function renderProvider() {
   const result = render(
     <TranslationProvider>
@@ -73,7 +75,10 @@ async function renderProvider() {
       </UpdateCheckProvider>
     </TranslationProvider>,
   );
-  await act(async () => {});
+  await act(async () => {
+    await mockGetHostMetadata.mock.results.at(-1)?.value;
+  });
+
   return result;
 }
 
@@ -85,7 +90,7 @@ function emitUpdateEvent(type: string, data?: unknown) {
 
 // Last options object passed to the mocked raw `toast` (the ready reminder).
 function lastToastOptions() {
-  const calls = (toast as unknown as Mock).mock.calls;
+  const calls = vi.mocked(toast).mock.calls;
   return calls[calls.length - 1]?.[1] as {
     description?: string;
     onDismiss?: () => void;
@@ -101,9 +106,9 @@ describe('UpdateCheckContext', () => {
     mockGetHostMetadata.mockResolvedValue({ hostVersion: '2.1.0' });
     mockOnUpdateEvent.mockClear();
     mockOnCheckForUpdatesRequest.mockClear();
-    (toast as unknown as Mock).mockClear();
-    (toastSuccess as unknown as Mock).mockClear();
-    (toastError as unknown as Mock).mockClear();
+    vi.mocked(toast).mockClear();
+    vi.mocked(toastSuccess).mockClear();
+    vi.mocked(toastError).mockClear();
     // The persisted version state is a module-level singleton, so reset it in memory between tests
     // (localStorage.clear() alone would not — the binding only syncs from storage once at import).
     clearPendingVersion();
@@ -269,7 +274,7 @@ describe('UpdateCheckContext', () => {
       await userEvent.click(screen.getByText('Check'));
       emitUpdateEvent('update-downloaded', { version: '2.1.0' });
       expect(screen.getByText('Update is ready')).toBeTruthy();
-      (toast as unknown as Mock).mockClear();
+      vi.mocked(toast).mockClear();
 
       await userEvent.click(screen.getByRole('button', { name: 'Later' }));
 
@@ -284,7 +289,7 @@ describe('UpdateCheckContext', () => {
 
       await userEvent.click(screen.getByText('Check'));
       emitUpdateEvent('update-downloaded', { version: '2.1.0' });
-      (toast as unknown as Mock).mockClear();
+      vi.mocked(toast).mockClear();
 
       await userEvent.click(screen.getByRole('button', { name: 'Later' }));
 

@@ -14,7 +14,7 @@ const folderCardPayloadSchema = v.object({
 // passes through verbatim. The dashboard stores and returns it without reading.
 const contentCardPayloadSchema = v.objectWithRest({ kind: v.string() }, v.unknown());
 
-export const dashboardCardPayloadSchema = v.union([folderCardPayloadSchema, contentCardPayloadSchema]);
+const dashboardCardPayloadSchema = v.union([folderCardPayloadSchema, contentCardPayloadSchema]);
 
 export const parseDashboardCardPayload = (value: unknown): DashboardCardPayload | null => {
   const result = v.safeParse(dashboardCardPayloadSchema, value);

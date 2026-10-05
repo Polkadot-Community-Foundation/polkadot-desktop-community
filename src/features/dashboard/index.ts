@@ -15,6 +15,7 @@ export {
   dashboardCardMetadataTransformer,
   dashboardCardSDK,
   folderItemContentTransformer,
+  openAddToFavoritesSideEffect,
   openFavoriteItemSideEffect,
   openFavoritesSideEffect,
 } from './di';
@@ -31,13 +32,13 @@ export {
   widgetTopbarActionMenuTriggerClass,
   widgetTopbarActionVisibilityClass,
 } from './ui/WidgetMenu';
-export type { CardRenderProps, DashboardCardMetadata, WidgetSize } from './types';
+export type { CardRenderProps, DashboardCardMetadata, FolderItemIconSize, WidgetSize } from './types';
 
 // Generic dashboard host seams a content provider (e.g. `product-dashboard`)
 // fills from outside. The host owns these; providers register handlers / read
 // state through them without importing dashboard internals directly.
 export { isNativeAddableDashboardId, openNativeAddToDashboardDialog } from './addableDashboardCards';
-export { openAddToDashboardDialog } from './state/addToDashboardDialog';
+export { getAddToDashboardDialogTarget, openAddToDashboardDialog } from './state/addToDashboardDialog';
 export { clearAddWidgetCatalogSource, publishAddWidgetCatalogSource, useAddWidgetModalOpen } from './state/addWidgetCatalog';
 export { useAddDashboardContent } from './hooks/useAddDashboardContent';
 export { WIDGET_SIZE_CONFIG } from './constants';

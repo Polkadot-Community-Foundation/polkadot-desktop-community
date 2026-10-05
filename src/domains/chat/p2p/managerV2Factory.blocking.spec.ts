@@ -2,9 +2,13 @@ import 'fake-indexeddb/auto';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { environmentUseCase } from '@/domains/application';
 import { contactRepository } from '@/domains/contact';
 
+import { pushNotificationGateway } from './notifications/gateway';
+import { peerGateway } from './peer/gateway';
 import { p2pChatDatabase } from './repository';
+import { chatRequestGateway } from './requests/gateway';
 
 const OWN_USER_ID = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty';
 const PEER_ID = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
@@ -33,56 +37,33 @@ vi.mock('./identityChannel', () => ({
   },
 }));
 
-vi.mock('./requests/gateway', () => ({
-  chatRequestGateway: {
-    subscribeToIncomingRequestsV2: vi.fn().mockReturnValue(() => {}),
-    sendChatRequestV2: vi.fn(),
-  },
-}));
-
-vi.mock('./peer/gateway', () => ({
-  peerGateway: {
-    createPeerResolver: vi.fn().mockReturnValue({
-      searchUsers: vi.fn().mockResolvedValue([]),
-      getUsername: vi.fn().mockResolvedValue(undefined),
-      getPeerContact: vi.fn().mockResolvedValue(null),
-      getPeerChatKey: vi.fn().mockResolvedValue(new Uint8Array(32).fill(0xcc)),
-    }),
-  },
-}));
-
-vi.mock('./notifications/gateway', () => ({
-  pushNotificationGateway: { sendPushNotification: vi.fn().mockResolvedValue(undefined) },
-}));
-
-vi.mock('./session-transport/gateway', () => ({
-  transportGateway: { subscribeStatements: vi.fn().mockReturnValue(() => {}) },
-}));
-
+// `trackedSubscribeStatements` is a bare function export, which nothing can spy on in
+// place — the module has to be replaced until the manager takes its transport as a parameter.
 vi.mock('./subscription-registry', () => ({
   trackedSubscribeStatements: vi.fn().mockReturnValue(() => {}),
 }));
 
-vi.mock('@/domains/application', () => ({
-  environmentUseCase: {
-    getActive: vi.fn().mockResolvedValue({ bulletinHopEndpoints: [''] }),
-    getActiveId: vi.fn().mockReturnValue('test-env'),
-    getById: vi.fn().mockResolvedValue({ backendUrl: 'https://example.invalid' }),
-  },
-}));
-
-vi.mock('@/domains/device-sync/repository', () => ({
-  deviceSyncRepository: {
-    list: vi.fn().mockResolvedValue([]),
-    listActivePeers: vi.fn().mockResolvedValue([]),
-    upsertFromRoster: vi.fn(),
-  },
-}));
-
-vi.mock('@novasamatech/statement-store', async importOriginal => {
-  const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, createEncryption: () => ({ encrypt: vi.fn(), decrypt: vi.fn() }) };
-});
+// Every wire gateway is a plain object, spied in place so no statement, request or push
+// leaves the process; the active environment is spied the same way. The device-sync
+// repository runs for real on the fake IndexedDB imported above.
+vi.spyOn(chatRequestGateway, 'subscribeToIncomingRequestsV2').mockReturnValue(() => {});
+// eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- the manager reads only these fields of the double
+vi.spyOn(chatRequestGateway, 'sendChatRequestV2').mockResolvedValue(undefined as never);
+// eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- the manager reads only these fields of the double
+vi.spyOn(peerGateway, 'createPeerResolver').mockReturnValue({
+  searchUsers: vi.fn().mockResolvedValue([]),
+  getUsername: vi.fn().mockResolvedValue(undefined),
+  getPeerContact: vi.fn().mockResolvedValue(null),
+  getPeerChatKey: vi.fn().mockResolvedValue(new Uint8Array(32).fill(0xcc)),
+} as never);
+// eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- the manager reads only these fields of the double
+vi.spyOn(pushNotificationGateway, 'sendPushNotification').mockResolvedValue(undefined as never);
+// eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- the manager reads only these fields of the double
+vi.spyOn(environmentUseCase, 'getActive').mockResolvedValue({ bulletinHopEndpoints: [''] } as never);
+// eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- the manager reads only these fields of the double
+vi.spyOn(environmentUseCase, 'getActiveId').mockReturnValue('test-env' as never);
+// eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- the manager reads only these fields of the double
+vi.spyOn(environmentUseCase, 'getById').mockResolvedValue({ backendUrl: 'https://example.invalid' } as never);
 
 const { createP2PChatManagerV2 } = await import('./managerV2Factory');
 
@@ -92,7 +73,6 @@ const buildManager = () =>
   createP2PChatManagerV2({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/consistent-type-assertions -- test double for the SDK adapter; only the mocked session touches it
     statementStore: {} as any,
-    identity: { getIdentity: vi.fn() },
     userId: OWN_USER_ID,
     device: {
       statementAccountPublicKey: key(0x11),

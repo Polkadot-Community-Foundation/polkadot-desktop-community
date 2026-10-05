@@ -15,10 +15,27 @@ const INITIAL_OPACITY = 0.15;
 const INITIAL_SCALE = 0.92;
 const EASING = 0.3;
 
-export const Spinner = ({ size = 120 }: { size?: number }) => {
+type Props = {
+  size?: number;
+  animated?: boolean;
+};
+
+export const Spinner = ({ size = 120, animated = true }: Props) => {
   const pathRefs = useRef<(SVGPathElement | null)[]>([]);
 
   useEffect(() => {
+    if (!animated) {
+      // The last animation frame left its inline styles behind, so a petal would
+      // otherwise freeze mid-cycle at full opacity instead of settling to grey.
+      for (const el of pathRefs.current) {
+        if (!el) continue;
+        el.style.opacity = String(INITIAL_OPACITY);
+        el.style.transform = `scale(${INITIAL_SCALE})`;
+      }
+
+      return;
+    }
+
     let rafId: number | null = null;
     let start: number | null = null;
     const opacities = new Array<number>(PETAL_COUNT).fill(INITIAL_OPACITY);
@@ -53,7 +70,7 @@ export const Spinner = ({ size = 120 }: { size?: number }) => {
     return () => {
       if (rafId !== null) cancelAnimationFrame(rafId);
     };
-  }, []);
+  }, [animated]);
 
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 256 256" fill="none" aria-hidden="true">

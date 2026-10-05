@@ -1,4 +1,4 @@
-import { Observable } from 'rxjs';
+import { Observable, of } from 'rxjs';
 
 import { createStreamResource } from '@/shared/resource';
 import { type Chain } from '../chain/types';
@@ -18,31 +18,40 @@ import { type ConnectionStatus } from './types';
  * so a network-init failure (e.g. missing runtime descriptor, provider failure)
  * propagates to the UI instead of leaving the status stuck on `reconnecting`.
  */
+/**
+ * The status stream {@link chainConnectionStatusResource} caches: current status
+ * first, then every change, holding the connection lock for the subscription's
+ * lifetime.
+ */
+function observeChainConnectionStatus(chain: Chain): Observable<ConnectionStatus> {
+  return new Observable<ConnectionStatus>(subscriber => {
+    subscriber.next(chainRegistry.status(chain.genesisHash));
+
+    const unsubscribeStatus = chainRegistry.onStatusChanged(chain.genesisHash, status => {
+      subscriber.next(status);
+    });
+
+    // Subscribe to hold the connection lock open (see JSDoc). Successful
+    // emissions are ignored; errors are forwarded so init failures surface
+    // to the UI rather than leaving the status stuck on `reconnecting`.
+    const apiSubscription = chainRegistry.api$(chain).subscribe({
+      error: error => subscriber.error(error),
+    });
+
+    return () => {
+      unsubscribeStatus();
+      apiSubscription.unsubscribe();
+    };
+  });
+}
+
 export const chainConnectionStatusResource = createStreamResource<Chain>({
   key: chain => chain.genesisHash,
 })
-  .subscribe<ConnectionStatus>(
-    chain =>
-      new Observable<ConnectionStatus>(subscriber => {
-        subscriber.next(chainRegistry.status(chain.genesisHash));
-
-        const unsubscribeStatus = chainRegistry.onStatusChanged(chain.genesisHash, status => {
-          subscriber.next(status);
-        });
-
-        // Subscribe to hold the connection lock open (see JSDoc). Successful
-        // emissions are ignored; errors are forwarded so init failures surface
-        // to the UI rather than leaving the status stuck on `reconnecting`.
-        const apiSubscription = chainRegistry.api$(chain).subscribe({
-          error: error => subscriber.error(error),
-        });
-
-        return () => {
-          unsubscribeStatus();
-          apiSubscription.unsubscribe();
-        };
-      }),
-  )
+  .subscribe<ConnectionStatus>(observeChainConnectionStatus)
+  // Without this a unit test that renders any chain-status surface opens a real
+  // socket through `chainRegistry.api$`.
+  .mock(() => of('connected'))
   .cache<Record<string, ConnectionStatus>>({
     initial: {},
     map: (cache, status, chain) => ({ ...cache, [chain.genesisHash]: status }),

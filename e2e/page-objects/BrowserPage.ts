@@ -138,6 +138,10 @@ export class BrowserPage {
       this.page.getByTestId(TEST_IDS.permissionDialogAllowAlways),
       'device/remote permission dialog should be auto-approved, not overlapping product content',
     ).toBeHidden({ timeout: DEFAULT_TIMEOUT });
+    await expect(
+      this.page.getByTestId(TEST_IDS.productSubtreeAllow),
+      'product account-subtree request should be auto-approved, not overlapping product content',
+    ).toBeHidden({ timeout: DEFAULT_TIMEOUT });
 
     // The native system tabs (chat, dashboard) render React views, not a product
     // `<webview>`, so the `div[aria-hidden="false"] webview` assertion is

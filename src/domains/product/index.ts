@@ -18,6 +18,8 @@ export type {
   WorkerExecutable,
 } from './product';
 export type { ExecutableCacheStatus } from './product/executable-cache/types';
+// Pure derivation over the core's storage keys — a service, not a use case.
+export { coreSlotService } from './core-storage/service';
 export {
   EXECUTABLE_KINDS,
   executableArchiveResource,
@@ -41,23 +43,18 @@ export { bootstrapProduct } from './bootstrap';
 
 // Use cases — imperative product flows (multi-step writes / cross-module read
 // composition). Each group is exported separately per project structure.
+export { coreStorageUseCase } from './$usecase/coreStorage';
 export { lifecycleUseCase } from './$usecase/lifecycle';
 export { offlineCacheUseCase } from './$usecase/offlineCache';
-// DEBT: on the public surface for `widgets/ProductContainerBinding/integrations/localStorage.ts`.
-// Fix: a use case owning the read/write, with the widget calling that.
-// eslint-disable-next-line local-rules/enforce-import-restrictions
-export { productLocalStorageRepository } from './local-storage/repository';
+export { productStorageUseCase } from './$usecase/productStorage';
 export { remoteAccessUseCase } from './$usecase/remoteAccess';
+export { useRendererImage } from './$usecase/renderer.hooks';
 export { resolveProductUseCase } from './$usecase/resolve';
 export { useCommitProductByIdentifier, usePinExecutable, usePinProduct, useUnpinProduct } from './$usecase/commitment.hooks';
 export { useInteractedProducts } from './$usecase/interaction.hooks';
 export { useOfflineCacheSize, useOfflineCacheStatus } from './product/executable-cache/hooks';
 export { commitmentUseCase } from './$usecase/commitment';
 export { onProductModalityOpenedSideEffect, updatesUseCase } from './$usecase/updates';
-export { allowanceUseCase } from './$usecase/allowance';
-export { productAccountUseCase } from './$usecase/account';
-export { useProductAccountAddress, useProductAccountAddresses } from './$usecase/account.hooks';
-export type { AllowanceResourceKind } from './allowance/types';
 
 export type { AppListing } from '@parity/browse-sdk';
 export { browseService } from './browse/service';
@@ -70,52 +67,45 @@ export { useDotNsLabels, useDotNsTld, useIsProductIdentifier } from './dotns/hoo
 export { dotNsUseCase } from './$usecase/dotns';
 export type { DotNsUrl } from './dotns/types';
 
-export { productAccountService } from './account/service';
-
-export { aliasPermissionService } from './alias-permissions/service';
-export { useAllAliasPermissions, useRemoveAliasPermission, useSetAliasPermission } from './alias-permissions/hooks';
-export type { AliasPermission, AliasPermissionStatus } from './alias-permissions/types';
-
-export type { Binding, FetchResolver, ProductWorkerInstance, Sandbox, WorkerDeps, WorkerEvents } from './worker/types';
+export type { FetchResolver, ProductWorkerInstance, Sandbox } from './worker/types';
 export { createProductWorker } from './worker/instance';
-export { defaultWorkerBindings } from './worker/bindings';
 
 export type {
   AggregatedPermission,
   AppPermissionEntry,
   DevicePermissionType,
-  Permission,
+  OsDevicePermissionStatus,
   PermissionStatus,
-  ProductPermissions,
   RemotePermissionIpcRequest,
-  RemotePermissionRequest,
 } from './permissions/types';
-export { type PermissionId, type PermissionModality, PERMISSION_IDS } from './permissions/constants';
-export {
-  useAggregatedPermission,
-  useAggregatedPermissions,
-  useAllProductPermissions,
-  useProductExternalRequestPatterns,
-  useProductPermissions,
-  useResetPermissionToDefault,
-  useSetDevicePermission,
-  useSetRemotePermission,
-  useSetRemotePermissionsBatch,
-} from './permissions/hooks';
-export {
-  clearTransientDevicePermissionGrants,
-  grantTransientDevicePermission,
-  resetPermissionToDefault,
-  setDevicePermission,
-  setRemotePermission,
-  setRemotePermissionsBatch,
-} from './permissions/resource';
+export { type PermissionId, PERMISSION_IDS } from './permissions/constants';
+export { clearTransientDevicePermissionGrants, grantTransientDevicePermission } from './permissions/resource';
 export { permissionsService } from './permissions/service';
-export type { DevicePermissionId } from './permissions/types';
 export { _resetRemotePermissionBroker, pendingRemotePermissionRequests$, requestExternalUrlAccess } from './permissions/broker';
 export type { PendingRemotePermissionRequest } from './permissions/broker';
 
 // Recently opened products — persisted visit history, read back on every boot.
 export { MAX_RECENT_PRODUCTS } from './recents/constants';
-export { clearRecentProducts, forgetRecentProduct, recordRecentProduct, restoreRecentProducts } from './recents/resource';
+export {
+  clearRecentProducts,
+  forgetRecentProduct,
+  recentProductIdsResource,
+  recordRecentProduct,
+  restoreRecentProducts,
+} from './recents/resource';
 export { useRecentProductIds } from './recents/hooks';
+export type { CoreSlotDescriptor } from './core-storage/types';
+export { onDeviceOsPermissionBlockedSideEffect, permissionsUseCase } from './$usecase/permissions';
+export {
+  useSetPermissionStatus,
+  useWatchAggregatedPermissions,
+  useWatchGrantedAccountAccess,
+  useWatchGrantedPatterns,
+  useWatchProductPermissions,
+} from './$usecase/permissions.hooks';
+export type { GrantedAccountAccess, GrantedPattern, PermissionsAdapter, ProductPermissionEntry } from './permissions/types';
+export { publishedAppListingsResource, publishedWidgetListingsResource } from './browse/resource';
+export { dotNsTldResource } from './dotns/resource';
+export { executableCacheResource } from './product/executable-cache/resource';
+export { liveExecutableResource } from './product/manifest/resource';
+export { chainResolveResource } from './product/resource';

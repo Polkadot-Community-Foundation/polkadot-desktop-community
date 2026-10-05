@@ -36,7 +36,7 @@ When('the user opens the signing review screen', async ({ testProductPage }) => 
   await testProductPage.waitForSignReviewScreen();
 });
 
-Then('the signing review shows account, network, fee and call title', async ({ testProductPage }) => {
+Then('the signing review shows account, network and call title', async ({ testProductPage }) => {
   await testProductPage.expectReviewSummaryFields();
 });
 
@@ -56,12 +56,8 @@ When('the user double-clicks Continue to Sign', async ({ testProductPage }) => {
   await testProductPage.doubleClickContinueToSign();
 });
 
-When('the user allows the permission always', async ({ testProductPage }) => {
-  await testProductPage.allowPermissionAlways();
-});
-
-When('the user allows the permission once', async ({ testProductPage }) => {
-  await testProductPage.allowPermissionOnce();
+When('the user approves the permission', async ({ testProductPage }) => {
+  await testProductPage.approvePermission();
 });
 
 When('the user denies the permission', async ({ testProductPage }) => {

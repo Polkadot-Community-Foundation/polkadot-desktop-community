@@ -8,7 +8,8 @@ import {
   type PendingRemotePermissionRequest,
   type PermissionStatus,
   pendingRemotePermissionRequests$,
-  useSetRemotePermission,
+  permissionsService,
+  useSetPermissionStatus,
 } from '@/domains/product';
 
 import { RemotePermissionRequestDialog } from './RemotePermissionRequestDialog';
@@ -31,8 +32,8 @@ const EXIT_FALLBACK_MS = 500;
 export const RemotePermissionPromptHost = () => {
   const { t } = useTranslation();
   const tRef = useLooseRef(t);
-  const setRemote = useSetRemotePermission();
-  const setRemoteRef = useLooseRef(setRemote);
+  const setStatus = useSetPermissionStatus();
+  const setStatusRef = useLooseRef(setStatus);
 
   const pending = useSyncObservable(pendingRemotePermissionRequests$, []);
   const head = pending[0] ?? null;
@@ -77,10 +78,13 @@ export const RemotePermissionPromptHost = () => {
     const effect = DECISION_EFFECTS[decision];
 
     if (effect.persist) {
-      setRemoteRef().run({
-        productId: shown.productId,
-        permission: { payload: { type: 'Remote', pattern: shown.origin }, modality: shown.modality, status: effect.persist },
-      });
+      // `toAuthorizationRequest` reduces the origin to the bare host the core keys on,
+      // the same normalization the enforcement read applies, so a persisted grant is a
+      // key its own lookup can match.
+      const request = permissionsService.toAuthorizationRequest('ExternalRequest', { pattern: shown.origin });
+      if (request) {
+        setStatusRef().run({ productId: shown.productId, request, status: effect.persist });
+      }
     }
     if (effect.toast) {
       toastError({ title: tRef()('feature.productPermissions.externalBlockedToast', { origin: shown.origin }) });

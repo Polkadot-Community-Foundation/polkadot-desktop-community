@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { RouterProvider, createMemoryHistory, createRootRoute, createRouter } from '@tanstack/react-router';
 import { render, screen } from '@testing-library/react';
 import { of } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -11,13 +12,6 @@ import { type ChatSession } from '@/domains/chat';
 // useElementSize is the only @/shared/hooks symbol ChatWidget consumes; the mock
 // is overridden per-test to simulate different measured container heights.
 const useElementSizeMock = vi.fn();
-vi.mock('@/shared/hooks', () => ({
-  useElementSize: () => useElementSizeMock(),
-}));
-
-vi.mock('../hooks/useOpenProductChatRoom', () => ({
-  useOpenProductChatRoom: () => vi.fn(),
-}));
 
 import { ChatWidget } from './ChatWidget';
 
@@ -83,12 +77,21 @@ function makeCallSession(id: string, purpose: 'audio' | 'video'): ChatSession {
 
 const ref = { current: null };
 
-function renderWidget(visibleCount: number, sessions: ChatSession[] = [], pending = false) {
-  return render(
-    <TranslationProvider>
-      <ChatWidget visibleCount={visibleCount} sessions={sessions} pending={pending} />
-    </TranslationProvider>,
-  );
+// `useOpenProductChatRoom` calls `useNavigate`, so the widget mounts inside a real router;
+// nothing here navigates, a root route is enough.
+async function renderWidget(visibleCount: number, sessions: ChatSession[] = [], pending = false) {
+  const rootRoute = createRootRoute({
+    component: () => (
+      <TranslationProvider>
+        <ChatWidget visibleCount={visibleCount} sessions={sessions} pending={pending} />
+      </TranslationProvider>
+    ),
+  });
+  const router = createRouter({ routeTree: rootRoute, history: createMemoryHistory({ initialEntries: ['/'] }) });
+  // A RouterProvider renders nothing until the router has matched its first location.
+  await router.load();
+
+  return render(<RouterProvider router={router} />);
 }
 
 describe('ChatWidget', () => {
@@ -100,50 +103,50 @@ describe('ChatWidget', () => {
     vi.clearAllMocks();
   });
 
-  it('renders at most visibleCount items, clipping the rest', () => {
+  it('renders at most visibleCount items, clipping the rest', async () => {
     const sessions = [makeGroupSession('1'), makeGroupSession('2'), makeGroupSession('3')];
 
-    renderWidget(2, sessions);
+    await renderWidget(2, sessions);
 
     expect(screen.getAllByTestId(TEST_IDS.chatRoomItem)).toHaveLength(2);
   });
 
-  it('does not render a scroll container', () => {
-    const { container } = renderWidget(2, [makeGroupSession('1')]);
+  it('does not render a scroll container', async () => {
+    const { container } = await renderWidget(2, [makeGroupSession('1')]);
 
     expect(container.querySelector('.overflow-y-auto')).toBeNull();
     expect(container.querySelector('.overflow-hidden')).not.toBeNull();
   });
 
-  it('shows the group-sender line at regular density (medium/large)', () => {
+  it('shows the group-sender line at regular density (medium/large)', async () => {
     // visibleCount 4 = medium → regular layout keeps the group-sender line.
-    renderWidget(4, [makeGroupSession('1')]);
+    await renderWidget(4, [makeGroupSession('1')]);
 
     expect(screen.getByText(GROUP_SENDER_NAME)).toBeTruthy();
   });
 
-  it('hides the group-sender line at compact density (small)', () => {
+  it('hides the group-sender line at compact density (small)', async () => {
     // visibleCount 2 = small → compact layout drops the group-sender line.
-    renderWidget(2, [makeGroupSession('1')]);
+    await renderWidget(2, [makeGroupSession('1')]);
 
     expect(screen.queryByText(GROUP_SENDER_NAME)).toBeNull();
   });
 
-  it('renders no rooms while pending (the block pulse handles loading)', () => {
-    renderWidget(4, [], true);
+  it('renders no rooms while pending (the block pulse handles loading)', async () => {
+    await renderWidget(4, [], true);
 
     // No skeleton rows: the whole widget block pulses via DashboardCardChrome.
     expect(screen.queryByTestId(TEST_IDS.chatRoomItem)).toBeNull();
   });
 
-  it('previews a completed voice call with its call title', () => {
-    renderWidget(4, [makeCallSession('s1', 'audio')]);
+  it('previews a completed voice call with its call title', async () => {
+    await renderWidget(4, [makeCallSession('s1', 'audio')]);
 
     expect(screen.getByText('Voice Call')).toBeTruthy();
   });
 
-  it('previews a completed video call with its call title', () => {
-    renderWidget(4, [makeCallSession('s1', 'video')]);
+  it('previews a completed video call with its call title', async () => {
+    await renderWidget(4, [makeCallSession('s1', 'video')]);
 
     expect(screen.getByText('Video Call')).toBeTruthy();
   });

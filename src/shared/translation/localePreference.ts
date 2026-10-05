@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { type Observable, defer, distinctUntilChanged, fromEvent, map, merge, startWith } from 'rxjs';
 
 import { DEFAULT_LOCALE, LOCALE_IDS } from './constants';
 import { type Locale } from './types';
@@ -31,18 +32,24 @@ export function saveLocale(locale: Locale) {
   window.dispatchEvent(new CustomEvent(LOCALE_CHANGE_EVENT));
 }
 
+/** The selected locale, now and on every change — the non-React twin of `useLocalePreference`. */
+export function watchLocale(): Observable<Locale> {
+  return defer(() =>
+    merge(fromEvent(window, LOCALE_CHANGE_EVENT), fromEvent(window, 'storage')).pipe(
+      map(() => readLocale()),
+      startWith(readLocale()),
+      distinctUntilChanged(),
+    ),
+  );
+}
+
 export const useLocalePreference = (): Locale => {
   const [locale, setLocale] = useState<Locale>(readLocale);
 
   useEffect(() => {
-    const sync = () => setLocale(readLocale());
-    window.addEventListener(LOCALE_CHANGE_EVENT, sync);
-    window.addEventListener('storage', sync);
+    const subscription = watchLocale().subscribe(setLocale);
 
-    return () => {
-      window.removeEventListener(LOCALE_CHANGE_EVENT, sync);
-      window.removeEventListener('storage', sync);
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
   return locale;

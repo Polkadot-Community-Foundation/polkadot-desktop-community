@@ -54,3 +54,9 @@ result
 
 # Python bytecode from .github/scripts unit tests
 __pycache__/
+
+# temp
+tmp/
+# truapi-host signer state: one base path per e2e worker slot. Holds plaintext 0600
+# mnemonics for attested on-chain identities — never commit.
+.truapi-host/

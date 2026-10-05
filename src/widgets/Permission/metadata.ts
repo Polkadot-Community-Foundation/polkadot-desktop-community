@@ -5,18 +5,15 @@ import {
   Camera,
   Clipboard,
   ExternalLink,
-  File,
   Fingerprint,
   Globe,
   IdCard,
-  LayoutGrid,
   MapPin,
   Mic,
-  Scan,
 } from 'lucide-react';
-import { type ReactNode, createElement } from 'react';
+import { createElement } from 'react';
 
-import { type PermissionId, type PermissionModality, type PermissionStatus, PERMISSION_IDS } from '@/domains/product';
+import { type PermissionId, type PermissionStatus, PERMISSION_IDS } from '@/domains/product';
 
 import { type PermissionCategory, type PermissionMetadata } from './types';
 import { PolkadotPermissionIcon } from './ui/PolkadotPermissionIcon';
@@ -130,13 +127,6 @@ const PERMISSION_METADATA_BY_ID = {
     descriptionKey: 'feature.permissionSettings.permission.UserIdentity.description',
     ruleKeys: ruleKeys('UserIdentity', 4),
   },
-  Files: {
-    category: 'device',
-    icon: icon(File),
-    labelKey: 'feature.permissionSettings.permission.Files.label',
-    descriptionKey: 'feature.permissionSettings.permission.Files.description',
-    ruleKeys: ruleKeys('Files', 4),
-  },
 } satisfies Record<PermissionId, Omit<PermissionMetadata, 'id'>>;
 
 // Derived in PERMISSION_IDS order so the domain taxonomy is the single source of
@@ -159,25 +149,3 @@ export const STATUS_LABEL_KEYS: Record<PermissionStatus, string> = {
 };
 
 export const getPermissionMeta = (id: string): PermissionMetadata | undefined => PERMISSION_METADATA.find(p => p.id === id);
-
-export type ModalityMetadata = {
-  id: PermissionModality;
-  icon: ReactNode;
-  labelKey: string;
-  descriptionKey: string;
-};
-
-const MODALITY_METADATA_BY_ID = {
-  app: {
-    icon: icon(Scan),
-    labelKey: 'widget.permission.modality.app.label',
-    descriptionKey: 'widget.permission.modality.app.description',
-  },
-  widget: {
-    icon: icon(LayoutGrid),
-    labelKey: 'widget.permission.modality.widget.label',
-    descriptionKey: 'widget.permission.modality.widget.description',
-  },
-} satisfies Record<PermissionModality, Omit<ModalityMetadata, 'id'>>;
-
-export const getModalityMeta = (id: PermissionModality): ModalityMetadata => ({ id, ...MODALITY_METADATA_BY_ID[id] });

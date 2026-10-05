@@ -6,6 +6,7 @@ import { useDashboardProductIds } from '@/domains/application';
 import { useUserProductRooms } from '@/domains/chat';
 import { usePersistedProducts } from '@/domains/product';
 import { browserTabs, isSystemTabType } from '@/aggregates/browser-tabs';
+import { useTruapiUserId } from '@/aggregates/truapi-runtime';
 import { inputModalityService } from '../service';
 
 /** The product ids the current screen contributes, live. */
@@ -13,7 +14,7 @@ export const useInputContext = (): string[] => {
   const { pathname } = useLocation();
   const selectedTab = useObservable(browserTabs.selectedTab$, null);
   const { data: placedIds } = useDashboardProductIds();
-  const { data: rooms } = useUserProductRooms();
+  const { data: rooms } = useUserProductRooms(useTruapiUserId());
   const { data: installed } = usePersistedProducts();
 
   const dashboardProductIds = useMemo(

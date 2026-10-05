@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { SUPPORTED_LOCALES, TranslationProvider, readLocale } from '@/shared/translation';
 
@@ -13,10 +13,6 @@ const renderPage = () =>
       <LanguageSettings />
     </TranslationProvider>,
   );
-
-afterEach(() => {
-  localStorage.clear();
-});
 
 describe('LanguageSettings', () => {
   it('renders one option per supported locale', () => {

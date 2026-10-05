@@ -1,10 +1,10 @@
 import { createNanoEvents } from 'nanoevents';
 import { type Observable, BehaviorSubject, finalize, firstValueFrom, from, of, shareReplay, switchMap, tap } from 'rxjs';
 
+import { isTestEnvironment, onExecutionEnvironmentReset } from '@/shared/execution-environment';
 import { createAsyncTaskPool, createCache } from '@/shared/utils';
 
 import { createDefaultCacheMapper, createDefaultInitial, wrapKeyFactory } from './generic';
-import { onOverride } from './overrides';
 import { type DefaultCache, type KeyFn, type MapCacheFn, type Overridable, type Resource, type ResourceKey } from './types';
 
 type RequestFn<Params, Response> = (params: Params) => Response | Promise<Response>;
@@ -12,6 +12,7 @@ type RequestFn<Params, Response> = (params: Params) => Response | Promise<Respon
 type QueryParams<Params, Response, Cache> = {
   key: KeyFn<Params>;
   fn: RequestFn<Params, Response>;
+  mock?: RequestFn<Params, Response>;
   timeout?: number;
   cache: {
     initial: Cache;
@@ -29,13 +30,16 @@ type CacheOrDefault<Cache, Response> = [Cache] extends [never] ? DefaultCache<Re
 function build<Params, Response, Cache>({
   key,
   fn,
+  mock,
   timeout,
   retry,
   cache,
 }: QueryParams<Params, Response, Cache>): Resource<Params, Response, Cache> & Overridable<RequestFn<Params, Response>> {
-  // The request is read through this at call time rather than captured, so
-  // `instead` can swap it. Holds the real implementation outside tests.
-  let activeFn = fn;
+  // Resolved per request rather than captured, so the winner can change without
+  // rebuilding: a per-case `instead` beats the builder's blanket `mock`, which
+  // in turn stands in for the real request only under the test execution environment.
+  let overrideFn: RequestFn<Params, Response> | null = null;
+  const activeFn = () => overrideFn ?? (mock && isTestEnvironment() ? mock : fn);
   const events = createNanoEvents<{ read: Parameters<Resource<Params, Response, Cache>['onRead']>[0] }>();
 
   const createKey = wrapKeyFactory(key);
@@ -44,14 +48,22 @@ function build<Params, Response, Cache>({
   const cache$ = new BehaviorSubject<Cache>(cache.initial);
   const requestsCache = createCache<ResourceKey, Response>({ now: () => Date.now() });
   const requests: Record<ResourceKey, Observable<Response>> = {};
+  // The pool runs one request per key, so a discarded request left running would
+  // hold the slot — and every read queued behind it — until it settled or timed
+  // out. Tracked so `invalidateAll` can pull them out. A set, not one per key: two
+  // reads issued in the same tick both miss `requests` before either registers,
+  // and each becomes its own request.
+  const inFlight = new Set<AbortController>();
 
   function pending$(params: Params) {
     const key = createKey(params);
     return requests[key] ?? null;
   }
 
-  function read$(params: Params) {
-    const key = createKey(params);
+  function read$(params?: Params) {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- a param-less resource reads with `read$()`; `{}` is its canonical empty key
+    const resolved = params ?? ({} as Params);
+    const key = createKey(resolved);
     const existing = requests[key];
     if (existing) {
       return existing;
@@ -63,7 +75,7 @@ function build<Params, Response, Cache>({
           return of(result.value);
         }
 
-        const $request = makeRequest(params, key);
+        const $request = makeRequest(resolved, key);
         requestsCache.setRequest(key, firstValueFrom($request), cache.staleAfter ?? 0);
         return $request;
       }),
@@ -71,14 +83,19 @@ function build<Params, Response, Cache>({
   }
 
   function makeRequest(params: Params, key: ResourceKey) {
+    const controller = new AbortController();
+    inFlight.add(controller);
     const request$ = from(
-      requestPool.call(() => activeFn(params), {
+      requestPool.call(() => activeFn()(params), {
         pool: key,
-        signal: timeout ? AbortSignal.timeout(timeout) : undefined,
+        signal: timeout ? AbortSignal.any([controller.signal, AbortSignal.timeout(timeout)]) : controller.signal,
       }),
     ).pipe(
       tap(response => cache$.next(cache.map(cache$.value, response, params))),
-      finalize(() => delete requests[key]),
+      finalize(() => {
+        delete requests[key];
+        inFlight.delete(controller);
+      }),
       shareReplay({ bufferSize: 1, refCount: true }),
     );
 
@@ -111,8 +128,24 @@ function build<Params, Response, Cache>({
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       delete requests[key as ResourceKey];
     }
+    // Newest first: within a key the pool runs the oldest request and queues the
+    // rest, and aborting the active one first would start the next queued one
+    // for the instant before its own abort lands.
+    for (const controller of Array.from(inFlight).reverse()) {
+      controller.abort(new DOMException('Resource invalidated', 'AbortError'));
+    }
+    inFlight.clear();
     cache$.next(cache.initial);
   }
+
+  // After each test the override is dropped and the cache emptied, so no test
+  // inherits a value the previous one produced or a request it stubbed. The
+  // subscription lives as long as the resource; every resource in the app is a
+  // module singleton, and one created per instance would have to unsubscribe.
+  onExecutionEnvironmentReset(() => {
+    overrideFn = null;
+    invalidateAll();
+  });
 
   return {
     key: createKey,
@@ -125,14 +158,10 @@ function build<Params, Response, Cache>({
     invalidate,
     invalidateAll,
     instead(next) {
-      activeFn = next;
-      // Without this the next read is served from the cache the real
+      overrideFn = next;
+      // Without this the next read is served from the cache the previous
       // implementation filled, and the override silently does nothing.
       invalidateAll();
-      onOverride(() => {
-        activeFn = fn;
-        invalidateAll();
-      });
     },
     snapshot() {
       return cache$.value;
@@ -140,9 +169,10 @@ function build<Params, Response, Cache>({
   };
 }
 
-export const createQueryResource = <Params>({ key }: { key: KeyFn<Params> }) => {
+export const createQueryResource = <Params = unknown>({ key = () => 'default' }: { key?: KeyFn<Params> } = {}) => {
   type QueryResourceBuilder<Response, Cache> = {
     request<Response>(fn: RequestFn<Params, Response>): QueryResourceBuilder<Response, Cache>;
+    mock(fn: RequestFn<Params, Response>): QueryResourceBuilder<Response, Cache>;
     timeout(timeout: number): QueryResourceBuilder<Response, Cache>;
     retry(retry: NonNullable<QueryParams<Params, Response, Cache>>['retry']): QueryResourceBuilder<Response, Cache>;
     cache<Cache>(cache: NonNullable<QueryParams<Params, Response, Cache>['cache']>): QueryResourceBuilder<Response, Cache>;
@@ -156,6 +186,10 @@ export const createQueryResource = <Params>({ key }: { key: KeyFn<Params> }) => 
       request<Response>(fn: RequestFn<Params, Response>) {
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         return internal<Response, Cache>({ ...params, fn, key } as Partial<QueryParams<Params, Response, Cache>>);
+      },
+      mock(fn: RequestFn<Params, Response>) {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        return internal<Response, Cache>({ ...params, mock: fn } as Partial<QueryParams<Params, Response, Cache>>);
       },
       timeout(timeout) {
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
@@ -182,6 +216,7 @@ export const createQueryResource = <Params>({ key }: { key: KeyFn<Params> }) => 
             retry: params.retry,
             timeout: params.timeout,
             fn: params.fn,
+            mock: params.mock,
           }) as Resource<Params, Response, CacheOrDefault<Cache, Response>> & Overridable<RequestFn<Params, Response>>;
         } else {
           const initial = createDefaultInitial<Response>();
@@ -197,6 +232,7 @@ export const createQueryResource = <Params>({ key }: { key: KeyFn<Params> }) => 
             retry: params.retry,
             timeout: params.timeout,
             fn: params.fn,
+            mock: params.mock,
           }) as Resource<Params, Response, CacheOrDefault<Cache, Response>> & Overridable<RequestFn<Params, Response>>;
         }
       },

@@ -1,4 +1,4 @@
-import { type CodecType, type CustomRendererNode } from '@novasamatech/host-api';
+import { type RendererNode } from '@parity/truapi';
 
 // Types from RFC-0027 (Input Routing), mapped to TypeScript. The Rust enums in
 // the RFC become discriminated unions; field names are camelCased. Every union
@@ -82,11 +82,11 @@ export type InputCandidateContent =
 /**
  * A render tree the product drew for one custom candidate.
  *
- * The same closed vocabulary a chat custom message is drawn from — the product
- * names layouts and design tokens, never markup or URLs — which is what lets the
- * host draw a product's own content without giving it the page.
+ * The same closed vocabulary every product-rendered body is drawn from — the
+ * product names layouts and design tokens, never markup or URLs — which is what
+ * lets the host draw a product's own content without giving it the page.
  */
-export type CandidateNode = CodecType<typeof CustomRendererNode>;
+export type CandidateNode = RendererNode;
 
 /** What a product has to say about one query. */
 export type InputResponse =

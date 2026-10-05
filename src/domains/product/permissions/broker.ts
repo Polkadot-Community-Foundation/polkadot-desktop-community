@@ -1,14 +1,14 @@
+import { type ProductExecutionKind } from '@parity/truapi-host';
 import { type Observable, BehaviorSubject } from 'rxjs';
 
 import { promiseWithResolvers } from '@/shared/utils';
 
-import { type PermissionModality } from './constants';
 import { type PermissionStatus } from './types';
 
 export type PendingRemotePermissionRequest = {
   productId: string;
-  /** Modality the request originated from — the prompt's "Allow always" persists for this modality only. */
-  modality: PermissionModality;
+  /** The kind of executable that asked — concurrent requests are coalesced per kind. */
+  executionKind: ProductExecutionKind;
   /**
    * URL origin (scheme + host + port) — the pattern persisted if the user picks
    * "Allow always". Origin-wide granularity avoids prompt storms when a page
@@ -41,27 +41,27 @@ function toOrigin(url: string): string | null {
   return parsed.origin;
 }
 
-function dedupeKey(productId: string, origin: string, modality: PermissionModality): string {
-  return `${productId}\0${origin}\0${modality}`;
+function dedupeKey(productId: string, origin: string, executionKind: ProductExecutionKind): string {
+  return `${productId}\0${origin}\0${executionKind}`;
 }
 
 /**
- * Concurrent callers for the same (productId, origin, modality) share a single pending
+ * Concurrent callers for the same (productId, origin, executionKind) share a single pending
  * dialog — avoids prompt storms when a page loads many assets from one host.
  */
 export function requestExternalUrlAccess({
   productId,
   url,
-  modality,
+  executionKind,
 }: {
   productId: string;
   url: string;
-  modality: PermissionModality;
+  executionKind: ProductExecutionKind;
 }): Promise<PermissionStatus> {
   const origin = toOrigin(url);
   if (!origin) return Promise.resolve('denied');
 
-  const key = dedupeKey(productId, origin, modality);
+  const key = dedupeKey(productId, origin, executionKind);
   const { promise, resolve } = promiseWithResolvers<PermissionStatus>();
 
   const existing = resolversByKey.get(key);
@@ -75,7 +75,7 @@ export function requestExternalUrlAccess({
 
   const pending: PendingRemotePermissionRequest = {
     productId,
-    modality,
+    executionKind,
     origin,
     url,
     resolve: status => {

@@ -20,14 +20,6 @@ export async function launchElectronApp(options?: {
    */
   autotest?: boolean;
   /**
-   * Custom signing bot URL (sets BOT_URL env var)
-   */
-  botUrl?: string;
-  /**
-   * Custom signing bot token (sets BOT_TOKEN env var)
-   */
-  botToken?: string;
-  /**
    * Custom user data directory
    */
   userDataDir?: string;
@@ -37,7 +29,7 @@ export async function launchElectronApp(options?: {
    */
   recordVideo?: { dir: string; size?: { width: number; height: number } };
 }): Promise<ElectronAppContext> {
-  const { args = [], autotest = false, botUrl, botToken, userDataDir, recordVideo } = options ?? {};
+  const { args = [], autotest = false, userDataDir, recordVideo } = options ?? {};
 
   // Path to the Electron main file
   // Using the built file from release/build
@@ -74,14 +66,6 @@ export async function launchElectronApp(options?: {
 
   if (autotest) {
     env['AUTOTEST'] = 'true';
-  }
-
-  if (botUrl) {
-    env['BOT_URL'] = botUrl;
-  }
-
-  if (botToken) {
-    env['BOT_TOKEN'] = botToken;
   }
 
   if (userDataDir) {

@@ -6,6 +6,7 @@ import { TEST_IDS } from '@/shared/test-ids';
 import { useTranslation } from '@/shared/translation';
 import { useProductSessions, useTotalUnreadCount } from '@/domains/chat';
 import { useP2PSessions } from '@/aggregates/p2p-chat';
+import { useTruapiUserId } from '@/aggregates/truapi-runtime';
 
 import { QuickChat } from './QuickChat';
 
@@ -15,7 +16,8 @@ export const ChatHeaderButton = () => {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
 
-  const { data: productSessions } = useProductSessions();
+  const userId = useTruapiUserId();
+  const { data: productSessions } = useProductSessions(userId);
   const { data: p2pSessions } = useP2PSessions();
   const sessions = useMemo(() => [...productSessions, ...p2pSessions], [productSessions, p2pSessions]);
   const totalUnread = useTotalUnreadCount(sessions);

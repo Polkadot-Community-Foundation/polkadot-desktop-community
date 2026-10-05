@@ -24,10 +24,13 @@ export type Overridable<Fn> = {
   /**
    * Replaces the request implementation and **invalidates the cache**, so the
    * next read actually reaches the replacement instead of being served a value
-   * the real implementation produced earlier.
+   * the previous implementation produced earlier.
    *
-   * Cleared by `resetResourceOverrides()`, which `vitest.setup.js` calls after
-   * every test — a spec never has to undo this itself.
+   * Outranks the `mock` the builder declared: the order is `instead` > `mock` >
+   * the real request. Cleared by `resetExecutionEnvironment()` from
+   * `@/shared/execution-environment`, which `vitest.setup.js` calls after every
+   * test — a spec never has to undo this itself — after which the resource falls
+   * back to its `mock`, or to the real request if it declared none.
    */
   instead(fn: Fn): void;
 };
@@ -38,9 +41,12 @@ export type Resource<Params, Response, Cache> = {
    */
   key: NormalizedKeyFn<Params>;
   /**
-   * Calling resource read.
+   * Calling resource read. The param is omittable only when `{}` satisfies `Params` (a
+   * param-less resource, keyed as the empty params `{}`); a resource whose `Params` has
+   * required fields still demands the argument, so `read$()` on it stays a compile error.
    */
-  read$(params: Params): Observable<Response>;
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- `{} extends Params` is the type-level test for "Params has no required field"; `object`/`unknown` would not express it
+  read$(...args: {} extends Params ? [params?: Params] : [params: Params]): Observable<Response>;
   /**
    * Return pending observable for given params.
    */

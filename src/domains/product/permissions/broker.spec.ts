@@ -19,7 +19,7 @@ describe('requestExternalUrlAccess', () => {
     void requestExternalUrlAccess({
       productId: 'pr239.parity.dot',
       url: 'https://storage.googleapis.com/parity-io/image.png',
-      modality: 'app',
+      executionKind: 'App',
     });
 
     const pending = await pendingPromise;
@@ -36,7 +36,7 @@ describe('requestExternalUrlAccess', () => {
     const decision = requestExternalUrlAccess({
       productId: 'app.dot',
       url: 'https://cdn.example.com/logo.svg',
-      modality: 'app',
+      executionKind: 'App',
     });
 
     const [first] = await pendingPromise;
@@ -49,12 +49,12 @@ describe('requestExternalUrlAccess', () => {
     const emitted: PendingRemotePermissionRequest[][] = [];
     const sub = pendingRemotePermissionRequests$.subscribe(list => emitted.push(list));
 
-    const a = requestExternalUrlAccess({ productId: 'p.dot', url: 'https://cdn.example.com/a.png', modality: 'app' });
-    const b = requestExternalUrlAccess({ productId: 'p.dot', url: 'https://cdn.example.com/b.png', modality: 'app' });
+    const a = requestExternalUrlAccess({ productId: 'p.dot', url: 'https://cdn.example.com/a.png', executionKind: 'App' });
+    const b = requestExternalUrlAccess({ productId: 'p.dot', url: 'https://cdn.example.com/b.png', executionKind: 'App' });
     const c = requestExternalUrlAccess({
       productId: 'p.dot',
       url: 'https://cdn.example.com/deep/path/c.png',
-      modality: 'app',
+      executionKind: 'App',
     });
 
     await Promise.resolve();
@@ -73,8 +73,8 @@ describe('requestExternalUrlAccess', () => {
     const emitted: PendingRemotePermissionRequest[][] = [];
     const sub = pendingRemotePermissionRequests$.subscribe(list => emitted.push(list));
 
-    void requestExternalUrlAccess({ productId: 'p.dot', url: 'https://cdn-a.example.com/x.png', modality: 'app' });
-    void requestExternalUrlAccess({ productId: 'p.dot', url: 'https://cdn-b.example.com/x.png', modality: 'app' });
+    void requestExternalUrlAccess({ productId: 'p.dot', url: 'https://cdn-a.example.com/x.png', executionKind: 'App' });
+    void requestExternalUrlAccess({ productId: 'p.dot', url: 'https://cdn-b.example.com/x.png', executionKind: 'App' });
 
     await Promise.resolve();
 
@@ -88,8 +88,8 @@ describe('requestExternalUrlAccess', () => {
     const emitted: PendingRemotePermissionRequest[][] = [];
     const sub = pendingRemotePermissionRequests$.subscribe(list => emitted.push(list));
 
-    void requestExternalUrlAccess({ productId: 'a.dot', url: 'https://cdn.example.com/x.png', modality: 'app' });
-    void requestExternalUrlAccess({ productId: 'b.dot', url: 'https://cdn.example.com/x.png', modality: 'app' });
+    void requestExternalUrlAccess({ productId: 'a.dot', url: 'https://cdn.example.com/x.png', executionKind: 'App' });
+    void requestExternalUrlAccess({ productId: 'b.dot', url: 'https://cdn.example.com/x.png', executionKind: 'App' });
 
     await Promise.resolve();
 
@@ -103,7 +103,7 @@ describe('requestExternalUrlAccess', () => {
     const emitted: PendingRemotePermissionRequest[][] = [];
     const sub = pendingRemotePermissionRequests$.subscribe(list => emitted.push(list));
 
-    const decision = requestExternalUrlAccess({ productId: 'p.dot', url: 'https://cdn.example.com/x.png', modality: 'app' });
+    const decision = requestExternalUrlAccess({ productId: 'p.dot', url: 'https://cdn.example.com/x.png', executionKind: 'App' });
     await Promise.resolve();
 
     const pending = emitted.at(-1) ?? [];
@@ -121,12 +121,12 @@ describe('requestExternalUrlAccess', () => {
       currentList = list;
     });
 
-    const first = requestExternalUrlAccess({ productId: 'p.dot', url: 'https://cdn.example.com/a.png', modality: 'app' });
+    const first = requestExternalUrlAccess({ productId: 'p.dot', url: 'https://cdn.example.com/a.png', executionKind: 'App' });
     await Promise.resolve();
     currentList[0]?.resolve('denied');
     await first;
 
-    const second = requestExternalUrlAccess({ productId: 'p.dot', url: 'https://cdn.example.com/b.png', modality: 'app' });
+    const second = requestExternalUrlAccess({ productId: 'p.dot', url: 'https://cdn.example.com/b.png', executionKind: 'App' });
     await Promise.resolve();
 
     expect(currentList).toHaveLength(1);
@@ -140,7 +140,9 @@ describe('requestExternalUrlAccess', () => {
     const emitted: PendingRemotePermissionRequest[][] = [];
     const sub = pendingRemotePermissionRequests$.subscribe(list => emitted.push(list));
 
-    await expect(requestExternalUrlAccess({ productId: 'p.dot', url: 'not a url', modality: 'app' })).resolves.toBe('denied');
+    await expect(requestExternalUrlAccess({ productId: 'p.dot', url: 'not a url', executionKind: 'App' })).resolves.toBe(
+      'denied',
+    );
 
     expect(emitted.every(list => list.length === 0)).toBe(true);
     sub.unsubscribe();
@@ -150,7 +152,7 @@ describe('requestExternalUrlAccess', () => {
     const emitted: PendingRemotePermissionRequest[][] = [];
     const sub = pendingRemotePermissionRequests$.subscribe(list => emitted.push(list));
 
-    await expect(requestExternalUrlAccess({ productId: 'p.dot', url: 'file:///etc/passwd', modality: 'app' })).resolves.toBe(
+    await expect(requestExternalUrlAccess({ productId: 'p.dot', url: 'file:///etc/passwd', executionKind: 'App' })).resolves.toBe(
       'denied',
     );
 
@@ -164,7 +166,7 @@ describe('requestExternalUrlAccess', () => {
     void requestExternalUrlAccess({
       productId: 'p.dot',
       url: 'wss://rpc.polkadot.io/path',
-      modality: 'app',
+      executionKind: 'App',
     });
 
     const [first] = await pendingPromise;
@@ -177,8 +179,8 @@ describe('requestExternalUrlAccess', () => {
     const emitted: PendingRemotePermissionRequest[][] = [];
     const sub = pendingRemotePermissionRequests$.subscribe(list => emitted.push(list));
 
-    void requestExternalUrlAccess({ productId: 'p.dot', url: 'wss://rpc.example.com/a', modality: 'app' });
-    void requestExternalUrlAccess({ productId: 'p.dot', url: 'https://rpc.example.com/a', modality: 'app' });
+    void requestExternalUrlAccess({ productId: 'p.dot', url: 'wss://rpc.example.com/a', executionKind: 'App' });
+    void requestExternalUrlAccess({ productId: 'p.dot', url: 'https://rpc.example.com/a', executionKind: 'App' });
 
     await Promise.resolve();
 
@@ -190,13 +192,13 @@ describe('requestExternalUrlAccess', () => {
   });
 
   it('does not coalesce requests for the same origin from different modalities', async () => {
-    const first = requestExternalUrlAccess({ productId: 'x.dot', url: 'https://api.example.com/a', modality: 'app' });
-    const second = requestExternalUrlAccess({ productId: 'x.dot', url: 'https://api.example.com/b', modality: 'widget' });
+    const first = requestExternalUrlAccess({ productId: 'x.dot', url: 'https://api.example.com/a', executionKind: 'App' });
+    const second = requestExternalUrlAccess({ productId: 'x.dot', url: 'https://api.example.com/b', executionKind: 'Widget' });
 
     const pending = await firstValueFrom(pendingRemotePermissionRequests$);
     expect(pending).toHaveLength(2);
-    expect(pending[0]?.modality).toBe('app');
-    expect(pending[1]?.modality).toBe('widget');
+    expect(pending[0]?.executionKind).toBe('App');
+    expect(pending[1]?.executionKind).toBe('Widget');
 
     pending[0]?.resolve('granted');
     pending[1]?.resolve('denied');
@@ -208,8 +210,8 @@ describe('requestExternalUrlAccess', () => {
     const emitted: PendingRemotePermissionRequest[][] = [];
     const sub = pendingRemotePermissionRequests$.subscribe(list => emitted.push(list));
 
-    void requestExternalUrlAccess({ productId: 'p.dot', url: 'https://api.example.com:8443/a', modality: 'app' });
-    void requestExternalUrlAccess({ productId: 'p.dot', url: 'https://api.example.com:9443/a', modality: 'app' });
+    void requestExternalUrlAccess({ productId: 'p.dot', url: 'https://api.example.com:8443/a', executionKind: 'App' });
+    void requestExternalUrlAccess({ productId: 'p.dot', url: 'https://api.example.com:9443/a', executionKind: 'App' });
 
     await Promise.resolve();
 

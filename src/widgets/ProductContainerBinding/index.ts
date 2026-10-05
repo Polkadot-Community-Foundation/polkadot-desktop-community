@@ -1,1 +1,0 @@
-export { ProductContainerBinding } from './ProductContainerBinding';

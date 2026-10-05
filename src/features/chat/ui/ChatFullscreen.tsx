@@ -25,6 +25,7 @@ import {
   useRevealRequest,
   useSendChatRequest,
 } from '@/aggregates/p2p-chat';
+import { useTruapiUserId } from '@/aggregates/truapi-runtime';
 import { useAnnounceProductRoomOpen } from '../hooks/useAnnounceProductRoomOpen';
 import { useContactSearch } from '../hooks/useContactSearch';
 import { useSortedChatList } from '../hooks/useSortedChatList';
@@ -68,7 +69,8 @@ const boldText = (chunks: ReactNode) => <span className="font-semibold text-fg-p
 
 export const ChatFullscreen = ({ selected, onSelect, onDeselect }: Props) => {
   const { t } = useTranslation();
-  const { data: productSessions, pending: pendingProduct } = useProductSessions();
+  const userId = useTruapiUserId();
+  const { data: productSessions, pending: pendingProduct } = useProductSessions(userId);
   const { data: p2pSessions, pending: pendingP2P } = useP2PSessions();
   const { data: pendingRequests, outgoing: outgoingRequests } = useP2PRequests();
   const manager = useP2PChatManager();

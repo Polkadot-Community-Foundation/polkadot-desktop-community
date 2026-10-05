@@ -103,17 +103,10 @@
       "navigationBackAria": "后退",
       "navigationForwardAria": "前进",
       "addressWelcome": "欢迎来到 Polkadot！在此输入 .dot 地址",
-      "addressFavorites": "收藏",
-      "suggestionSeparator": "—",
       "removeFromDashboard": "从仪表板移除该产品",
       "addressSuggestions": "全部应用",
       "addressNoResults": "未找到应用",
-      "recentlyVisited": "最近打开",
       "recentlyOpened": "最近打开",
-      "clearRecent": "清除",
-      "recents": {
-        "header": "最近"
-      },
       "recentClearedTitle": "最近打开的标签页已成功清除",
       "undoLabel": "撤销 {seconds} 秒",
       "ramUsage": "内存占用：{value}",
@@ -194,7 +187,8 @@
       "zoomIn": "放大",
       "zoomOut": "缩小",
       "zoomReset": "重置缩放",
-      "zoomPercent": "{percent}%"
+      "zoomPercent": "{percent}%",
+      "clearRecent": "清除"
     },
     "userManager": {
       "connectionStatus": {
@@ -347,8 +341,7 @@
           "sending": "发送中",
           "sent": "已发送",
           "delivered": "已送达",
-          "claimed": "已领取",
-          "currencyLabel": "CASH"
+          "claimed": "已领取"
         }
       },
       "call": {
@@ -370,7 +363,11 @@
           "openToCall": "打开移动应用以拨打",
           "openToReturn": "打开移动应用以返回",
           "openToCallBack": "打开移动应用以回拨",
-          "openToCallAgain": "打开移动应用以再次拨打"
+          "openToCallAgain": "打开移动应用以再次拨打",
+          "tapToCall": "点按以通话",
+          "tapToReturn": "点按以返回",
+          "tapToCallBack": "点按以回拨",
+          "tapToCallAgain": "点按以再次通话"
         }
       }
     },
@@ -407,23 +404,6 @@
           "subtitle": "请稍后重试"
         }
       }
-    },
-    "signingBotAutopair": {
-      "title": "Signing Bot",
-      "statusIdle": "可以连接",
-      "statusConnecting": "正在检查 bot…",
-      "statusPairing": "正在通过 bot 配对…",
-      "statusPaired": "已配对为「{user}」",
-      "statusError": "配对失败",
-      "botUrlLabel": "Bot URL",
-      "botReachable": "Bot 可访问",
-      "botUnreachable": "Bot 不可访问",
-      "tokenLabel": "Token",
-      "usernameLabel": "用户名",
-      "connectingButton": "配对中…",
-      "connectButton": "连接到 Bot",
-      "connected": "已连接",
-      "waitingQr": "正在等待二维码 payload…"
     },
     "dashboard": {
       "title": "仪表板",
@@ -625,7 +605,7 @@
         "description": "这将清除所有站点数据并重置 {productName} 的权限。标签页仍会保持打开；下次打开时所有内容都会重新加载。"
       },
       "webDomains": {
-        "dialogTitle": "管理 {productName} {modality} 的网页域名访问权限"
+        "dialogTitle": "管理 {productName} 的网页域名访问权限"
       },
       "appPermission": {
         "title": "{productName} 的{permission}访问权限",
@@ -660,6 +640,7 @@
           "Clipboard": "剪贴板",
           "OpenUrl": "打开外部链接",
           "Biometrics": "生物识别",
+          "NFC": "NFC",
           "Files": "文件",
           "Remote": "网页域名",
           "WebRtc": "WebRTC",
@@ -677,6 +658,7 @@
           "Clipboard": "用于复制和粘贴你选择共享的内容",
           "OpenUrl": "用于在默认浏览器中打开外部链接",
           "Biometrics": "用于需要验证你身份的功能",
+          "NFC": "用于与附近的标签和设备进行非接触式读写",
           "Files": "用于上传、下载和管理文件等功能",
           "Remote": "用于向以下域名发起请求",
           "WebRtc": "用于语音和视频通话等实时通信功能",
@@ -974,6 +956,132 @@
         "hi": "印地语",
         "tr": "土耳其语"
       }
+    },
+    "inputModality": {
+      "title": "搜索",
+      "placeholder": "搜索或输入 {tld} 地址",
+      "attach": "添加文件",
+      "removeAttachment": "移除附件",
+      "loadingAttachment": "正在加载附件…",
+      "asked": "已询问此屏幕上的 {count} 个产品…",
+      "noContext": "此屏幕上没有可以回答的内容。",
+      "noCandidates": "没有可以处理它的对象。",
+      "goTo": "前往",
+      "pickerPrompt": "“{fileName}”应发送给哪个产品？",
+      "pickerEmpty": "此屏幕上没有产品接受该文件类型。",
+      "attachmentTooLarge": "过大，无法转发：{fileName}",
+      "scan": "扫描码",
+      "scanPrompt": "已扫描的码",
+      "scanWillOpen": "这将打开 {productId}。",
+      "scanWillAsk": "这将询问此屏幕上的产品。",
+      "scanConfirm": "继续",
+      "scanCancel": "取消",
+      "scanUnavailable": "此设备没有可用的摄像头。",
+      "scanDenied": "摄像头访问被拒绝。",
+      "fromThisScreen": "来自此屏幕",
+      "recentlyVisited": "最近打开",
+      "clearRecent": "清除",
+      "addressFavorites": "收藏",
+      "suggestionSeparator": "—"
+    },
+    "networkConnection": {
+      "title": "网络连接",
+      "chainsLoading": "正在加载网络…",
+      "chainsEmpty": "尚未配置网络。",
+      "noLightClient": "没有可用的轻客户端",
+      "mode": {
+        "lightClient": "轻客户端",
+        "rpc": "可信提供方",
+        "lightClientHint": "无需信任提供方，直接在设备上验证网络数据",
+        "rpcHint": "通过可信提供方访问更快，但隐私性较低"
+      },
+      "advanced": {
+        "title": "高级",
+        "description": "配置连接方式"
+      },
+      "slowLoad": {
+        "title": "加载时间比平时更长",
+        "description": "跳过等待，本次会话改用可信提供方以更快加载",
+        "action": "更快加载"
+      },
+      "loadFailed": {
+        "title": "无法加载此页面",
+        "description": "连接耗时过长。请重试或改用更快的连接。",
+        "descriptionReloadOnly": "连接耗时过长。请尝试重新加载页面。",
+        "reload": "重新加载页面"
+      },
+      "role": {
+        "identity": "身份",
+        "apps": "应用",
+        "transactions": "交易"
+      }
+    },
+    "productRuntime": {
+      "permissionDenied": {
+        "systemDeviceSettings": "设备设置",
+        "Camera": {
+          "title": "需要相机访问权限",
+          "description": "用于视频通话、扫描二维码和拍摄等功能"
+        },
+        "Microphone": {
+          "title": "需要麦克风访问权限",
+          "description": "用于语音通话、消息和录音等功能"
+        }
+      },
+      "review": {
+        "deny": "拒绝",
+        "signPayload": {
+          "title": "签署交易载荷",
+          "subtitle": "签署前请检查载荷。"
+        },
+        "signRaw": {
+          "title": "签署消息",
+          "subtitle": "签署前请检查消息。"
+        },
+        "createTransaction": {
+          "title": "创建交易",
+          "subtitle": "提交前请检查交易。"
+        },
+        "signVrf": {
+          "title": "签署 VRF 转录",
+          "subtitle": "签署前请检查转录。"
+        },
+        "allowance": {
+          "title": "分配资源",
+          "subtitle": "请检查此应用请求的资源。"
+        },
+        "statementSign": {
+          "title": "签署声明",
+          "subtitle": "签署前请检查声明。"
+        },
+        "createProof": {
+          "title": "创建证明",
+          "subtitle": "请检查此应用请求的证明。"
+        },
+        "permission": {
+          "IdentityDisclosure": "此应用请求获知你的身份。",
+          "PreimageSubmit": "此应用请求提交内容。",
+          "AccountAccess": "此应用请求使用另一个应用的账户。",
+          "AccountAlias": "此应用请求派生一个别名。",
+          "title": "权限请求"
+        },
+        "legacyAccountNotice": "正在使用旧版账户签署。",
+        "resource": {
+          "statementStore": "声明存储槽位",
+          "bulletin": "Bulletin 存储槽位",
+          "smartContract": "账户 {account} 的智能合约 gas",
+          "autoSigning": "代表你签署，无需每次询问"
+        },
+        "accountAccess": {
+          "title": "允许访问 {targetIdentifier} 的账户？",
+          "subtitle": "让此应用使用属于另一个应用的账户进行操作",
+          "warning": "允许后，此应用可代表你使用另一个应用的账户"
+        },
+        "productSubtree": {
+          "title": "允许此应用访问自己的账户？",
+          "subtitle": "从你已配对的设备获取此应用的账户"
+        }
+      }
     }
   },
   "widget": {
@@ -1131,10 +1239,6 @@
         "Clipboard": {
           "title": "需要剪贴板访问权限",
           "description": "用于复制和粘贴你选择共享的内容"
-        },
-        "Files": {
-          "title": "需要磁盘访问权限",
-          "description": "用于上传、下载和管理文件等功能"
         },
         "OpenUrl": {
           "title": "需要外部链接访问权限",

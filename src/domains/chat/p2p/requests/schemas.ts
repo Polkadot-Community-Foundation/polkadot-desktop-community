@@ -68,19 +68,19 @@ export const IdentityProof = Struct({
 });
 
 // v0.2 spec layout — must match android's `RequestContentV2` field-for-field.
-export const RequestContentV2 = Struct({
+const RequestContentV2 = Struct({
   identityProof: IdentityProof,
   deviceEncPubKey: PublicKeyCodec,
   pushToken: Option(TokenContent),
   welcomeMessage: Option(RichTextContent),
 });
 
-export const VersionedRequestContent = Enum({
+const VersionedRequestContent = Enum({
   v1: RequestContentV1,
   v2: RequestContentV2,
 });
 
-export const RequestMessage = Struct({
+const RequestMessage = Struct({
   messageId: str,
   timestamp: u64,
   content: VersionedRequestContent,
@@ -122,7 +122,7 @@ export const EncryptedRemoteModel = Struct({
 // APKs emit this as `Vec<u8>` — those builds cannot complete the first
 // `DeviceChatAccepted` handshake regardless (chicken-and-egg slot wrap), so we
 // match the post-#605 wire and require the Android build to be at #605 head.
-export const RequestDeviceInfo = Struct({
+const RequestDeviceInfo = Struct({
   statementAccountId: AccountIdCodec,
   encryptedKey: Bytes(),
 });
@@ -133,13 +133,13 @@ export const RequestDeviceInfo = Struct({
 // Each `RequestDeviceInfo.encryptedKey` is the one-shot symmetric key
 // wrapped via ECDH between the sender's persistent device priv key and
 // that recipient device's persistent device pub key.
-export const MultiDeviceRequest = Struct({
+const MultiDeviceRequest = Struct({
   encryptedRequest: Bytes(),
   devicesInfo: Vector(RequestDeviceInfo),
 });
 
 // Mirrors MultiDeviceRequest for the response side.
-export const MultiDeviceResponse = Struct({
+const MultiDeviceResponse = Struct({
   encryptedResponse: Bytes(),
   devicesInfo: Vector(RequestDeviceInfo),
 });

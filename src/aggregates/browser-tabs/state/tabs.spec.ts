@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { type Tab, type TabRef, browserTabs, decodePersistedTabs, encodePersistedTabs } from './tabs';
 
@@ -9,11 +9,6 @@ const tab = (id: string, type: string, deeplink = '', tabKey = 'k', persistable 
   deeplink,
   tabKey,
   persistable,
-});
-
-beforeEach(() => {
-  browserTabs.tabs$.set([]);
-  browserTabs.selectedTabId$.set(null);
 });
 
 describe('selection', () => {

@@ -5,23 +5,23 @@ Feature: Device permissions
   feature is tagged manual-permissions so the auto-approver is off and the test
   drives the dialog itself.
 
+  The core takes a `PermissionDecision` and owns the stored decision, and the host
+  renders the same `RemotePermissionRequestDialog` for this prompt as for its own
+  remote-URL grant, headed by the requesting product. Deny, Allow Once and Allow
+  Always are offered for every capability; Allow Once also opens the host's native
+  device gate (camera, microphone, location) for that product until it is closed.
+
+  TC-6.1.2 (14792) and TC-6.2.2 (14797) cover Allow Once and remain dropped; neither
+  scenario has been rewritten for the button.
+
   @allure.id:14791
-  Scenario: TC-6.1.1 Allow Always grants a device permission
+  Scenario: TC-6.1.1 Approving grants a device permission
     Given the user is authenticated
     And the test product "host-playground" is opened
     And the user clicks the "Permissions" tab
     When the user runs "Device Permission: Camera"
-    And the user allows the permission always
+    And the user approves the permission
     Then the result contains "Camera"
-
-  @allure.id:14792
-  Scenario: TC-6.1.2 Allow Once grants a device permission for the current request
-    Given the user is authenticated
-    And the test product "host-playground" is opened
-    And the user clicks the "Permissions" tab
-    When the user runs "Device Permission: Microphone"
-    And the user allows the permission once
-    Then the result contains "Microphone"
 
   @allure.id:14795
   Scenario: TC-6.1.5 A granted permission is not prompted again
@@ -29,7 +29,7 @@ Feature: Device permissions
     And the test product "host-playground" is opened
     And the user clicks the "Permissions" tab
     When the user runs "Device Permission: Notifications"
-    And the user allows the permission always
+    And the user approves the permission
     Then the result contains "Notifications"
     When the user runs "Device Permission: Notifications"
     Then the result contains "Notifications"
@@ -53,22 +53,13 @@ Feature: Device permissions
     Then the result contains "Bluetooth"
 
   @allure.id:14796
-  Scenario: TC-6.2.1 Allow Always for an external (remote) request
+  Scenario: TC-6.2.1 Approving an external (remote) request
     Given the user is authenticated
     And the test product "host-playground" is opened
     And the user clicks the "Permissions" tab
     When the user runs "Remote Permission: Chain Submit"
-    And the user allows the permission always
+    And the user approves the permission
     Then the result contains "Chain"
-
-  @allure.id:14797
-  Scenario: TC-6.2.2 Allow Once for an external request
-    Given the user is authenticated
-    And the test product "host-playground" is opened
-    And the user clicks the "Permissions" tab
-    When the user runs "Remote Permission: Preimage Submit"
-    And the user allows the permission once
-    Then the result contains "Preimage"
 
   @allure.id:14798
   Scenario: TC-6.2.3 Deny an external request blocks it

@@ -1,22 +1,24 @@
+import { describe, expect, it } from 'vitest';
+
 import { mergeArrays, splice } from './arrays';
 
 describe('Arrays utils', () => {
-  test('should insert element in the beginning', () => {
+  it('should insert element in the beginning', () => {
     const array = splice([1, 2, 3], 100, 0);
     expect(array).toEqual([100, 2, 3]);
   });
 
-  test('should insert element at the end', () => {
+  it('should insert element at the end', () => {
     const array = splice([1, 2, 3], 100, 2);
     expect(array).toEqual([1, 2, 100]);
   });
 
-  test('should insert element in the middle', () => {
+  it('should insert element in the middle', () => {
     const array = splice([1, 2, 3], 100, 1);
     expect(array).toEqual([1, 100, 3]);
   });
 
-  test('should insert element in empty array', () => {
+  it('should insert element in empty array', () => {
     const array1 = splice([], 100, 0);
     const array2 = splice([], 100, 1);
 
@@ -26,7 +28,7 @@ describe('Arrays utils', () => {
 });
 
 describe('merge', () => {
-  test('should array of strings', () => {
+  it('should array of strings', () => {
     const list1 = ['1', '2', '3', '4'];
     const list2 = ['2', '5'];
 
@@ -38,7 +40,7 @@ describe('merge', () => {
     expect(res).toEqual(['1', '2', '3', '4', '5']);
   });
 
-  test('should return first array if second is empty', () => {
+  it('should return first array if second is empty', () => {
     const list1 = ['1', '2', '3', '4'];
 
     const res = mergeArrays({
@@ -49,7 +51,7 @@ describe('merge', () => {
     expect(res).toBe(list1);
   });
 
-  test('should return second array if first is empty', () => {
+  it('should return second array if first is empty', () => {
     const list2 = ['1', '2', '3', '4'];
 
     const res = mergeArrays({
@@ -60,7 +62,7 @@ describe('merge', () => {
     expect(res).toBe(list2);
   });
 
-  test('should sort', () => {
+  it('should sort', () => {
     const list1 = [2, 4, 3];
     const list2 = [1, 5];
 
@@ -73,7 +75,7 @@ describe('merge', () => {
     expect(res).toEqual([1, 2, 3, 4, 5]);
   });
 
-  test('should replace objects', () => {
+  it('should replace objects', () => {
     const list1 = [{ id: 1 }, { id: 4 }, { id: 5 }];
     const list2 = [{ id: 3 }, { id: 2 }, { id: 3, test: true }, { id: 6 }, { id: 7 }];
 
@@ -85,7 +87,7 @@ describe('merge', () => {
     expect(res).toEqual([{ id: 1 }, { id: 2 }, { id: 3, test: true }, { id: 4 }, { id: 5 }, { id: 6 }, { id: 7 }]);
   });
 
-  test('should merge objects', () => {
+  it('should merge objects', () => {
     const list1 = [{ id: 1, v: 1 }, { id: 5 }];
     const list2 = [{ id: 3 }, { id: 1, v: 2 }];
 
@@ -98,7 +100,7 @@ describe('merge', () => {
     expect(res).toEqual([{ id: 1, v: 3 }, { id: 3 }, { id: 5 }]);
   });
 
-  test('should replace and sort objects', () => {
+  it('should replace and sort objects', () => {
     const list1 = [{ id: 1 }, { id: 5 }, { id: 4 }];
     const list2 = [{ id: 3 }, { id: 2 }];
 
@@ -111,7 +113,7 @@ describe('merge', () => {
     expect(res).toEqual([{ id: 5 }, { id: 4 }, { id: 3 }, { id: 2 }, { id: 1 }]);
   });
 
-  test('should sort objects by complex value', () => {
+  it('should sort objects by complex value', () => {
     const list1 = [
       { id: 1, date: new Date(1) },
       { id: 5, date: new Date(5) },

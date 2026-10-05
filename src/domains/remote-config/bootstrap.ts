@@ -2,7 +2,15 @@ import { type FirebaseApp, initializeApp } from 'firebase/app';
 import { type RemoteConfig, fetchAndActivate, getRemoteConfig, setCustomSignals } from 'firebase/remote-config';
 import * as v from 'valibot';
 
-import { REMOTE_CONFIG_FETCH_TIMEOUT_MS, REMOTE_CONFIG_MIN_FETCH_INTERVAL_MS, REMOTE_CONFIG_SIGNAL_KEY } from './constants';
+import { delay } from '@/shared/utils';
+
+import {
+  REMOTE_CONFIG_FETCH_TIMEOUT_MS,
+  REMOTE_CONFIG_MIN_FETCH_INTERVAL_MS,
+  REMOTE_CONFIG_REFRESH_ATTEMPTS,
+  REMOTE_CONFIG_REFRESH_BACKOFF_MS,
+  REMOTE_CONFIG_SIGNAL_KEY,
+} from './constants';
 import { firebaseConfigSchema } from './schemas';
 
 // Singleton owned here (wiring), read by the stateless gateway via
@@ -22,8 +30,9 @@ export function getRemoteConfigInstance(): RemoteConfig | null {
   return remoteConfig;
 }
 
-// Force a fetch/activate past the time-based throttle. Returns `false` if RC is
-// disabled; never throws.
+// Force a fetch/activate past the time-based throttle, retrying transient
+// failures with backoff. Returns `false` if RC is disabled or every attempt
+// failed; never throws.
 export async function refreshRemoteConfig(): Promise<boolean> {
   const initialized = remoteConfig;
   if (!initialized) return false;
@@ -31,9 +40,19 @@ export async function refreshRemoteConfig(): Promise<boolean> {
   const previousInterval = initialized.settings.minimumFetchIntervalMillis;
   initialized.settings.minimumFetchIntervalMillis = 0;
   try {
-    return await fetchAndActivate(initialized);
-  } catch (error) {
-    console.warn('[remote-config] forced refresh failed — keeping last-activated values', error);
+    for (let attempt = 1; attempt <= REMOTE_CONFIG_REFRESH_ATTEMPTS; attempt++) {
+      try {
+        return await fetchAndActivate(initialized);
+      } catch (error) {
+        console.warn(`[remote-config] forced refresh attempt ${attempt}/${REMOTE_CONFIG_REFRESH_ATTEMPTS} failed`, error);
+        if (attempt < REMOTE_CONFIG_REFRESH_ATTEMPTS) {
+          await delay(attempt * REMOTE_CONFIG_REFRESH_BACKOFF_MS);
+        }
+      }
+    }
+
+    console.warn('[remote-config] forced refresh failed — keeping last-activated values');
+
     return false;
   } finally {
     initialized.settings.minimumFetchIntervalMillis = previousInterval;

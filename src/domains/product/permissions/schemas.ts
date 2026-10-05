@@ -1,44 +1,19 @@
-import * as v from 'valibot';
+import { PermissionAuthorizationRequest } from '@parity/truapi-host';
 
-const permissionStatusSchema = v.picklist(['ask', 'granted', 'denied']);
+/**
+ * Decode a permission slot's stored request.
+ *
+ * Uses the codec the package generates rather than a schema restating the union here:
+ * the definition stays upstream's, so a variant added to the core cannot drift out of
+ * sync with a copy. Returns `null` on bytes that will not decode — a damaged row is
+ * dropped from a read rather than erroring the stream it is part of.
+ */
+export function parsePermissionAuthorizationRequest(value: unknown): PermissionAuthorizationRequest | null {
+  if (!(value instanceof Uint8Array)) return null;
 
-// Rows written before the per-modality migration have no `modality` — they are
-// App-modality decisions by definition. Normalize at the trust boundary.
-const permissionModalitySchema = v.optional(v.picklist(['app', 'widget']), 'app');
-
-const devicePermissionSchema = v.object({
-  payload: v.object({
-    name: v.picklist([
-      'Notifications',
-      'Camera',
-      'Microphone',
-      'Bluetooth',
-      'NFC',
-      'Location',
-      'Clipboard',
-      'OpenUrl',
-      'Biometrics',
-    ]),
-  }),
-  modality: permissionModalitySchema,
-  status: permissionStatusSchema,
-});
-
-const remotePermissionSchema = v.object({
-  payload: v.union([
-    v.object({ type: v.literal('Remote'), pattern: v.string() }),
-    v.object({ type: v.literal('ChainSubmit') }),
-    v.object({ type: v.literal('PreimageSubmit') }),
-    v.object({ type: v.literal('StatementSubmit') }),
-    v.object({ type: v.literal('WebRtc') }),
-    v.object({ type: v.literal('UserIdentity') }),
-  ]),
-  modality: permissionModalitySchema,
-  status: permissionStatusSchema,
-});
-
-export const productPermissionsSchema = v.object({
-  productId: v.string(),
-  devicePermissions: v.array(devicePermissionSchema),
-  remotePermissions: v.array(remotePermissionSchema),
-});
+  try {
+    return PermissionAuthorizationRequest.dec(value);
+  } catch {
+    return null;
+  }
+}

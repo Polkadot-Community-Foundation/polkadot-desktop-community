@@ -55,26 +55,28 @@ export class PermissionSettingsPage {
     await expect(this.resetButton).toBeVisible({ timeout: DEFAULT_TIMEOUT });
   }
 
-  // --- Per-app permission entity page (modality rows) -----------------------
+  // --- Per-app permission entity page ---------------------------------------
 
-  private get firstModalityRow() {
-    return this.page.getByTestId(TEST_IDS.permissionModalityRow).first();
+  // One row per permission. A stored decision no longer carries a surface, so the
+  // per-modality rows this used to pick the first of are gone.
+  private get permissionRow() {
+    return this.page.getByTestId(TEST_IDS.permissionRow).first();
   }
 
   private get resetButton() {
     return this.page.getByTestId(TEST_IDS.permissionResetButton);
   }
 
-  /** Change the first modality row's status via its dropdown. */
+  /** Change the permission's status via its dropdown. */
   async setStatus(status: string) {
-    await this.firstModalityRow.getByRole('button').first().click();
+    await this.permissionRow.getByRole('button').first().click();
     await this.page.getByRole('menuitem', { name: status, exact: true }).click();
     await this.expectStatus(status);
   }
 
-  /** Assert the first modality row's dropdown shows the given status. */
+  /** Assert the permission's dropdown shows the given status. */
   async expectStatus(status: string) {
-    await expect(this.firstModalityRow.getByRole('button').first()).toContainText(status, { timeout: DEFAULT_TIMEOUT });
+    await expect(this.permissionRow.getByRole('button').first()).toContainText(status, { timeout: DEFAULT_TIMEOUT });
   }
 
   /** Reset the permission to its default (Ask) status via the entity-page button. */

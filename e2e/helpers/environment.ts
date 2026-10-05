@@ -1,19 +1,19 @@
 /**
  * Maps the desktop's Environment id (the `VITE_ENVIRONMENTS` channel key, used as the
- * `network-button-<id>` testid by the onboarding picker) to the signing-bot's `network`
- * HTTP parameter (the signing-bot service's NETWORKS config).
+ * `network-button-<id>` testid by the onboarding picker) to the network name
+ * `truapi-host` accepts for `--network`.
  *
  * The catalog's channel keys are `nightly` (display "Paseo Next V2") and `unstable`
- * (display "PreviewNet"); the bot networks they map to are `paseo-next-v2` and `preview`.
+ * (display "PreviewNet"); the networks they map to are `paseo-next-v2` and `previewnet`.
  */
 
 export type E2eEnvironmentId = 'nightly' | 'unstable';
 
-const ENV_TO_BOT_NETWORK: Record<E2eEnvironmentId, string> = {
+const ENV_TO_NETWORK: Record<E2eEnvironmentId, string> = {
   nightly: 'paseo-next-v2',
-  unstable: 'preview',
+  unstable: 'previewnet',
 };
 
-export function envToBotNetwork(envId: E2eEnvironmentId): string {
-  return ENV_TO_BOT_NETWORK[envId];
+export function envToNetwork(envId: E2eEnvironmentId): string {
+  return ENV_TO_NETWORK[envId];
 }

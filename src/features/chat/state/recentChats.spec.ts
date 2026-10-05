@@ -1,12 +1,7 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { recentChats } from './recentChats';
-
-afterEach(() => {
-  recentChats.clearRecent();
-  localStorage.clear();
-});
 
 const read = () => recentChats.recent$.get();
 

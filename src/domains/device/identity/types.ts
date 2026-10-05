@@ -1,7 +1,12 @@
 /**
  * The identity of *this* device — the local instance of Polkadot Desktop on this
- * machine. Owned and persisted by the SDK (host-papp); the app reads it back
- * from the SDK via `@/domains/application` (`loadDeviceIdentity`).
+ * machine. Minted and persisted by this domain
+ * (`deviceIdentityUseCase.getDeviceIdentity`), stable for the install.
+ *
+ * The host owns these keys outright: they are not derived from the paired session
+ * and no wallet is involved in creating them, so they survive a re-pair. That also
+ * makes them the one identity the multi-device protocol cannot re-issue — minting a
+ * second orphans every peer that knows the first.
  *
  * Per-device keys (locally generated):
  *   `statementAccountSeed` is the device's expanded sr25519 secret (64 bytes,

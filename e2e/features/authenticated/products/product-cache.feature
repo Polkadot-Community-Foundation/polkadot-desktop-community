@@ -10,7 +10,7 @@ Feature: Clear cache and forget app
 
   @allure.id:14783
   Scenario: TC-5.3.1 Clear product cache from settings
-    Given the user opens "coinflipgame03" in a new tab
+    Given the user opens "host-playground" in a new tab
     When the user opens the product actions menu
     And the user opens product settings from the actions menu
     And the user clicks the "Clear Cache" product setting
@@ -22,9 +22,9 @@ Feature: Clear cache and forget app
   # settings list. Unlike TC-13.5.1, no offline pin is established first.
   @allure.id:14784
   Scenario: TC-5.3.2 Forget an app removes it and its local storage
-    Given the user opens "coinflipgame03" in a new tab
+    Given the user opens "host-playground" in a new tab
     When the user opens the product actions menu
     And the user opens product settings from the actions menu
     And the user clicks the "Forget App" product setting
     And the user confirms forgetting the product
-    Then the "coinflipgame03" product is removed from the apps settings list
+    Then the "host-playground" product is removed from the apps settings list

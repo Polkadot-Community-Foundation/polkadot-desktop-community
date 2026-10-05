@@ -3,14 +3,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { delay } from '@/shared/utils';
-import type * as productDomain from '@/domains/product';
-
-// The round sources the network TLD before routing; the real read would reach
-// the environment (and localStorage) from a node test.
-vi.mock('@/domains/product', async importActual => ({
-  ...(await importActual<typeof productDomain>()),
-  dotNsUseCase: { getActiveTld: () => Promise.resolve('.dot') },
-}));
 
 import { inputRound, requestRound, resetRound } from './round';
 

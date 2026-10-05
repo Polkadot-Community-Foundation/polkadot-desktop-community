@@ -1,3 +1,17 @@
+export { HOST_AUTH_PRODUCT_ID } from './core-auth/constants';
+export type { ResolvedTheme, Theme, ThemeName, ThemePreference } from './theme/types';
+export { THEME_NAMES } from './theme/constants';
+export { themeService } from './theme/service';
+export { saveThemeName, saveThemePreference, themeResource } from './theme/resource';
+export { themeUseCase } from './$usecase/theme';
+export {
+  useSetThemeName,
+  useSetThemePreference,
+  useTheme,
+  useThemeName,
+  useThemePreference,
+  useThemeVariant,
+} from './theme/hooks';
 export { commandsService } from './commands/service';
 export { useSubmitError } from './statement-store/hooks';
 export type { Command } from './commands/types';
@@ -10,16 +24,7 @@ export { useActiveEnvironment, useEnvironment } from './$usecase/environment.hoo
 
 export { web3SummitGateService } from './web3summit-gate/service';
 export { type Web3SummitGateMode, web3SummitGateModeSchema } from './web3summit-gate/schemas';
-export {
-  ensurePappProvider,
-  hydrateUserIdentity,
-  loadDeviceIdentity,
-  loadUserIdentity,
-  usePappProvider,
-  watchHostPappSessionTeardown,
-} from './papp-provider';
 export { onUserLoggedOutSideEffect, sessionUseCase } from './$usecase/session';
-export { localAllowanceUseCase } from './$usecase/localAllowance';
 
 export type {
   ContentCardPayload,
@@ -28,6 +33,7 @@ export type {
   DashboardCardPayload,
   DashboardLayout,
   FolderCardPayload,
+  MainDashboardLayoutSnapshot,
   WidgetSizeHints,
   WidgetSizeIconVariant,
   WidgetSizeKey,
@@ -57,3 +63,5 @@ export { cardsUseCase } from './$usecase/cards';
 export { foldersUseCase } from './$usecase/folders';
 export { useAddCard, useRemoveCard, useResizeCard } from './$usecase/cards.hooks';
 export { useAddToFavorites, useRemoveFolder, useRemoveItemFromFolder } from './$usecase/folders.hooks';
+export { mainDashboardLayoutResource } from './dashboard-layout/resource';
+export { environmentResource } from './environment/resource';

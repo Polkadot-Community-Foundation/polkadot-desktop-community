@@ -69,10 +69,18 @@ does, and who else needs it.
 - **Service method** — a pure derivation over already-loaded entities. No I/O.
 - **Resource** — one cached or streamed read, or one write. Its sources are leaves (`gateway.ts`, `repository.ts`); everything
   else it needs arrives as a **parameter**. It never reads another resource and never calls a use case.
-- **Use case** — composition. Composes ≥2 **resources**, enforces a business invariant, or fans out ≥2 side effects.
+- **Use case** — composition. Composes ≥2 **resources**, enforces a business invariant, fans out ≥2 side effects, or
+  **encapsulates a single resource** to give a consumer that cannot use a hook (a non-React caller — e.g. a core-driven
+  generator callback) a named domain entry point, keeping the resource object off the public surface.
 
 A resource may call four gateway methods and merge the results into one domain entity — gateways are its internals, not
 composition. **Composition begins at the second _resource_.**
+
+Encapsulation is the one reason a single-resource use case is not a passthrough: what it adds is surface control, keeping the
+resource's `invalidate` / `instead` / `cache$` off the domain barrel while still exposing the read. It applies only when the
+consumer cannot use a hook — a React consumer reads through the resource's `hooks.ts`, so wrapping the resource for it adds
+nothing and is a passthrough. A resource-level accessor function (the `readTheme` shape) is the equally valid alternative; pick
+one, not both.
 
 Direction: use cases depend on resources, never the reverse.
 

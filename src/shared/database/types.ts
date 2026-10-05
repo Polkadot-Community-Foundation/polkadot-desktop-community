@@ -55,13 +55,8 @@ export type DashboardLayoutRow = {
   updatedAt: number;
 };
 
-export type AliasPermissionRow = {
-  key: string;
-  requesterProductId: string;
-  requestedContextId: string;
-  status: string;
-};
-
+// Survives its table: `migrateProductPermissionsToV2` is typed with it, and that
+// upgrade must keep working for a database still at v1.
 export type ProductPermissionsRow = {
   productId: string;
   devicePermissions: { payload: { name: string }; modality?: string; status: string }[];
@@ -71,6 +66,17 @@ export type ProductPermissionsRow = {
 export type ProductLocalStorageRow = {
   productId: string;
   data: Record<string, Uint8Array>;
+};
+
+export type CoreStorageRow = {
+  key: string; // hex of the SCALE-encoded CoreStorageKey
+  value: Uint8Array;
+  // The key's own decoded fields. Optional: rows written before schema v9 have
+  // none of them. They never participate in the core's own lookup, which is by
+  // `key` alone.
+  slotTag?: string;
+  productId?: string;
+  request?: Uint8Array; // SCALE-encoded by the core's own codec
 };
 
 export type ProductExecutableCacheRow = {
@@ -93,20 +99,38 @@ export type DeclinedUpdateRow = {
   declinedAt: number;
 };
 
-export type ProductSubtreeRow = {
-  key: string; // `${sessionId}:${productId}`
-  sessionId: string;
-  productId: string;
-  subtreeKey: Uint8Array;
+export type DeviceIdentityRow = {
+  id: string; // always the single-row id — the store holds exactly one row
+  statementAccountSeed: Uint8Array;
+  encryptionPrivateKey: Uint8Array;
   createdAt: number;
+};
+
+export type ThemeSettingsRow = {
+  id: string; // always the single-row id — the store holds exactly one row
+  preference: string;
+  name: string;
+};
+
+/**
+ * One chain's smoldot finalized-state database, so its light client resumes instead
+ * of syncing from the chain-spec checkpoint on every launch.
+ *
+ * Disposable: losing a row costs a resync, never correctness.
+ */
+export type LightClientDatabaseRow = {
+  genesisHash: string;
+  blob: string;
+  updatedAt: number;
 };
 
 export type AppTableName =
   | 'products'
   | 'dashboardLayouts'
-  | 'aliasPermissions'
   | 'productLocalStorage'
-  | 'productPermissions'
   | 'productExecutableCache'
   | 'declinedUpdates'
-  | 'productSubtrees';
+  | 'coreStorage'
+  | 'deviceIdentity'
+  | 'themeSettings'
+  | 'lightClientDatabases';

@@ -98,6 +98,6 @@ jobs:
 
       - name: Trigger release pipeline for new tag
         if: ${{ github.event.inputs.RELEASE_TAG || steps.check.outputs.commit_count != '0' }}
-        run: gh workflow run release-pipeline.yml --ref "${{ steps.create_tag.outputs.tag }}" -f BUILD_TYPE="${{ github.event.inputs.BUILD_TYPE || 'dev' }}"
+        run: gh workflow run release-pipeline.yml --ref "${{ steps.create_tag.outputs.tag }}" -f BUILD_TYPE="${{ github.event.inputs.BUILD_TYPE || 'dev' }}" -f PUBLISH_RELEASE=true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

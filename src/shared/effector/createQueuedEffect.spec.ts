@@ -1,6 +1,7 @@
 import { setTimeout } from 'node:timers/promises';
 
 import { allSettled, createWatch, fork } from 'effector';
+import { describe, expect, it } from 'vitest';
 
 import { createQueuedEffect } from './createQueuedEffect';
 

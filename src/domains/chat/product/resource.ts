@@ -35,6 +35,7 @@ export const messagesResource = createStreamResource<{ sessionId: string }>({
       return () => subscription.unsubscribe();
     });
   })
+  .mock(() => of([]))
   .cache<Record<string, ChatMessage[]>>({
     initial: {},
     map(cache, messages, { sessionId }) {
@@ -93,6 +94,7 @@ export const roomsResource = createStreamResource<{ accountId: AccountId }>({
       return () => subscription.unsubscribe();
     });
   })
+  .mock(() => of([]))
   .cache<Record<AccountId, ProductChatRoom[]>>({
     initial: {},
     map(cache, rooms, { accountId }) {

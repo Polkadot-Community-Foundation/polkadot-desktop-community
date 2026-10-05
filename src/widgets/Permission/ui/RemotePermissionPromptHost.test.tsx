@@ -8,21 +8,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConfirmationProvider } from '@/shared/components';
 import { TranslationProvider } from '@/shared/translation';
-import type * as productDomain from '@/domains/product';
-import { _resetRemotePermissionBroker, requestExternalUrlAccess } from '@/domains/product';
+import { _resetRemotePermissionBroker, permissionsUseCase, requestExternalUrlAccess } from '@/domains/product';
 
 import { RemotePermissionPromptHost } from './RemotePermissionPromptHost';
 
-const mockRemoteRun = vi.fn();
+// The write is core-backed (an injected adapter, not a resource); the use-case method
+// behind `useSetPermissionStatus` is spied in place and the hook itself stays real.
+const mockRemoteRun = vi.spyOn(permissionsUseCase, 'setPermissionStatus').mockResolvedValue();
 const mockToastError = vi.fn();
-
-vi.mock('@/domains/product', async () => {
-  const actual = await vi.importActual<typeof productDomain>('@/domains/product');
-  return {
-    ...actual,
-    useSetRemotePermission: () => ({ run: mockRemoteRun, status: undefined, pending: false }),
-  };
-});
 
 vi.mock('@novasamatech/tr-ui', async () => {
   const actual = await vi.importActual<typeof trUi>('@novasamatech/tr-ui');
@@ -65,7 +58,7 @@ describe('RemotePermissionPromptHost', () => {
       void requestExternalUrlAccess({
         productId: 'pr239.parity.dot',
         url: 'https://storage.googleapis.com/a/b.png',
-        modality: 'app',
+        executionKind: 'App',
       });
     });
 
@@ -85,7 +78,7 @@ describe('RemotePermissionPromptHost', () => {
       decision = requestExternalUrlAccess({
         productId: 'pr239.parity.dot',
         url: 'https://storage.googleapis.com/a/b.png',
-        modality: 'app',
+        executionKind: 'App',
       });
     });
 
@@ -95,13 +88,12 @@ describe('RemotePermissionPromptHost', () => {
     await act(async () => {
       await expect(decision).resolves.toBe('granted');
     });
+    // The bare host, not the origin the prompt carries: the enforcement read looks
+    // the grant up by host, so an origin-keyed write could never be matched.
     expect(mockRemoteRun).toHaveBeenCalledWith({
       productId: 'pr239.parity.dot',
-      permission: {
-        payload: { type: 'Remote', pattern: 'https://storage.googleapis.com' },
-        modality: 'app',
-        status: 'granted',
-      },
+      request: { tag: 'Remote', value: { permission: { tag: 'Remote', value: { domains: ['storage.googleapis.com'] } } } },
+      status: 'granted',
     });
   });
 
@@ -117,7 +109,7 @@ describe('RemotePermissionPromptHost', () => {
       decision = requestExternalUrlAccess({
         productId: 'pr239.parity.dot',
         url: 'https://storage.googleapis.com/a/b.png',
-        modality: 'app',
+        executionKind: 'App',
       });
     });
 
@@ -142,7 +134,7 @@ describe('RemotePermissionPromptHost', () => {
       decision = requestExternalUrlAccess({
         productId: 'pr239.parity.dot',
         url: 'https://storage.googleapis.com/a/b.png',
-        modality: 'app',
+        executionKind: 'App',
       });
     });
 
@@ -152,13 +144,12 @@ describe('RemotePermissionPromptHost', () => {
     await act(async () => {
       await expect(decision).resolves.toBe('denied');
     });
+    // The bare host, not the origin the prompt carries: the enforcement read looks
+    // the grant up by host, so an origin-keyed write could never be matched.
     expect(mockRemoteRun).toHaveBeenCalledWith({
       productId: 'pr239.parity.dot',
-      permission: {
-        payload: { type: 'Remote', pattern: 'https://storage.googleapis.com' },
-        modality: 'app',
-        status: 'denied',
-      },
+      request: { tag: 'Remote', value: { permission: { tag: 'Remote', value: { domains: ['storage.googleapis.com'] } } } },
+      status: 'denied',
     });
     expect(mockToastError).toHaveBeenCalled();
   });
@@ -173,17 +164,25 @@ describe('RemotePermissionPromptHost', () => {
     let firstDecision: Promise<string> = Promise.resolve('pending');
     let secondDecision: Promise<string> = Promise.resolve('pending');
     await act(async () => {
-      firstDecision = requestExternalUrlAccess({ productId: 'p.dot', url: 'https://cdn-a.example.com/a.png', modality: 'app' });
-      secondDecision = requestExternalUrlAccess({ productId: 'p.dot', url: 'https://cdn-b.example.com/b.png', modality: 'app' });
+      firstDecision = requestExternalUrlAccess({
+        productId: 'p.dot',
+        url: 'https://cdn-a.example.com/a.png',
+        executionKind: 'App',
+      });
+      secondDecision = requestExternalUrlAccess({
+        productId: 'p.dot',
+        url: 'https://cdn-b.example.com/b.png',
+        executionKind: 'App',
+      });
     });
 
-    await waitFor(() => expect(screen.getByText('https://cdn-a.example.com')).toBeTruthy());
+    await screen.findByText('https://cdn-a.example.com');
     await userEvent.click(screen.getByRole('button', { name: /allow once/i }));
     await act(async () => {
       await expect(firstDecision).resolves.toBe('granted');
     });
 
-    await waitFor(() => expect(screen.getByText('https://cdn-b.example.com')).toBeTruthy());
+    await screen.findByText('https://cdn-b.example.com');
     await userEvent.click(screen.getByRole('button', { name: /allow once/i }));
     await act(async () => {
       await expect(secondDecision).resolves.toBe('granted');
@@ -199,7 +198,7 @@ describe('RemotePermissionPromptHost', () => {
 
     let decision: Promise<string> = Promise.resolve('pending');
     await act(async () => {
-      decision = requestExternalUrlAccess({ productId: 'p.dot', url: 'https://cdn.example.com/x.png', modality: 'app' });
+      decision = requestExternalUrlAccess({ productId: 'p.dot', url: 'https://cdn.example.com/x.png', executionKind: 'App' });
     });
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeNull());
@@ -229,7 +228,7 @@ describe('RemotePermissionPromptHost', () => {
       decision = requestExternalUrlAccess({
         productId: 'pr239.parity.dot',
         url: 'https://storage.googleapis.com/a/b.png',
-        modality: 'app',
+        executionKind: 'App',
       });
     });
 

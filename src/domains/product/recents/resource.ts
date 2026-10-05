@@ -1,3 +1,5 @@
+import { of } from 'rxjs';
+
 import { createStreamResource } from '@/shared/resource';
 
 import { recentProductsRepository } from './repository';
@@ -9,6 +11,7 @@ export const recentProductIdsResource = createStreamResource<object>({
   key: () => 'all',
 })
   .subscribe<string[]>(() => recentProductsRepository.recentProductIds$.value$)
+  .mock(() => of(EMPTY))
   .cache<string[]>({
     initial: EMPTY,
     map: (_, value) => value,

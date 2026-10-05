@@ -77,7 +77,7 @@ describe('deviceSessionUseCase.createChannel', () => {
     harness.channel.close();
   });
 
-  it('decrypts inbound Request, emits the inner envelope, and ACKs with Response{same requestId, code=0}', async () => {
+  it('decrypts inbound Request, emits the inner envelope, and ACKs with a matching Response', async () => {
     const harness = makeHarness();
 
     const received: SyncSignalingEnvelope[] = [];
@@ -127,7 +127,7 @@ describe('deviceSessionUseCase.createChannel', () => {
     expect(offers).toHaveLength(1);
     expect(offers[0]!.offerId).toBe('new');
     // Candidates message is still delivered (not an Offer, never superseded).
-    expect(received.some(m => m.message.tag === 'Candidates')).toBe(true);
+    expect(received.map(m => m.message.tag)).toContain('Candidates');
 
     harness.channel.close();
   });

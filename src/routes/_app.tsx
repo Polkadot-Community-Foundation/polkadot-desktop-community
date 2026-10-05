@@ -1,18 +1,16 @@
-import { PairingModal, PappProvider } from '@novasamatech/host-papp-react-ui';
-import { useTheme } from '@novasamatech/tr-ui';
 import { Outlet, createFileRoute, useNavigate, useRouterState } from '@tanstack/react-router';
 import { useEffect } from 'react';
 
 import { ConfirmationProvider, Web3SummitEndedScreen } from '@/shared/components';
 import { useSideEffect } from '@/shared/di';
 import { useBodyLockTracer, useResetAppData, useScrollLockGuard } from '@/shared/hooks';
-import { usePappProvider } from '@/domains/application';
 import { clearAllOutboxRecords } from '@/domains/chat';
 import { dotNsService, dotNsUseCase, recordRecentProduct } from '@/domains/product';
-import { userIdentity$ } from '@/domains/sso';
 import { P2PChatBinding } from '@/aggregates/p2p-chat';
+import { truapiRuntimeUseCase, useLoggingOut } from '@/aggregates/truapi-runtime';
 import { AppShell } from '@/features/app-shell';
 import { Browser, openDotNsUrlSideEffect } from '@/features/browser';
+import { TruapiPromptsBinding } from '@/features/product-runtime';
 import { UpdateCheckProvider } from '@/features/update-check';
 import { RemotePermissionPromptHost } from '@/widgets/Permission';
 
@@ -74,10 +72,9 @@ const useOpenDotNsUrlNavigation = () => {
 };
 
 const AppLayout = () => {
-  const { mode } = useTheme();
   const outcome = Route.useLoaderData();
-  const pappProvider = usePappProvider();
   const { location } = useRouterState();
+  const loggingOut = useLoggingOut();
   const isOnboarding = location.pathname === '/onboarding';
   const isProductRoute = location.pathname.startsWith('/product/');
 
@@ -88,7 +85,9 @@ const AppLayout = () => {
   // `polkadot_*` sweep does NOT cover — clear them here or a reset leaves
   // orphan per-peer queues behind.
   useResetAppData(() => {
-    userIdentity$.set(null);
+    // The core owns the session now, so a reset has to tell it to drop the
+    // pairing — wiping localStorage alone would leave the core still Connected.
+    void truapiRuntimeUseCase.disconnectSession();
     clearAllOutboxRecords();
   });
   useScrollLockGuard();
@@ -96,40 +95,44 @@ const AppLayout = () => {
   useDeepLinkNavigation();
   useOpenDotNsUrlNavigation();
 
-  if (outcome.status === 'w3s-ended') {
-    return <Web3SummitEndedScreen />;
-  }
-
-  // Second async gate (unchanged from the old App): the papp SDK provider is
-  // resolved reactively and may lag bootstrap.
-  if (!pappProvider) {
+  // Cover the whole logout teardown with the same splash the boot uses. Returning it
+  // in place of the shell means the async wipe's signed-out renders and the hash-reset
+  // to onboarding never reach the screen — the reload replaces this splash outright.
+  if (loggingOut) {
     return <PageLoadingState />;
   }
 
+  // `ConfirmationProvider` wraps everything — including the two loading gates —
+  // because `TruapiPromptsBinding` renders the core's prompts into it, and the core
+  // holds every prompt until that binding has mounted.
   return (
-    <PappProvider adapter={pappProvider}>
-      <ConfirmationProvider>
-        <UpdateCheckProvider>
-          {isOnboarding ? (
-            <Outlet />
-          ) : (
-            <>
-              <P2PChatBinding pappProvider={pappProvider} />
-              <AppShell>
-                <div className="h-full w-full" style={{ display: isProductRoute ? 'none' : undefined }}>
-                  <Outlet />
-                </div>
-                <div className="h-full w-full" style={{ display: isProductRoute ? undefined : 'none' }}>
-                  <Browser />
-                </div>
-              </AppShell>
-            </>
-          )}
-        </UpdateCheckProvider>
-        <PairingModal theme={mode} size={240} />
-        <RemotePermissionPromptHost />
-      </ConfirmationProvider>
-    </PappProvider>
+    <ConfirmationProvider>
+      <TruapiPromptsBinding />
+      {outcome.status === 'w3s-ended' ? (
+        <Web3SummitEndedScreen />
+      ) : (
+        <>
+          <UpdateCheckProvider>
+            {isOnboarding ? (
+              <Outlet />
+            ) : (
+              <>
+                <P2PChatBinding />
+                <AppShell>
+                  <div className="h-full w-full" style={{ display: isProductRoute ? 'none' : undefined }}>
+                    <Outlet />
+                  </div>
+                  <div className="h-full w-full" style={{ display: isProductRoute ? undefined : 'none' }}>
+                    <Browser />
+                  </div>
+                </AppShell>
+              </>
+            )}
+          </UpdateCheckProvider>
+          <RemotePermissionPromptHost />
+        </>
+      )}
+    </ConfirmationProvider>
   );
 };
 

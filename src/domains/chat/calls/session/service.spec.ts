@@ -244,7 +244,7 @@ describe('Phase-2 + lifecycle', () => {
       { type: 'closeWindow' },
     ]);
   });
-  it('remoteClosed (matching) → ended + closePeerConnection + closeWindow (no publishClosed — peer already closed)', () => {
+  it('remoteClosed (matching) → ended + closePeerConnection + closeWindow, no publishClosed', () => {
     const r = callSessionReducer(outgoing(), { type: 'remoteClosed', offerId: 'o1' });
     expect(r.state.status).toBe('ended');
     expect(r.effects).toEqual([{ type: 'closePeerConnection' }, { type: 'closeWindow' }]);

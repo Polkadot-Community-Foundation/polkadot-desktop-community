@@ -128,6 +128,7 @@
       },
       "signMessageRequestTitle": "Raw Message signing request",
       "rawMessageNotReadableCaption": "This message can't be displayed in a readable format",
+      "unwatermarkedSigningWarning": "This signature isn't watermarked, so it could authorize a transaction. Only continue if you trust this app.",
       "copyMessage": "Copy message",
       "account": "Account",
       "accountAddress": "Account address",
@@ -341,8 +342,7 @@
           "sending": "Sending",
           "sent": "Sent",
           "delivered": "Delivered",
-          "claimed": "Claimed",
-          "currencyLabel": "CASH"
+          "claimed": "Claimed"
         }
       },
       "call": {
@@ -405,23 +405,6 @@
           "subtitle": "Please try again later"
         }
       }
-    },
-    "signingBotAutopair": {
-      "title": "Signing Bot",
-      "statusIdle": "Ready to connect",
-      "statusConnecting": "Checking bot...",
-      "statusPairing": "Pairing via bot...",
-      "statusPaired": "Paired as \"{user}\"",
-      "statusError": "Pairing failed",
-      "botUrlLabel": "Bot URL",
-      "botReachable": "Bot reachable",
-      "botUnreachable": "Bot unreachable",
-      "tokenLabel": "Token",
-      "usernameLabel": "Username",
-      "connectingButton": "Pairing...",
-      "connectButton": "Connect to Bot",
-      "connected": "Connected",
-      "waitingQr": "Waiting for QR payload..."
     },
     "dashboard": {
       "title": "Dashboard",
@@ -623,7 +606,7 @@
         "description": "This will clear all site data and reset permissions for {productName}. The tab stays open; everything will reload fresh next time you open it."
       },
       "webDomains": {
-        "dialogTitle": "Manage Web Domains Access for {productName} {modality}"
+        "dialogTitle": "Manage Web Domains Access for {productName}"
       },
       "appPermission": {
         "title": "{productName} {permission} Access",
@@ -658,6 +641,7 @@
           "Clipboard": "Clipboard",
           "OpenUrl": "Open External URL",
           "Biometrics": "Biometrics",
+          "NFC": "NFC",
           "Files": "Files",
           "Remote": "Web Domains",
           "WebRtc": "WebRTC",
@@ -675,6 +659,7 @@
           "Clipboard": "Used for copying and pasting content you choose to share",
           "OpenUrl": "Used to open external links in your default browser",
           "Biometrics": "Used for features that require verifying your identity",
+          "NFC": "Used for contactless reading and writing with nearby tags and devices",
           "Files": "Used for features like uploading, downloading and managing files",
           "Remote": "Used to make requests to the following domains",
           "WebRtc": "Used for real-time communication features like voice and video calls",
@@ -999,6 +984,105 @@
       "clearRecent": "Clear",
       "addressFavorites": "Favorites",
       "suggestionSeparator": "—"
+    },
+    "networkConnection": {
+      "title": "Network connections",
+      "chainsLoading": "Loading networks…",
+      "chainsEmpty": "No networks configured.",
+      "noLightClient": "No light client available",
+      "mode": {
+        "lightClient": "Light client",
+        "rpc": "Trusted providers",
+        "lightClientHint": "Verify network data directly on your device without trusting providers",
+        "rpcHint": "Faster access through trusted providers but less private"
+      },
+      "advanced": {
+        "title": "Advanced",
+        "description": "Configure connection methods"
+      },
+      "slowLoad": {
+        "title": "Loading is taking longer than usual",
+        "description": "Skip the wait and load faster using trusted providers for this session",
+        "action": "Load faster"
+      },
+      "loadFailed": {
+        "title": "Couldn’t load this page",
+        "description": "The connection took too long. Try again or use a faster connection.",
+        "descriptionReloadOnly": "The connection took too long. Try reloading the page.",
+        "reload": "Reload page"
+      },
+      "role": {
+        "identity": "Identity",
+        "apps": "Apps",
+        "transactions": "Transactions"
+      }
+    },
+    "productRuntime": {
+      "permissionDenied": {
+        "systemDeviceSettings": "Device settings",
+        "Camera": {
+          "title": "Camera Access Required",
+          "description": "Used for features like video calls, QR scanning and media capture"
+        },
+        "Microphone": {
+          "title": "Microphone Access Required",
+          "description": "Used for features like voice calls, messaging and audio recording"
+        }
+      },
+      "review": {
+        "deny": "Deny",
+        "signPayload": {
+          "title": "Sign transaction payload",
+          "subtitle": "Review the payload before it is signed."
+        },
+        "signRaw": {
+          "title": "Sign message",
+          "subtitle": "Review the message before it is signed."
+        },
+        "createTransaction": {
+          "title": "Create transaction",
+          "subtitle": "Review the transaction before it is submitted."
+        },
+        "signVrf": {
+          "title": "Sign VRF transcript",
+          "subtitle": "Review the transcript before it is signed."
+        },
+        "allowance": {
+          "title": "Allocate resources",
+          "subtitle": "Review the resources this app is requesting."
+        },
+        "statementSign": {
+          "title": "Sign statement",
+          "subtitle": "Review the statement before it is signed."
+        },
+        "createProof": {
+          "title": "Create proof",
+          "subtitle": "Review the proof this app is requesting."
+        },
+        "permission": {
+          "IdentityDisclosure": "This app is asking to learn your identity.",
+          "PreimageSubmit": "This app is asking to submit content.",
+          "AccountAccess": "This app is asking to use another app’s account.",
+          "AccountAlias": "This app is asking to derive an alias.",
+          "title": "Permission request"
+        },
+        "legacyAccountNotice": "Signing with a legacy account.",
+        "resource": {
+          "statementStore": "Statement store slot",
+          "bulletin": "Bulletin storage slot",
+          "smartContract": "Smart-contract gas for account {account}",
+          "autoSigning": "Sign on your behalf without asking each time"
+        },
+        "accountAccess": {
+          "title": "Allow access to {targetIdentifier}'s account?",
+          "subtitle": "Lets this app act with an account that belongs to another app",
+          "warning": "By allowing this, this app can use the other app's account on your behalf"
+        },
+        "productSubtree": {
+          "title": "Allow this app to access its account?",
+          "subtitle": "Fetches this app's account from your paired device"
+        }
+      }
     }
   },
   "widget": {
@@ -1156,10 +1240,6 @@
         "Clipboard": {
           "title": "Clipboard Access Required",
           "description": "Used for copying and pasting content you choose to share"
-        },
-        "Files": {
-          "title": "Disk Access Required",
-          "description": "Used for features like uploading, downloading and managing files"
         },
         "OpenUrl": {
           "title": "External Link Access Required",

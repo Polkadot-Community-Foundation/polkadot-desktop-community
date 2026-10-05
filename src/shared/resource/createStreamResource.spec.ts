@@ -1,5 +1,6 @@
 import { produce } from 'immer';
 import { BehaviorSubject, Subject, firstValueFrom, take } from 'rxjs';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createStreamResource } from './createStreamResource';
 

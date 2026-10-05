@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { TEST_IDS } from '@/shared/test-ids';
@@ -38,5 +38,37 @@ describe('MessageInput', () => {
     fireEvent.change(screen.getByTestId(TEST_IDS.chatMessageInput), { target: { value: 'hello' } });
 
     expect(screen.getByTestId(TEST_IDS.chatSendButton)).toBeInTheDocument();
+  });
+
+  describe('send in flight', () => {
+    // A send that never settles — the invitation case from issue #873. Handed in as a
+    // prop rather than mocked: the seam is already there.
+    const neverSettles = () => new Promise<void>(() => {});
+
+    const type = (value: string) => fireEvent.change(screen.getByTestId(TEST_IDS.chatMessageInput), { target: { value } });
+
+    it('keeps the send button mounted, disabled and busy while opted in', async () => {
+      renderInput({ showSendProgress: true, submitAction: neverSettles });
+
+      type('hello');
+      fireEvent.click(screen.getByTestId(TEST_IDS.chatSendButton));
+
+      await waitFor(() => expect(screen.getByTestId(TEST_IDS.chatSendButton)).toBeDisabled());
+
+      const button = screen.getByTestId(TEST_IDS.chatSendButton);
+      expect(button).toHaveAttribute('aria-busy', 'true');
+      // The spinner replaces the arrow, so the button reads as working rather than as a
+      // dead control the user could keep pressing.
+      expect(button.querySelector('.animate-spin')).not.toBeNull();
+    });
+
+    it('leaves the other composers unchanged — the button still unmounts without the opt-in', async () => {
+      renderInput({ submitAction: neverSettles });
+
+      type('hello');
+      fireEvent.click(screen.getByTestId(TEST_IDS.chatSendButton));
+
+      await waitFor(() => expect(screen.queryByTestId(TEST_IDS.chatSendButton)).toBeNull());
+    });
   });
 });
