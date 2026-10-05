@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 
-import { useThemePreference } from '@/shared/hooks';
+import { useThemePreference } from '@/domains/application';
 
 /**
  * Reflects the app theme PREFERENCE into Electron's app-global

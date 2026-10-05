@@ -1,4 +1,4 @@
-import { type Observable, map, take } from 'rxjs';
+import { type Observable, map, of, take } from 'rxjs';
 
 import { createStreamResource } from '@/shared/resource';
 
@@ -9,6 +9,7 @@ export const hideRequestsByDefaultResource = createStreamResource<object>({
   key: () => 'all',
 })
   .subscribe<boolean>(() => requestPreferencesRepository.hideRequestsByDefault$.value$)
+  .mock(() => of(HIDE_REQUESTS_BY_DEFAULT))
   .cache<boolean>({
     initial: HIDE_REQUESTS_BY_DEFAULT,
     map: (_, value) => value,

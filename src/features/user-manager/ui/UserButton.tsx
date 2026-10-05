@@ -1,19 +1,14 @@
-import { type Identity } from '@novasamatech/host-papp';
-import { useSession, useSessionIdentity } from '@novasamatech/host-papp-react-ui';
 import { Tooltip } from '@novasamatech/tr-ui';
 import { memo } from 'react';
 
 import { TEST_IDS } from '@/shared/test-ids';
 import { useTranslation } from '@/shared/translation';
+import { useConsumerIdentity } from '@/domains/network';
 import { usePeopleChainStatus } from '@/aggregates/network-settings';
+import { useTruapiSession, useTruapiUserId } from '@/aggregates/truapi-runtime';
 
 import { type ConnectionState, ConnectionStatus } from './ConnectionStatus';
 import { UserInfoPopover } from './UserInfoPopover';
-
-const firstLetter = (identity: Identity | null | undefined): string => {
-  const source = identity?.fullUsername ?? identity?.liteUsername ?? '';
-  return source.charAt(0).toUpperCase() || '?';
-};
 
 const useConnectionStatusLabel = (state: ConnectionState): string => {
   const { t } = useTranslation();
@@ -30,18 +25,24 @@ const useConnectionStatusLabel = (state: ConnectionState): string => {
 };
 
 export const UserButton = memo(() => {
-  const { session } = useSession();
+  const session = useTruapiSession();
+  const userId = useTruapiUserId();
+  const { data: identity } = useConsumerIdentity(userId);
   const { status: peopleChainStatus, networkName } = usePeopleChainStatus();
+  const { t } = useTranslation();
 
-  const [identity] = useSessionIdentity(session);
-  const letter = firstLetter(identity);
+  // Resolve the signed-in user's name off the People chain — the same source a chat
+  // peer's name comes from. The core's session projection is only a fallback for the
+  // brief window before that read settles.
+  const resolvedName = identity?.fullUsername ?? identity?.liteUsername ?? session?.fullUsername ?? session?.liteUsername ?? null;
+  const username = resolvedName ?? t('common.status.unknownUser');
+  const letter = resolvedName?.charAt(0).toUpperCase() || '?';
 
   // The chain status is already the badge's state verbatim; the badge only adds
   // the signed-out case. No re-classification.
   const state: ConnectionState = session ? peopleChainStatus : 'no-connection';
 
   const statusLabel = useConnectionStatusLabel(state);
-  const { t } = useTranslation();
 
   return (
     <Tooltip.Provider delayDuration={300}>
@@ -49,6 +50,7 @@ export const UserButton = memo(() => {
         <div className="inline-flex items-center" data-testid={TEST_IDS.userButton}>
           <UserInfoPopover
             session={session}
+            username={username}
             connectionState={session ? peopleChainStatus : 'no-connection'}
             networkName={networkName}
           >

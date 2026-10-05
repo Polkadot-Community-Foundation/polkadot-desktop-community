@@ -1,22 +1,18 @@
 import { createSideEffect } from '@/shared/di';
 import { clearAllP2PChatStorage, clearAllProductChatStorage } from '@/domains/chat';
 import { contactRepository } from '@/domains/contact';
+import { deviceIdentityUseCase } from '@/domains/device';
 import { deviceSyncRepository } from '@/domains/device-sync';
-import { userIdentity$ } from '@/domains/sso';
-import { ensurePappProvider } from '../papp-provider/provider';
+import { coreAuthGateway } from '../core-auth/gateway';
 
 /**
- * Rotate the device identity; host-papp regenerates a fresh keypair on the next
- * `authenticate()`. This cryptographically erases any cached on-chain
- * `HandshakeSuccess` — it was ECDH-encrypted to the key we're discarding.
+ * Rotate the device identity; the next read mints a fresh keypair. This
+ * cryptographically erases anything addressed to the old one.
  *
- * Called on its own by the onboarding "retry" path, so a fresh pairing QR uses a
- * new device keypair, and as the last step of `performUserLogout`.
+ * Called on its own by the onboarding "retry" path, so a fresh pairing uses a new
+ * device keypair, and as the last step of `performUserLogout`.
  */
-const resetDeviceIdentity = async (): Promise<void> => {
-  const adapter = await ensurePappProvider();
-  await adapter.sso.resetDeviceIdentity();
-};
+const resetDeviceIdentity = (): Promise<void> => deviceIdentityUseCase.resetDeviceIdentity();
 
 const reloadRenderer = () => {
   // Tanstack hash router preserves `#/<path>` across reloads. If the user
@@ -64,27 +60,23 @@ const reloadRenderer = () => {
 export const onUserLoggedOutSideEffect = createSideEffect<void>({ name: 'onUserLoggedOut' });
 
 const runV2Logout = async (): Promise<void> => {
-  try {
-    // `allSettled`, not `all`: a wipe that rejects (a blocked IndexedDB connection, say)
-    // must not strand the user in an authenticated shell. Leftover local data on an
-    // otherwise-signed-out app is recoverable; a logout that never completes is not.
-    const results = await Promise.allSettled([
-      contactRepository.clearAll(),
-      deviceSyncRepository.clearAll(),
-      clearAllP2PChatStorage(),
-      clearAllProductChatStorage(),
-    ]);
-    for (const result of results) {
-      if (result.status === 'rejected') {
-        console.warn('[sso] logout: per-user storage wipe failed', result.reason);
-      }
+  // `allSettled`, not `all`: a wipe that rejects (a blocked IndexedDB connection, say)
+  // must not strand the user in an authenticated shell. Leftover local data on an
+  // otherwise-signed-out app is recoverable; a logout that never completes is not.
+  const results = await Promise.allSettled([
+    contactRepository.clearAll(),
+    deviceSyncRepository.clearAll(),
+    clearAllP2PChatStorage(),
+    clearAllProductChatStorage(),
+  ]);
+  for (const result of results) {
+    if (result.status === 'rejected') {
+      console.warn('[sso] logout: per-user storage wipe failed', result.reason);
     }
-    // Awaited after the application-owned clears, not alongside them: a handler that
-    // throws must not mask a failure in the teardown above. `apply` settles, it never rejects.
-    await onUserLoggedOutSideEffect.apply();
-  } finally {
-    userIdentity$.set(null);
   }
+  // Awaited after the application-owned clears, not alongside them: a handler that
+  // throws must not mask a failure in the teardown above. `apply` settles, it never rejects.
+  await onUserLoggedOutSideEffect.apply();
 };
 
 /**
@@ -111,12 +103,32 @@ const performUserLogout = async (): Promise<void> => {
     // here still lands on the login screen — reporting beats stalling on this screen.
     console.error('[sso] logout teardown failed; reloading to the login screen anyway', error);
   } finally {
-    await resetDeviceIdentity();
+    // The reload is what clears the logout splash and resets startup state, so it must
+    // run even if the device reset throws — a stuck splash is worse than a keypair that
+    // rotates on the next attempt.
+    try {
+      await resetDeviceIdentity();
+    } catch (error) {
+      console.error('[sso] logout: device identity reset failed; reloading anyway', error);
+    }
     reloadRenderer();
   }
 };
 
+/**
+ * Start a core pairing over the host's auth provider.
+ *
+ * Thin by design: `gateway.ts` may not sit on the domain barrel
+ * (`local-rules/enforce-import-restrictions`), and a single wire call has no cache
+ * or identity to justify a resource, so a use case is the sanctioned way for the
+ * `truapi-runtime` aggregate to reach it. The provider's lifetime stays with the
+ * caller, which owns the one reused auth session.
+ */
+const requestCoreLogin = (provider: Parameters<typeof coreAuthGateway.requestLogin>[0], reason?: string): Promise<string> =>
+  coreAuthGateway.requestLogin(provider, reason);
+
 export const sessionUseCase = {
+  requestCoreLogin,
   runV2Logout,
   performUserLogout,
   resetDeviceIdentity,

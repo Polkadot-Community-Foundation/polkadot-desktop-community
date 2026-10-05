@@ -1,38 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/domains/application', () => ({
-  DEFAULT_DASHBOARD_WIDGET_PRODUCT_LABEL: 'browse',
-  DEFAULT_RESIZE_HANDLES: ['s'],
-  MAX_WIDGET_WIDTH: 2,
-  MAX_WIDGET_HEIGHT: 8,
-  cardsUseCase: {
-    addCardToLayout: vi.fn(),
-    resizeCardToGridSize: vi.fn(),
-    removeCardFromLayout: vi.fn(),
-    seedDefaultMainLayout: vi.fn(),
-  },
-  foldersUseCase: {
-    addToFavorites: vi.fn(),
-    removeItemFromFolder: vi.fn(),
-  },
-}));
-
-vi.mock('@/domains/product', () => ({
-  commitmentUseCase: {
-    commitResolvedProduct: vi.fn(),
-    commitProductByIdentifier: vi.fn(),
-  },
-  lifecycleUseCase: {
-    purgeProduct: vi.fn(),
-  },
-  dotNsUseCase: { getActiveTld: vi.fn().mockResolvedValue('.dot') },
-  dotNsService: { baseNameOf: (id: string, tld: string) => (id.endsWith(tld) ? id : `${id}${tld}`) },
-}));
-
 import { cardsUseCase, foldersUseCase } from '@/domains/application';
 import { type Product, commitmentUseCase, lifecycleUseCase } from '@/domains/product';
 
 import { productManagementUseCase } from './productManagementUseCase';
+
+// The aggregate composes domain use cases, all plain objects: each method it reaches is
+// spied in place, so the orchestration is the only real code on the path.
+vi.spyOn(cardsUseCase, 'addCardToLayout');
+vi.spyOn(cardsUseCase, 'resizeCardToGridSize');
+vi.spyOn(cardsUseCase, 'removeCardFromLayout');
+vi.spyOn(cardsUseCase, 'seedDefaultMainLayout');
+vi.spyOn(foldersUseCase, 'addToFavorites');
+vi.spyOn(foldersUseCase, 'removeItemFromFolder');
+vi.spyOn(commitmentUseCase, 'commitResolvedProduct');
+vi.spyOn(commitmentUseCase, 'commitProductByIdentifier');
+vi.spyOn(lifecycleUseCase, 'purgeProduct');
 
 // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
 const product = { baseName: 'app.dot' } as Product;

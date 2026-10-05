@@ -47,14 +47,24 @@ body {
 }
 
 /*
- * Toasts render in a portal over the window, which on the onboarding screen is a
- * full-window `-webkit-app-region: drag` region (OnboardingScreen). Chromium hands
- * presses on a drag region to the OS for window dragging *before* the renderer hit-tests
- * them, so the toast's own buttons (e.g. the update "Relaunch" action) never receive the
- * click. Marking each toast `no-drag` subtracts its rect from the drag region so presses
- * land in the renderer. Scoped to the toast element (not the container) so empty
- * background stays draggable. Same mechanism handled for popovers by DismissOverlay.
+ * Every layer below renders in a portal under <body>, so it can be painted over a
+ * `app-region: drag` region — the toolbar (Header) and the whole onboarding screen
+ * are both drag regions. Chromium hands presses on a drag region to the OS for window
+ * dragging *before* the renderer hit-tests them, so a layer that overlaps one never
+ * receives the click (and a double press maximizes the window instead).
+ *
+ * A portal is a sibling of #app, which is where the drag region is declared
+ * (src/index.html), so it inherits no region of its own — and inheriting nothing does
+ * not subtract the region painted underneath. Each layer has to say `no-drag`, which
+ * subtracts its rect, for presses to land in the renderer.
+ *
+ * The popper wrapper covers popover / dropdown-menu / select / tooltip / context-menu
+ * in one selector. Toasts are scoped to the toast element rather than the container so
+ * the container's empty background stays draggable.
  */
+[data-radix-popper-content-wrapper],
+[data-slot='dialog-content'],
+[data-slot='alert-dialog-content'],
 [data-sonner-toast] {
   -webkit-app-region: no-drag;
 }
@@ -309,4 +319,28 @@ body {
 
 .animate-widget-pulse {
   animation: widget-pulse 1.8s ease-in-out infinite;
+}
+
+/* Renderer tree `Effect::Rainbow` — the one visual effect the TrUAPI render
+   vocabulary defines. The gradient is painted through the text it wraps, which is
+   why a descendant that sets its own colour opts itself out. */
+@keyframes renderer-rainbow {
+  to {
+    background-position: 200% center;
+  }
+}
+
+.animate-renderer-rainbow {
+  animation: renderer-rainbow 4s linear infinite;
+  background: linear-gradient(90deg, #ff0040, #ff8000, #ffe000, #00c060, #0080ff, #8000ff, #ff0040) 0 center / 200% auto;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Stopped, not shortened: collapsing an infinite loop to 1ms strobes rather than
+   settles. The gradient still reads as intended, just static. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-renderer-rainbow {
+    animation: none;
+  }
 }

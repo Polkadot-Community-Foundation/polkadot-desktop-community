@@ -103,17 +103,10 @@
       "navigationBackAria": "Geri git",
       "navigationForwardAria": "İleri git",
       "addressWelcome": "Polkadot'a hoş geldin! Buraya bir .dot adresi gir",
-      "addressFavorites": "Favoriler",
-      "suggestionSeparator": "—",
       "removeFromDashboard": "Ürünü panodan kaldır",
       "addressSuggestions": "Tüm uygulamalar",
       "addressNoResults": "Uygulama bulunamadı",
-      "recentlyVisited": "Son açılanlar",
       "recentlyOpened": "Son açılanlar",
-      "clearRecent": "Temizle",
-      "recents": {
-        "header": "Son kullanılanlar"
-      },
       "recentClearedTitle": "Son açılan sekmeler başarıyla temizlendi",
       "undoLabel": "Geri al {seconds} sn",
       "ramUsage": "RAM kullanımı: {value}",
@@ -194,7 +187,8 @@
       "zoomIn": "Yakınlaştır",
       "zoomOut": "Uzaklaştır",
       "zoomReset": "Yakınlaştırmayı sıfırla",
-      "zoomPercent": "%{percent}"
+      "zoomPercent": "%{percent}",
+      "clearRecent": "Temizle"
     },
     "userManager": {
       "connectionStatus": {
@@ -347,8 +341,7 @@
           "sending": "Gönderiliyor",
           "sent": "Gönderildi",
           "delivered": "Teslim edildi",
-          "claimed": "Alındı",
-          "currencyLabel": "CASH"
+          "claimed": "Alındı"
         }
       },
       "call": {
@@ -370,7 +363,11 @@
           "openToCall": "Aramak için mobil uygulamayı aç",
           "openToReturn": "Dönmek için mobil uygulamayı aç",
           "openToCallBack": "Geri aramak için mobil uygulamayı aç",
-          "openToCallAgain": "Yeniden aramak için mobil uygulamayı aç"
+          "openToCallAgain": "Yeniden aramak için mobil uygulamayı aç",
+          "tapToCall": "Aramak için dokun",
+          "tapToReturn": "Geri dönmek için dokun",
+          "tapToCallBack": "Geri aramak için dokun",
+          "tapToCallAgain": "Tekrar aramak için dokun"
         }
       }
     },
@@ -407,23 +404,6 @@
           "subtitle": "Lütfen daha sonra yeniden dene"
         }
       }
-    },
-    "signingBotAutopair": {
-      "title": "İmzalama botu",
-      "statusIdle": "Bağlanmaya hazır",
-      "statusConnecting": "Bot kontrol ediliyor...",
-      "statusPairing": "Bot üzerinden eşleştiriliyor...",
-      "statusPaired": "\"{user}\" olarak eşleştirildi",
-      "statusError": "Eşleştirme başarısız",
-      "botUrlLabel": "Bot URL'si",
-      "botReachable": "Bota ulaşılabiliyor",
-      "botUnreachable": "Bota ulaşılamıyor",
-      "tokenLabel": "Token",
-      "usernameLabel": "Kullanıcı adı",
-      "connectingButton": "Eşleştiriliyor...",
-      "connectButton": "Bota bağlan",
-      "connected": "Bağlandı",
-      "waitingQr": "QR verisi bekleniyor..."
     },
     "dashboard": {
       "title": "Pano",
@@ -625,7 +605,7 @@
         "description": "Bu işlem {productName} için tüm site verilerini siler ve izinleri sıfırlar. Sekme açık kalır; bir sonraki açışında her şey yeniden yüklenir."
       },
       "webDomains": {
-        "dialogTitle": "{productName} {modality} için web alan adı erişimini yönet"
+        "dialogTitle": "{productName} için web alan adı erişimini yönet"
       },
       "appPermission": {
         "title": "{productName} {permission} erişimi",
@@ -660,6 +640,7 @@
           "Clipboard": "Pano",
           "OpenUrl": "Harici URL açma",
           "Biometrics": "Biyometri",
+          "NFC": "NFC",
           "Files": "Dosyalar",
           "Remote": "Web alan adları",
           "WebRtc": "WebRTC",
@@ -677,6 +658,7 @@
           "Clipboard": "Paylaşmayı seçtiğin içeriği kopyalayıp yapıştırmak için kullanılır",
           "OpenUrl": "Harici bağlantıları varsayılan tarayıcında açmak için kullanılır",
           "Biometrics": "Kimliğinin doğrulanmasını gerektiren özellikler için kullanılır",
+          "NFC": "Yakındaki etiketler ve cihazlarla temassız okuma ve yazma için kullanılır",
           "Files": "Dosya yükleme, indirme ve yönetme gibi özellikler için kullanılır",
           "Remote": "Aşağıdaki alan adlarına istek göndermek için kullanılır",
           "WebRtc": "Sesli ve görüntülü arama gibi gerçek zamanlı iletişim özellikleri için kullanılır",
@@ -974,6 +956,132 @@
         "hi": "Hintçe",
         "tr": "Türkçe"
       }
+    },
+    "inputModality": {
+      "title": "Ara",
+      "placeholder": "Ara veya {tld} adresi gir",
+      "attach": "Dosya ekle",
+      "removeAttachment": "Eki kaldır",
+      "loadingAttachment": "Ek yükleniyor…",
+      "asked": "Bu ekrandaki {count} ürüne soruldu…",
+      "noContext": "Bu ekranda buna yanıt verebilecek bir şey yok.",
+      "noCandidates": "Bunu işleyebilecek bir şey yok.",
+      "goTo": "Şuraya git",
+      "pickerPrompt": "“{fileName}” hangi ürüne gitsin?",
+      "pickerEmpty": "Bu ekrandaki hiçbir ürün bu dosya türünü kabul etmiyor.",
+      "attachmentTooLarge": "Yönlendirmek için çok büyük: {fileName}",
+      "scan": "Kod tara",
+      "scanPrompt": "Taranan kod",
+      "scanWillOpen": "Bu, {productId} uygulamasını açacak.",
+      "scanWillAsk": "Bu, ekrandaki ürünlere sorulacak.",
+      "scanConfirm": "Devam et",
+      "scanCancel": "İptal",
+      "scanUnavailable": "Bu cihazda kullanılabilir kamera yok.",
+      "scanDenied": "Kamera erişimi reddedildi.",
+      "fromThisScreen": "Bu ekrandan",
+      "recentlyVisited": "Son açılanlar",
+      "clearRecent": "Temizle",
+      "addressFavorites": "Favoriler",
+      "suggestionSeparator": "—"
+    },
+    "networkConnection": {
+      "title": "Ağ bağlantıları",
+      "chainsLoading": "Ağlar yükleniyor…",
+      "chainsEmpty": "Yapılandırılmış ağ yok.",
+      "noLightClient": "Kullanılabilir hafif istemci yok",
+      "mode": {
+        "lightClient": "Hafif istemci",
+        "rpc": "Güvenilir sağlayıcılar",
+        "lightClientHint": "Sağlayıcılara güvenmeden ağ verilerini doğrudan cihazında doğrula",
+        "rpcHint": "Güvenilir sağlayıcılar üzerinden daha hızlı erişim, ancak daha az gizlilik"
+      },
+      "advanced": {
+        "title": "Gelişmiş",
+        "description": "Bağlantı yöntemlerini yapılandır"
+      },
+      "slowLoad": {
+        "title": "Yükleme her zamankinden uzun sürüyor",
+        "description": "Beklemeyi atla ve bu oturumda güvenilir sağlayıcılarla daha hızlı yükle",
+        "action": "Daha hızlı yükle"
+      },
+      "loadFailed": {
+        "title": "Bu sayfa yüklenemedi",
+        "description": "Bağlantı çok uzun sürdü. Yeniden dene veya daha hızlı bir bağlantı kullan.",
+        "descriptionReloadOnly": "Bağlantı çok uzun sürdü. Sayfayı yeniden yüklemeyi dene.",
+        "reload": "Sayfayı yeniden yükle"
+      },
+      "role": {
+        "identity": "Kimlik",
+        "apps": "Uygulamalar",
+        "transactions": "İşlemler"
+      }
+    },
+    "productRuntime": {
+      "permissionDenied": {
+        "systemDeviceSettings": "Cihaz ayarları",
+        "Camera": {
+          "title": "Kamera erişimi gerekli",
+          "description": "Görüntülü arama, QR tarama ve medya çekimi gibi özellikler için kullanılır"
+        },
+        "Microphone": {
+          "title": "Mikrofon erişimi gerekli",
+          "description": "Sesli arama, mesajlaşma ve ses kaydı gibi özellikler için kullanılır"
+        }
+      },
+      "review": {
+        "deny": "Reddet",
+        "signPayload": {
+          "title": "İşlem yükünü imzala",
+          "subtitle": "İmzalanmadan önce yükü gözden geçir."
+        },
+        "signRaw": {
+          "title": "Mesajı imzala",
+          "subtitle": "İmzalanmadan önce mesajı gözden geçir."
+        },
+        "createTransaction": {
+          "title": "İşlem oluştur",
+          "subtitle": "Gönderilmeden önce işlemi gözden geçir."
+        },
+        "signVrf": {
+          "title": "VRF dökümünü imzala",
+          "subtitle": "İmzalanmadan önce dökümü gözden geçir."
+        },
+        "allowance": {
+          "title": "Kaynak ayır",
+          "subtitle": "Bu uygulamanın istediği kaynakları gözden geçir."
+        },
+        "statementSign": {
+          "title": "Beyanı imzala",
+          "subtitle": "İmzalanmadan önce beyanı gözden geçir."
+        },
+        "createProof": {
+          "title": "Kanıt oluştur",
+          "subtitle": "Bu uygulamanın istediği kanıtı gözden geçir."
+        },
+        "permission": {
+          "IdentityDisclosure": "Bu uygulama kimliğini öğrenmek istiyor.",
+          "PreimageSubmit": "Bu uygulama içerik göndermek istiyor.",
+          "AccountAccess": "Bu uygulama başka bir uygulamanın hesabını kullanmak istiyor.",
+          "AccountAlias": "Bu uygulama bir takma ad türetmek istiyor.",
+          "title": "İzin isteği"
+        },
+        "legacyAccountNotice": "Eski bir hesapla imzalanıyor.",
+        "resource": {
+          "statementStore": "Beyan deposu alanı",
+          "bulletin": "Bulletin depolama alanı",
+          "smartContract": "{account} hesabı için akıllı sözleşme gazı",
+          "autoSigning": "Her seferinde sormadan senin adına imzala"
+        },
+        "accountAccess": {
+          "title": "{targetIdentifier} hesabına erişim izni verilsin mi?",
+          "subtitle": "Bu uygulamanın, başka bir uygulamaya ait bir hesapla işlem yapmasına izin verir",
+          "warning": "Buna izin verirsen bu uygulama, diğer uygulamanın hesabını senin adına kullanabilir"
+        },
+        "productSubtree": {
+          "title": "Bu uygulamanın kendi hesabına erişmesine izin verilsin mi?",
+          "subtitle": "Bu uygulamanın hesabını eşleştirilmiş cihazından alır"
+        }
+      }
     }
   },
   "widget": {
@@ -1131,10 +1239,6 @@
         "Clipboard": {
           "title": "Pano erişimi gerekli",
           "description": "Paylaşmayı seçtiğin içeriği kopyalayıp yapıştırmak için kullanılır"
-        },
-        "Files": {
-          "title": "Disk erişimi gerekli",
-          "description": "Dosya yükleme, indirme ve yönetme gibi özellikler için kullanılır"
         },
         "OpenUrl": {
           "title": "Harici bağlantı erişimi gerekli",

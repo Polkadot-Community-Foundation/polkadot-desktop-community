@@ -1,7 +1,7 @@
-import { useSession, useSessionIdentity } from '@novasamatech/host-papp-react-ui';
 import { useMemo } from 'react';
 
 import { useRead } from '@/shared/hooks';
+import { type AccountId } from '@/domains/network';
 import { productRoomUseCase } from '../$usecase/productRoom';
 import { type UserPeer } from '../session/types';
 
@@ -23,25 +23,26 @@ import { productChatService } from './service';
 //   }
 // }
 
-export const useCurrentUserPeer = () => {
-  const { session } = useSession();
-  const [identity, pendingIdentity] = useSessionIdentity(session);
+/**
+ * The signed-in user as a chat peer.
+ *
+ * `userId` and `name` are parameters because the session lives in the
+ * `truapi-runtime` aggregate, which a domain may not import. The calling feature
+ * reads them (`useTruapiUserId` / `useTruapiSession`) and passes them down.
+ */
+export const useCurrentUserPeer = (userId: Nullable<AccountId>, name = '') => {
   const peer = useMemo((): UserPeer | null => {
-    if (!session) return null;
+    if (!userId) return null;
 
-    return {
-      type: 'user',
-      accountId: productChatService.getUserId(session),
-      name: identity?.fullUsername ?? identity?.liteUsername ?? '',
-    };
-  }, [session, identity]);
+    return { type: 'user', accountId: userId, name };
+  }, [userId, name]);
 
-  return { data: peer, pending: pendingIdentity };
+  return { data: peer };
 };
 
 // The current user's product chat rooms (across all products), live from the DB.
-const useUserRooms = () => {
-  const { data: peer, pending: pendingPeer } = useCurrentUserPeer();
+const useUserRooms = (userId: Nullable<AccountId>, name = '') => {
+  const { data: peer } = useCurrentUserPeer(userId, name);
   const {
     data: rooms,
     pending: pendingRooms,
@@ -52,11 +53,11 @@ const useUserRooms = () => {
     map: (cache, { accountId }) => cache[accountId],
   });
 
-  return { peer, rooms, pending: pendingPeer || pendingRooms, error };
+  return { peer, rooms, pending: pendingRooms, error };
 };
 
-export const useProductSessions = () => {
-  const { peer, rooms, pending, error } = useUserRooms();
+export const useProductSessions = (userId: Nullable<AccountId>, name = '') => {
+  const { peer, rooms, pending, error } = useUserRooms(userId, name);
 
   const sessions = useMemo(
     () => (peer ? rooms.map(r => productRoomUseCase.createProductChatSession(peer, r)) : []),
@@ -69,14 +70,14 @@ export const useProductSessions = () => {
 // The current user's product chat rooms across every product — each carries its
 // `productId` and `sessionId`, so callers that handle many products at once (e.g.
 // a dashboard grid) can look up a product's room without a per-product hook.
-export const useUserProductRooms = () => {
-  const { rooms, pending, error } = useUserRooms();
+export const useUserProductRooms = (userId: Nullable<AccountId>) => {
+  const { rooms, pending, error } = useUserRooms(userId);
   return { data: rooms, pending, error };
 };
 
 // The current user's chat rooms for a single product.
-export const useProductRooms = (productId: Nullable<string>) => {
-  const { rooms, pending, error } = useUserRooms();
+export const useProductRooms = (productId: Nullable<string>, userId: Nullable<AccountId>) => {
+  const { rooms, pending, error } = useUserRooms(userId);
 
   const data = useMemo(
     () => (productId ? rooms.filter(room => productChatService.belongsToProduct(room, productId)) : []),

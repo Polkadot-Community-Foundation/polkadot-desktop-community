@@ -1,8 +1,5 @@
-import { useCallback } from 'react';
-
 import { isElectron } from '@/shared/env';
-import { useLooseRef } from '@/shared/hooks';
-import { type FetchResolver, type PermissionStatus, remoteAccessUseCase, useProductPermissions } from '@/domains/product';
+import { type FetchResolver, type PermissionStatus, remoteAccessUseCase } from '@/domains/product';
 
 type FetchRequest = Parameters<FetchResolver>[0];
 type FetchResponse = Awaited<ReturnType<FetchResolver>>;
@@ -51,24 +48,17 @@ async function performFetch(req: FetchRequest): Promise<FetchResponse> {
 
 /**
  * Builds the worker's `fetch` resolver, gated against the product's remote permissions through the
- * same chokepoint as the webview and navigateTo. Stable across renders; reads the latest permission
- * state on each call, so grants made after the worker starts take effect immediately.
+ * same chokepoint as the webview and navigateTo. Permission state is read on each call, so grants
+ * made after the worker starts take effect immediately.
+ *
+ * A plain factory, not a hook: a worker is started by the core's demand ledger, which has no React
+ * lifetime to hang one off.
  */
-export function useWorkerFetchResolver(productId: Nullable<string>): FetchResolver {
-  // Hold the product's permission subscription open for the worker's lifetime. Worker startup
-  // resolves many module imports through this resolver *before* the product view (which otherwise
-  // keeps the resource warm) mounts; without this, each fetch's `resolveRemoteUrlAccess` would
-  // reopen and tear down a Dexie liveQuery per request instead of replaying the shared cache.
-  useProductPermissions(productId);
-  const productIdRef = useLooseRef(productId);
-
-  return useCallback<FetchResolver>(async req => {
-    const productId = productIdRef();
-    if (!productId) return BLOCKED_RESPONSE;
-
+export function createWorkerFetchResolver(productId: string): FetchResolver {
+  return async req => {
     let status: PermissionStatus;
     try {
-      status = await remoteAccessUseCase.resolveRemoteUrlAccess({ productId, url: req.url, modality: 'app' });
+      status = await remoteAccessUseCase.resolveRemoteUrlAccess({ productId, url: req.url, executionKind: 'Worker' });
     } catch {
       // Fail closed: a permission-layer error (e.g. the permissions stream erroring) denies
       // the fetch with the webview's 403 rather than rejecting and breaking worker loading.
@@ -76,5 +66,5 @@ export function useWorkerFetchResolver(productId: Nullable<string>): FetchResolv
     }
 
     return status === 'granted' ? performFetch(req) : BLOCKED_RESPONSE;
-  }, []);
+  };
 }

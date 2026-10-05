@@ -3,6 +3,8 @@ import { type ElectronApplication, type Page, expect } from '@playwright/test';
 import { TEST_IDS } from '@/shared/test-ids';
 import { DEFAULT_TIMEOUT, LONG_TIMEOUT, VERY_LONG_TIMEOUT } from '../helpers/timeouts';
 
+import { AddressBarPage } from './AddressBarPage';
+
 /**
  * Page Object for the test-product-sdk test product page.
  * Handles navigation to the product and interaction with SDK test buttons.
@@ -13,8 +15,6 @@ import { DEFAULT_TIMEOUT, LONG_TIMEOUT, VERY_LONG_TIMEOUT } from '../helpers/tim
  */
 export class TestProductPage {
   private webviewPage: Page | null = null;
-  private lastCategory: string | null = null;
-  private lastAction: string | null = null;
   private lastProductName: string | null = null;
 
   constructor(
@@ -22,8 +22,13 @@ export class TestProductPage {
     private readonly app: ElectronApplication,
   ) {}
 
+  /**
+   * The header address bar — a button showing where you are, not an editable
+   * field. Typing goes through the input surface it opens; `AddressBarPage` owns
+   * both halves.
+   */
   get addressBar() {
-    return this.page.locator('[data-address-bar-input]');
+    return new AddressBarPage(this.page);
   }
 
   /**
@@ -51,9 +56,7 @@ export class TestProductPage {
 
     const windowPromise = this.app.waitForEvent('window', { timeout: LONG_TIMEOUT });
 
-    await this.addressBar.click();
-    await this.addressBar.fill(productName);
-    await this.addressBar.press('Enter');
+    await this.addressBar.submit(productName);
 
     // The webview spawns a new window — wait for it
     this.webviewPage = await windowPromise;
@@ -103,7 +106,6 @@ export class TestProductPage {
    * In narrow layout: scrolls to the category heading (sections are already visible).
    */
   async clickCategory(categoryName: string) {
-    this.lastCategory = categoryName;
     const webview = this.getWebview();
     const categoriesHeader = webview.getByText('CATEGORIES').first();
 
@@ -122,7 +124,6 @@ export class TestProductPage {
    * Run a test action by clicking its button (partial name match).
    */
   async runAction(actionName: string) {
-    this.lastAction = actionName;
     const webview = this.getWebview();
 
     // Reset logs before running so previous results don't interfere with assertions
@@ -203,13 +204,8 @@ export class TestProductPage {
    * The product may request resource allocation (e.g. AutoSigning) before signing.
    * When it does, the allocation modal appears first and blocks the signing queue —
    * so the signing "Continue" button never shows until the allocation is approved. This method
-   * first checks for and clicks "Continue" in the allowance modal if that modal is present.
-   *
-   * After clicking "Continue" in the signing modal, waits briefly for a possible submit error
-   * alert (e.g. NoAllowanceError when the account allowance isn't set up yet).
-   * If the error appears AND the signing modal is still open (error is from signing,
-   * not a background operation), cancels the modal, reloads the product, re-runs the
-   * last category/action, and retries up to {@link MAX_SIGNING_RETRIES} times.
+   * first checks for and clicks "Continue" in the allowance modal if that modal is present,
+   * then clicks "Continue" in the signing modal.
    */
   /**
    * The product may request AutoSigning (or other) resource allocation before signing,
@@ -233,60 +229,11 @@ export class TestProductPage {
   }
 
   async confirmSigning() {
-    const SUBMIT_ERROR_WATCH_MS = 15_000;
-    const RETRY_DELAY_MS = 30_000;
-    const MAX_SIGNING_RETRIES = 2;
-
     await this.approveAllocationIfPresent();
 
-    for (let attempt = 0; ; attempt++) {
-      const signButton = this.page.getByRole('button', { name: 'Continue', exact: true });
-      await expect(signButton).toBeVisible({ timeout: DEFAULT_TIMEOUT });
-      await signButton.click();
-
-      // waitFor actually waits for the element to appear, unlike isVisible which checks instantly
-      const errorAlert = this.page.getByTestId(TEST_IDS.submitErrorAlert);
-      const hasError = await errorAlert
-        .waitFor({ state: 'visible', timeout: SUBMIT_ERROR_WATCH_MS })
-        .then(() => true)
-        .catch(() => false);
-
-      if (!hasError) {
-        return;
-      }
-
-      // If the signing modal is already closed, the error was from a background
-      // operation (e.g. statement-store), not from signing itself — the signing
-      // succeeded, so skip the retry.
-      const cancelButton = this.page.getByRole('button', { name: 'Cancel', exact: true });
-      const isModalStillOpen = await cancelButton.isVisible().catch(() => false);
-      if (!isModalStillOpen) {
-        return;
-      }
-
-      if (attempt >= MAX_SIGNING_RETRIES) {
-        throw new Error(`Signing failed with submit error after ${MAX_SIGNING_RETRIES + 1} attempts`);
-      }
-
-      console.warn(
-        `[confirmSigning] Submit error detected (attempt ${attempt + 1}), waiting ${RETRY_DELAY_MS / 1000}s before retry...`,
-      );
-
-      // Close the signing modal
-      await cancelButton.click();
-
-      // Wait for allowance to propagate before retrying
-      await this.page.waitForTimeout(RETRY_DELAY_MS);
-
-      // Reload and replay the last category + action
-      await this.reloadProduct();
-      if (this.lastCategory) {
-        await this.clickCategory(this.lastCategory);
-      }
-      if (this.lastAction) {
-        await this.runAction(this.lastAction);
-      }
-    }
+    const signButton = this.page.getByRole('button', { name: 'Continue', exact: true });
+    await expect(signButton).toBeVisible({ timeout: DEFAULT_TIMEOUT });
+    await signButton.click();
   }
 
   /**
@@ -323,13 +270,17 @@ export class TestProductPage {
     await expect(this.signReviewContinueButton).toBeVisible({ timeout: VERY_LONG_TIMEOUT });
   }
 
-  /** Assert the review summary shows account, network, fee and call title. */
+  /**
+   * Assert the review summary shows account, network and call title.
+   *
+   * No fee row: estimating one needs the signer's address, which the host cannot derive
+   * until the core persists the product subtree key, so `CreateTransactionModal` omits it
+   * rather than showing a guess (TODO(truapi) there). Restore this assertion with the row.
+   */
   async expectReviewSummaryFields() {
     await expect(this.page.getByTestId(TEST_IDS.signReviewCallTitle)).toBeVisible({ timeout: DEFAULT_TIMEOUT });
     await expect(this.page.getByTestId(TEST_IDS.signReviewAccount)).toBeVisible({ timeout: DEFAULT_TIMEOUT });
     await expect(this.page.getByTestId(TEST_IDS.signReviewNetwork)).toBeVisible({ timeout: DEFAULT_TIMEOUT });
-    // Fee row only renders for an inspectable chain; wait long enough for fee estimation.
-    await expect(this.page.getByTestId(TEST_IDS.signReviewFee)).toBeVisible({ timeout: VERY_LONG_TIMEOUT });
   }
 
   /** Click "More details" and assert the arguments + call-data sections expand. */
@@ -365,47 +316,42 @@ export class TestProductPage {
   }
 
   /**
-   * Approve a host permission request with "Allow Always". The testid sits on a
-   * wrapper div, so the inner <button> is clicked (see e2e/helpers/dialogs.ts).
-   * Requires the feature to be tagged @manual-permissions (otherwise the
-   * auto-approver dismisses the dialog first).
+   * The core's device/remote permission prompt. This is the same
+   * `RemotePermissionRequestDialog` the host's own remote-URL grant uses: the core takes
+   * a `PermissionDecision`, not a boolean, and owns the stored decision. Deny, Allow Once
+   * and Allow Always are always present. Requires the feature to be tagged
+   * @manual-permissions (otherwise the auto-approver answers it first).
    */
-  async allowPermissionAlways() {
-    // The testid sits on two nodes (a label div + the button wrapper); target the
-    // one that actually contains a <button>.
-    const button = this.page.getByTestId(TEST_IDS.permissionDialogAllowAlways).locator('button').first();
-    await expect(button).toBeVisible({ timeout: LONG_TIMEOUT });
+  private get permissionApproveButton() {
+    return this.page.getByTestId(TEST_IDS.permissionDialogAllowAlways);
+  }
+
+  private get permissionDenyButton() {
+    return this.page.getByTestId(TEST_IDS.permissionDialogDeny);
+  }
+
+  /** Approve a host permission request. */
+  async approvePermission() {
+    await expect(this.permissionApproveButton).toBeVisible({ timeout: LONG_TIMEOUT });
     // force: the dialog animates in and can briefly fail the stability check.
-    await button.click({ force: true });
+    await this.permissionApproveButton.click({ force: true });
   }
 
-  /** Assert a host device-permission request dialog is rendered (its Allow Always button is visible). */
+  /** Assert a host device-permission request dialog is rendered. */
   async expectDevicePermissionDialog() {
-    const button = this.page.getByTestId(TEST_IDS.permissionDialogAllowAlways).locator('button').first();
-    await expect(button).toBeVisible({ timeout: LONG_TIMEOUT });
+    await expect(this.permissionApproveButton).toBeVisible({ timeout: LONG_TIMEOUT });
   }
 
-  /** Approve a host permission request with "Allow Once". */
-  async allowPermissionOnce() {
-    await this.clickPermissionButton('Allow Once');
-  }
-
-  /** Reject a host permission request with "Don't Allow". */
+  /** Reject a host permission request. */
   async denyPermission() {
-    await this.clickPermissionButton("Don't Allow");
+    await expect(this.permissionDenyButton).toBeVisible({ timeout: LONG_TIMEOUT });
+    await this.permissionDenyButton.click({ force: true });
   }
 
   /** Dismiss a host permission request without choosing (Escape → defaults to denied). */
   async dismissPermission() {
-    const allow = this.page.getByTestId(TEST_IDS.permissionDialogAllowAlways).locator('button').first();
-    await expect(allow).toBeVisible({ timeout: LONG_TIMEOUT });
+    await expect(this.permissionApproveButton).toBeVisible({ timeout: LONG_TIMEOUT });
     await this.page.keyboard.press('Escape');
-  }
-
-  private async clickPermissionButton(name: string) {
-    const button = this.page.getByRole('button', { name, exact: true });
-    await expect(button).toBeVisible({ timeout: LONG_TIMEOUT });
-    await button.click({ force: true });
   }
 
   // --- Alias permission dialog (getAlias) -----------------------------------
@@ -413,30 +359,31 @@ export class TestProductPage {
   /**
    * Assert the alias-permission request dialog is rendered. The testid sits on a
    * `display:contents` marker (no box of its own), so attachment is checked; the
-   * "Always Allow" button visibility confirms the dialog actually painted.
+   * Allow button's visibility confirms the dialog actually painted.
    */
   async expectAliasPermissionDialog() {
     await expect(this.page.getByTestId(TEST_IDS.aliasPermissionDialog)).toBeAttached({ timeout: LONG_TIMEOUT });
-    // The alias dialog puts the testid directly on the <button> (tr-ui Button
-    // forwards data-testid), unlike the device dialog's wrapper div.
+    // The alias dialog puts the testid directly on the <button> — tr-ui Button
+    // forwards data-testid.
     await expect(this.page.getByTestId(TEST_IDS.aliasPermissionAllow)).toBeVisible({ timeout: LONG_TIMEOUT });
   }
 
-  /** Approve an alias request with "Always Allow" (persists a granted alias context). */
-  async allowAliasAlways() {
+  /**
+   * Approve an alias request. Like the permission prompt, the redesigned modal
+   * offers one Allow — the once/always split went with the core's boolean answer
+   * (`AliasPermissionModal`).
+   */
+  async allowAlias() {
     const button = this.page.getByTestId(TEST_IDS.aliasPermissionAllow);
     await expect(button).toBeVisible({ timeout: LONG_TIMEOUT });
     await button.click({ force: true });
   }
 
-  /** Approve an alias request with "Allow Once" (does not persist). */
-  async allowAliasOnce() {
-    await this.clickPermissionButton('Allow Once');
-  }
-
-  /** Reject an alias request with "Don't Allow". */
+  /** Reject an alias request. Every request modal's footer carries the same deny testid. */
   async denyAlias() {
-    await this.clickPermissionButton("Don't Allow");
+    const button = this.page.getByTestId(TEST_IDS.productRequestDeny);
+    await expect(button).toBeVisible({ timeout: LONG_TIMEOUT });
+    await button.click({ force: true });
   }
 
   /** Assert the alias-permission dialog has closed (decision accepted). */
@@ -501,6 +448,29 @@ export class TestProductPage {
   }
 
   /**
+   * Put the future offset in the product's schedule field and make sure it stayed
+   * there.
+   *
+   * The card is a controlled form that re-renders when a previous push settles, and
+   * that re-render restores the stored (empty) args — so a `fill` whose value the CI
+   * run then read back 14 times as `""` was not a lost keystroke, it was the product
+   * resetting the field underneath. Re-fill until the value sticks rather than trust
+   * one attempt.
+   */
+  private async setScheduleOffset(value: string) {
+    await expect
+      .poll(
+        async () => {
+          await this.scheduleInSecondsInput.fill(value);
+
+          return this.scheduleInSecondsInput.inputValue();
+        },
+        { timeout: DEFAULT_TIMEOUT, message: 'the product kept resetting its schedule-offset field' },
+      )
+      .toBe(value);
+  }
+
+  /**
    * Fill the queue of FUTURE-scheduled notifications past the host cap so the
    * next schedule returns ScheduleLimitReached. Uses a far future offset so the
    * schedules stay pending in the host queue (counting toward the cap) instead
@@ -532,19 +502,28 @@ export class TestProductPage {
     await this.runPushNotificationButton.click({ timeout: DEFAULT_TIMEOUT });
     await webview.waitForTimeout(WARMUP_SETTLE_MS);
 
-    // Far-future offset keeps each schedule pending in the host queue (counts
-    // toward the cap) instead of firing immediately (which bypasses the cap).
-    await this.scheduleInSecondsInput.fill(FUTURE_OFFSET_SECONDS);
-
     // Once the cap is exceeded the product logs the host's ScheduleLimitReached
-    // rejection as a RangeError (product-sdk 0.19.1) — that is the signal the
-    // over-shoot has surfaced, so stop as soon as it appears. Kept in sync with
-    // the assertion in host-api.feature (TC-11.1.5).
+    // rejection as a RangeError — that is the signal the over-shoot has surfaced,
+    // so stop as soon as it appears. Kept in sync with the assertion in
+    // host-api.feature (TC-11.1.5).
     const limitReached = webview.getByText('RangeError').first();
+    // Only a FUTURE schedule stays pending in the host queue and counts toward the
+    // cap; an immediate one fires and never does. Filling the offset once and
+    // trusting it to survive is what left a CI run with 123 notifications, every
+    // one of them "scheduled now" and the cap untouched — so re-assert it before
+    // every click and prove the first one actually landed in the future.
     for (let i = 0; i < MAX_ATTEMPTS; i++) {
+      await this.setScheduleOffset(FUTURE_OFFSET_SECONDS);
       // Blocking click — waits for the button to be actionable, so it lands even
       // while the product gates/re-renders it between schedules.
       await this.runPushNotificationButton.click({ timeout: DEFAULT_TIMEOUT });
+
+      if (i === 0) {
+        await expect(
+          webview.getByText('scheduled at').first(),
+          'the product must schedule into the future, or nothing ever accumulates in the host queue',
+        ).toBeVisible({ timeout: DEFAULT_TIMEOUT });
+      }
       if (await limitReached.isVisible().catch(() => false)) break;
       await webview.waitForTimeout(PACING_FLOOR_MS);
     }
@@ -562,8 +541,10 @@ export class TestProductPage {
     } catch (err) {
       const diagnostics = await this.collectWebviewDiagnostics();
 
+      // Body text can run to thousands of characters; the full copy goes to the
+      // report attachment, the log keeps only enough to recognise the page.
       console.error(
-        `[expectResultContains] failed — looking for "${text}"\nwebview url: ${diagnostics.url}\nwebview body text:\n${diagnostics.bodyText}`,
+        `[product] "${text}" not found at ${diagnostics.url}. Body: ${diagnostics.bodyText.slice(0, 300).replace(/\s+/g, ' ')}`,
       );
       throw err;
     }

@@ -1,43 +1,30 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { OS_SUFFIX } from './bot-user';
-import { PairingLimitError, StuckPairingError, shouldHealPermanentUser, signInWithHeal, withSignInRetries } from './sign-in';
+import { PairingLimitError, StuckPairingError, shouldResetSigner, signInWithReset, withSignInRetries } from './sign-in';
 
-const { deleteBotUserMock, ensureMock } = vi.hoisted(() => ({
-  deleteBotUserMock: vi.fn().mockResolvedValue(undefined),
-  ensureMock: vi.fn().mockResolvedValue(undefined),
-}));
+/**
+ * A signer double built from plain functions rather than `vi.mock`. `signInWithReset`
+ * declares only the two methods it calls, so this satisfies the parameter structurally
+ * and needs no type assertion — the seam is already in the language.
+ */
+function fakeSigningHost() {
+  const stop = vi.fn().mockResolvedValue(undefined);
+  const removeDevices = vi.fn().mockResolvedValue(undefined);
 
-vi.mock('./bot-user', async importOriginal => {
-  const orig = await importOriginal<Record<string, unknown>>();
-  return {
-    ...orig,
-    deleteBotUser: deleteBotUserMock,
-    BotUserSession: class {
-      constructor(public username: string) {}
-      ensure = ensureMock;
-    },
-  };
-});
+  return { host: { stop, removeDevices }, stop, removeDevices };
+}
 
-describe('shouldHealPermanentUser', () => {
-  const permanent = `desktopauth${OS_SUFFIX}`;
-
-  it('heals a permanent user stuck in pairing', () => {
-    expect(shouldHealPermanentUser(new StuckPairingError(45), permanent)).toBe(true);
+describe('shouldResetSigner', () => {
+  it('resets on a wedged pairing', () => {
+    expect(shouldResetSigner(new StuckPairingError(60))).toBe(true);
   });
 
-  it('heals a permanent user rejected with the no-free-slots "Limit Reached" error', () => {
-    expect(shouldHealPermanentUser(new PairingLimitError(), permanent)).toBe(true);
+  it('resets on an exhausted slot budget', () => {
+    expect(shouldResetSigner(new PairingLimitError())).toBe(true);
   });
 
-  it('does not heal random users — nothing to reset', () => {
-    expect(shouldHealPermanentUser(new StuckPairingError(45), 'testbotabcdefghij')).toBe(false);
-    expect(shouldHealPermanentUser(new PairingLimitError(), 'testbotabcdefghij')).toBe(false);
-  });
-
-  it('does not heal on other errors (timeouts, assertion failures)', () => {
-    expect(shouldHealPermanentUser(new Error('waitForURL timeout'), permanent)).toBe(false);
+  it('does not reset on an unrelated error', () => {
+    expect(shouldResetSigner(new Error('boom'))).toBe(false);
   });
 });
 
@@ -56,79 +43,70 @@ describe('withSignInRetries on PairingLimitError', () => {
   });
 });
 
-describe('signInWithHeal on PairingLimitError', () => {
-  const permanent = `desktopauth${OS_SUFFIX}`;
-
-  it('heals a permanent user immediately: one failed attempt, then a fresh identity', async () => {
-    deleteBotUserMock.mockClear();
-    const attempted: string[] = [];
-    const attempt = async (username: string): Promise<void> => {
-      attempted.push(username);
-      if (username === permanent) throw new PairingLimitError();
+describe('signInWithReset', () => {
+  it('clears the signer pairings and retries once the first phase exhausts', async () => {
+    const { host, stop, removeDevices } = fakeSigningHost();
+    let calls = 0;
+    const attempt = async (): Promise<void> => {
+      calls++;
+      // The budget error aborts the first phase after one attempt; the post-reset
+      // phase then succeeds, which is the behaviour the reset exists to produce.
+      if (calls === 1) throw new PairingLimitError();
     };
 
-    const signedIn = await signInWithHeal({
+    await signInWithReset({ label: 'test', signingHost: host, attempt, retryDelayMs: 1 });
+
+    expect(calls).toBe(2);
+    expect(stop).toHaveBeenCalledOnce();
+    expect(removeDevices).toHaveBeenCalledOnce();
+    // Ordering is load-bearing: `truapi-host` cannot clear pairings while serving.
+    expect(stop.mock.invocationCallOrder[0]).toBeLessThan(removeDevices.mock.invocationCallOrder[0] ?? 0);
+  });
+
+  it('rethrows an unrelated error without touching the signer', async () => {
+    const { host, stop, removeDevices } = fakeSigningHost();
+    let calls = 0;
+    const attempt = async (): Promise<void> => {
+      calls++;
+      throw new Error('boom');
+    };
+
+    await expect(signInWithReset({ label: 'test', signingHost: host, attempt, retryDelayMs: 1 })).rejects.toThrow('boom');
+    // First phase is 2 attempts; a non-reset error must not buy a third.
+    expect(calls).toBe(2);
+    expect(stop).not.toHaveBeenCalled();
+    expect(removeDevices).not.toHaveBeenCalled();
+  });
+
+  it('resets only after the first phase is spent, and re-cleans storage before retrying', async () => {
+    const { host, stop, removeDevices } = fakeSigningHost();
+    const order: string[] = [];
+    let calls = 0;
+    // Two wedged attempts exhaust the 2-attempt first phase — one is not enough,
+    // because an ordinary retry would clear it without ever reaching the reset.
+    const attempt = async (): Promise<void> => {
+      calls++;
+      order.push(`attempt${calls}`);
+      if (calls <= 2) throw new StuckPairingError(60);
+    };
+
+    stop.mockImplementation(async () => {
+      order.push('stop');
+    });
+    removeDevices.mockImplementation(async () => {
+      order.push('removeDevices');
+    });
+
+    await signInWithReset({
       label: 'test',
-      network: 'nightly',
-      botUrl: 'http://bot.invalid',
-      botToken: undefined,
-      username: permanent,
+      signingHost: host,
       attempt,
+      beforeRetry: async () => {
+        order.push('beforeRetry');
+      },
       retryDelayMs: 1,
     });
 
-    // First phase aborts after ONE attempt (no pointless retry against an
-    // exhausted daily budget), then the heal path signs in a fresh identity.
-    expect(attempted[0]).toBe(permanent);
-    expect(attempted.filter(u => u === permanent)).toHaveLength(1);
-    expect(signedIn).not.toBe(permanent);
-    expect(signedIn.startsWith('testbot')).toBe(true);
-    expect(deleteBotUserMock).toHaveBeenCalledWith(expect.objectContaining({ username: permanent, network: 'nightly' }));
-  });
-});
-
-describe('signInWithHeal first-phase attempt budget', () => {
-  const permanent = `desktopauth${OS_SUFFIX}`;
-
-  it('gives a non-permanent identity the full shared budget (3 attempts) and rethrows', async () => {
-    let calls = 0;
-    const attempt = async (): Promise<void> => {
-      calls++;
-      throw new Error('boom');
-    };
-
-    await expect(
-      signInWithHeal({
-        label: 'test',
-        network: 'nightly',
-        botUrl: 'http://bot.invalid',
-        botToken: undefined,
-        username: 'testbotabcdefghij',
-        attempt,
-        retryDelayMs: 1,
-      }),
-    ).rejects.toThrow('boom');
-    expect(calls).toBe(3);
-  });
-
-  it('stops a permanent identity at 2 attempts and rethrows without healing when the error is not StuckPairingError', async () => {
-    let calls = 0;
-    const attempt = async (): Promise<void> => {
-      calls++;
-      throw new Error('boom');
-    };
-
-    await expect(
-      signInWithHeal({
-        label: 'test',
-        network: 'nightly',
-        botUrl: 'http://bot.invalid',
-        botToken: undefined,
-        username: permanent,
-        attempt,
-        retryDelayMs: 1,
-      }),
-    ).rejects.toThrow('boom');
-    expect(calls).toBe(2);
+    expect(order).toEqual(['attempt1', 'beforeRetry', 'attempt2', 'stop', 'removeDevices', 'beforeRetry', 'attempt3']);
   });
 });

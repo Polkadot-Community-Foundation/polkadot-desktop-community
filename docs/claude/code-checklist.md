@@ -21,12 +21,16 @@ Walk this for every file the diff touches. Cite the **doc and section**. Severit
 
 These are file-role rules _within_ a package — ESLint's boundaries plugin works at the package level and can't see them.
 
-- **major** — `hooks.ts` importing `repository.ts` or `gateway.ts` directly; persisted/wire data must reach a hook through a `resource.ts` (anti-pattern 8).
-- **major** — A `createMutation` / `useMutation` / `useResource` primitive — there is none; writes are plain functions bound via `useAction` (anti-pattern 7).
-- **major** — Inline `useRead(resource, {...})` at a feature call site; features call named domain hooks (`useProducts`), the `useRead` indirection lives in the domain's `hooks.ts` (anti-pattern 3).
-- **major** — A domain `hooks.ts` doing feature-specific shaping — if it only matters for one feature it belongs in that feature's `hooks/` (anti-pattern 4).
+- **major** — `hooks.ts` importing `repository.ts` or `gateway.ts` directly; persisted/wire data must reach a hook through a `resource.ts` (anti-pattern 7).
+- **major** — A `createMutation` / `useMutation` / `useResource` primitive — there is none; writes are plain functions bound via `useAction` (anti-pattern 6).
+- **major** — Inline `useRead(resource, {...})` at a feature call site; features call named domain hooks (`useProducts`), the `useRead` indirection lives in the domain's `hooks.ts` (anti-pattern 2).
+- **major** — A domain `hooks.ts` doing feature-specific shaping — if it only matters for one feature it belongs in that feature's `hooks/` (anti-pattern 3).
 - **major** — Business logic (transformation, derivation) inside a `hooks.ts` instead of a `service.ts` it should call. Same for a **feature**: a pure non-React derivation/formatter placed in a `hooks/` file (or inline in a hook) instead of the feature-root `service.ts` — or, when it's reusable domain logic over entities, a domain `service.ts` (`project-structure.md` § Feature `hooks/` / `service.ts`).
 - **major** — `service.ts` performing I/O or importing a resource/repository/gateway — it's stateless sync helpers only.
+- **major** — A `createQueryResource` / `createStreamResource` chain with no `.mock(fn)` step (`project-structure.md` § Domain, `resource.ts`). Unit tests enable mocks globally, so an un-mocked resource runs its real request in every spec that reads through it. Fix: add `.mock(fn)` after `.request()` / `.subscribe()`. **Not** a finding when the request performs no external I/O and a comment above the builder says so.
+- **minor** — A `.mock(fn)` body importing a fixture module instead of returning an inline literal. Mocks ship in the production bundle, so the fixtures ship with them.
+- **minor** — A spec exercising a resource through `read$` / `cache$` rather than the request body and key function exported from `resource.ts` (`style.md` § Files and tests). Driving the resource tests `@/shared/resource`'s caching and lifecycle, which that library already covers, not the domain. Fix: export the request body and assert it directly.
+- **minor** — A spec reaching for `vi.mock` on a domain barrel to stub a read that a resource's `instead(fn)` already covers (`style.md` § Files and tests). `instead` is type-checked against the real signature and self-resets; a module mock is neither.
 
 ## Feature UI (`project-structure.md` § Feature, `style.md` § React)
 

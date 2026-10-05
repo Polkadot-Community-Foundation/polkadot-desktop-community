@@ -21,7 +21,7 @@ Before touching a feature, make sure its user action can be expressed as an atom
 
 5. **Keep the API minimal.** Export only what consumers need from the domain `index.ts`.
 
-6. **Cover with tests.** Co-located `*.spec.ts`. Services are pure — assert inputs/outputs. Resources via their public hook or by driving the underlying observable with fakes. Domain-level coverage pays off most.
+6. **Cover with tests.** Co-located `*.spec.ts`, following [Testing](#testing): every `service.ts` and every use case is tested; resources, repositories and schemas are not.
 
 7. **Build the feature.** In `src/features/{feature}/`, call domain hooks from UI and dispatch use cases on user events (via their hooks for React-state-aware call sites, or directly via the group object when no UI feedback is needed). Domain services may be imported directly. See [feature-development.md](./feature-development.md) and [di.md](./di.md).
 
@@ -36,10 +36,26 @@ Before touching a feature, make sure its user action can be expressed as an atom
 - [ ] DI side-effect identifiers live at the top of the use case file and are re-exported from `index.ts`.
 - [ ] Cached/persisted data lives in resources/Dexie; runtime selection state is in an aggregate, not the domain.
 - [ ] Every resource and mutation function has a matching `useX` hook in `hooks.ts`. `hooks.ts` contains no UI or feature-local hooks.
+- [ ] Every resource declares a `.mock(fn)` on its builder, with an inline-literal body (no fixture-module imports).
 - [ ] Features consume domain reads only via the named hooks (no `createQueryResource`, no inline `useRead`).
 - [ ] Cross-domain consumption goes through services / use cases / hooks of the other domain.
-- [ ] Co-located `*.spec.ts` on domain changes.
+- [ ] Every `service.ts` touched has a co-located `service.spec.ts` covering the changed helpers; every `$usecase/{group}.ts` touched has a `{group}.spec.ts`.
+- [ ] No `resource.spec.ts`, `repository.spec.ts` or `schemas.spec.ts` anywhere in the domain — logic that wanted one moved to a service ([Testing](#testing)).
 - [ ] No [anti-patterns](./project-structure.md#anti-patterns).
+
+## Testing
+
+What a domain file is decides whether it gets a spec. The rule follows the [file contracts](./project-structure.md#file-contracts): a file that owns a decision is tested; a file that owns plumbing is not, because the plumbing belongs to a library that already tests it.
+
+**Required — `service.ts` and `$usecase/*.ts`.** Every service helper and every use-case method has a co-located spec. Services are pure functions over already-loaded entities, so a spec is inputs → outputs with no setup; a service that is awkward to test this way is not a service (see the [cut rules](./code-placement.md#cut-rules)). Use cases are the domain's invariant chokepoints, so their specs pin the rule, not the plumbing: spy the leaves they compose in place (`vi.spyOn(productDb, 'getByBaseName')`, `resource.instead(...)`) and assert what the use case decided — what it wrote, what it refused, what it returned. Never `vi.mock` a sibling module to get there ([style.md](./style.md) § Files and tests).
+
+**Forbidden — `resource.ts`, `repository.ts`, `schemas.ts`.** None of these gets a spec. The reason differs per file, and it is the reason rather than the list that should be remembered:
+
+- A **resource** adds caching, staleness, retries and subscription lifecycle over its leaves. All of that is `@/shared/resource`, covered by that library's own specs; a test driving `read$` re-tests the framework. A resource whose request body carries a decision worth a test (a fallback, a merge, a normalisation) has a service function hiding in it — extract it to `service.ts` and test it there. Do not export the request body from `resource.ts` "for the spec": that leaves a public function nothing but the test calls.
+- A **repository** is Dexie or `localStorage` behind a thin helper. A spec either mocks the table, which proves nothing, or runs on `fake-indexeddb`, which tests Dexie. The one thing a repository owns — the row shape and its indices — is checked by the type system and exercised by every use-case spec that runs on the fake store.
+- A **schema** is a static definition. Its behaviour _is_ Valibot's or the SCALE codec's; a spec asserting that `v.parse` rejects a bad string tests the validator. The boundary it guards is exercised by the gateway or use case that parses through it.
+
+The test that seems to want one of these — "does the TLD fall back to `.dot` when the chain reports none?" — is a service test the moment the rule is a function of its inputs. Move the rule, keep the resource as the one-line composition it should be.
 
 ## When to split a module
 

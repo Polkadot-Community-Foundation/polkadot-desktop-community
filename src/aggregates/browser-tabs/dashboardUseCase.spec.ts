@@ -1,14 +1,9 @@
 // @vitest-environment happy-dom
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { DASHBOARD_TAB_ID } from './constants';
 import { dashboardUseCase } from './dashboardUseCase';
 import { browserTabs } from './state/tabs';
-
-beforeEach(() => {
-  browserTabs.tabs$.set([]);
-  browserTabs.selectedTabId$.set(null);
-});
 
 describe('cleanupOrphanDashboardTab', () => {
   it('removes dashboard when it is the only tab', () => {
@@ -37,7 +32,7 @@ describe('ensureDashboardTabExists', () => {
 
     dashboardUseCase.ensureDashboardTabExists();
 
-    expect(browserTabs.tabs$.get().some(t => t.id === DASHBOARD_TAB_ID)).toBe(true);
+    expect(browserTabs.tabs$.get().map(t => t.id)).toContain(DASHBOARD_TAB_ID);
   });
 
   it('does not add dashboard tab when no other tabs exist', () => {
@@ -64,7 +59,7 @@ describe('selectDashboardTab', () => {
 
     dashboardUseCase.selectDashboardTab();
 
-    expect(browserTabs.tabs$.get().some(t => t.id === DASHBOARD_TAB_ID)).toBe(true);
+    expect(browserTabs.tabs$.get().map(t => t.id)).toContain(DASHBOARD_TAB_ID);
     expect(browserTabs.selectedTabId$.get()).toBe(DASHBOARD_TAB_ID);
   });
 

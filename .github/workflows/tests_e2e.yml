@@ -30,9 +30,11 @@ permissions:
   contents: read
 
 jobs:
-  # A pull request from a fork gets no repository secrets, so the projects that sign in through
-  # the signing bot cannot run there. Probing a secret (rather than comparing repository names)
-  # also covers the case where the secret simply has not been configured yet.
+  # Sign-in no longer needs a repository secret — it runs a local `truapi-host` against an
+  # identity this repository caches. The asset to protect is therefore that cache, not a token:
+  # it holds plaintext mnemonics for attested on-chain identities, and a fork pull request can
+  # read base-branch caches. So trust is decided by fork status, and a fork run gets neither the
+  # signer-backed projects nor the cache.
   #
   # `pull_request_target` would hand secrets to fork runs, and is deliberately NOT used: combined
   # with checking out the pull request's code it executes untrusted code with repository secrets.
@@ -41,29 +43,27 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       projects: ${{ steps.probe.outputs.projects }}
-      has-secrets: ${{ steps.probe.outputs.has-secrets }}
+      trusted: ${{ steps.probe.outputs.trusted }}
     steps:
-      - name: Probe secret availability
+      - name: Probe trust level
         id: probe
-        env:
-          BOT_TOKEN_PROBE: ${{ secrets.SIGNING_BOT_TOKEN }}
         run: |
           set -euo pipefail
           # Every Playwright project belongs to exactly one of these two lists, so the full set is
           # their concatenation — a project cannot fall out of the fork-safe run by being forgotten
           # in a second literal.
           NO_SECRETS='["smoke","link-navigation","browser"]'
-          # Signs in through the signing bot, so it can only run where repository secrets exist.
-          BOT_BACKED='["auth","authenticated","product-sdk","chat"]'
+          # Signs in through a local truapi-host holding an attested on-chain identity.
+          SIGNER_BACKED='["auth","authenticated","product-sdk","chat"]'
 
-          if [ -n "$BOT_TOKEN_PROBE" ]; then
-            echo "Repository secrets available — running the full project set"
-            echo "projects=$(jq -cn --argjson a "$NO_SECRETS" --argjson b "$BOT_BACKED" '$a + $b')" >> "$GITHUB_OUTPUT"
-            echo "has-secrets=true" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event.pull_request.head.repo.fork }}" != "true" ]; then
+            echo "Trusted run — running the full project set"
+            echo "projects=$(jq -cn --argjson a "$NO_SECRETS" --argjson b "$SIGNER_BACKED" '$a + $b')" >> "$GITHUB_OUTPUT"
+            echo "trusted=true" >> "$GITHUB_OUTPUT"
           else
-            echo "No repository secrets (fork pull request?) — running the projects that need none"
+            echo "Fork pull request — running the projects that need no identity"
             echo "projects=$NO_SECRETS" >> "$GITHUB_OUTPUT"
-            echo "has-secrets=false" >> "$GITHUB_OUTPUT"
+            echo "trusted=false" >> "$GITHUB_OUTPUT"
           fi
 
   # Build the Vite output (renderer/main/preload) once.
@@ -102,7 +102,7 @@ jobs:
     name: ${{ matrix.project }} · ${{ matrix.os.short }}
     needs: [build, context]
     runs-on: ${{ matrix.os.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 45
     # `setup-allurectl` inside the composite action resolves the current workflow run through the
     # REST API, which the default `contents: read` does not cover — without this every project fails
     # before a single test runs, but only once Allure TestOps is fully configured, so the gap stays
@@ -142,8 +142,11 @@ jobs:
           artifact-name: build-output-shared
           playwright-browsers: chromium
           test-command: npm run test:e2e:${{ matrix.project }}
-          bot-url: ${{ secrets.SIGNING_BOT_URL }}
-          bot-token: ${{ secrets.SIGNING_BOT_TOKEN }}
+          signer-backed: ${{ contains(fromJSON('["auth","authenticated","product-sdk","chat"]'), matrix.project) }}
+          identity-cache: ${{ needs.context.outputs.trusted }}
+          cache-scope: ${{ matrix.project }}
+          # Repository/organization variable, optional — unset keeps the harness default.
+          identity-url: ${{ vars.E2E_IDENTITY_URL }}
           launch-name: "E2E #${{ github.run_number }}"
           results-artifact-name: allure-results-${{ matrix.project }}-${{ matrix.os.short }}
           junit-artifact-name: e2e-junit-${{ matrix.project }}-${{ matrix.os.short }}
@@ -157,7 +160,7 @@ jobs:
       contents: read
       actions: read
     runs-on: ${{ matrix.os.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:

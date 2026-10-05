@@ -41,7 +41,7 @@ When('the user removes the product from favorites from the actions menu', async 
 
 Given('a reload probe is set in the open product', async ({ authenticatedApp }) => {
   // Wait for the product webview to attach + load before seeding the probe — the
-  // coinflip webview mounts a beat after the host route settles.
+  // webview mounts a beat after the host route settles.
   await new BrowserPage(authenticatedApp.window, authenticatedApp.app).expectActiveTabHasContent();
   await evaluateInWebview(authenticatedApp.window, 'window.__e2eReloadProbe = "set"; true');
 });

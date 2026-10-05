@@ -25,6 +25,9 @@ export const useTabHistoryNavigation = () => {
 
   const canGoBack = canGoBackFn(history);
   const canGoForward = canGoForwardFn(history);
+  // `goBack` / `goForward` return the history unchanged at an edge, so the target exists only when navigation can.
+  const backEntry = canGoBack ? getCurrentEntry(goBackReducer(history)) : null;
+  const forwardEntry = canGoForward ? getCurrentEntry(goForwardReducer(history)) : null;
 
   const applyNavigation = useCallback(
     (reducer: (h: TabHistory | undefined) => TabHistory | undefined) => {
@@ -43,5 +46,5 @@ export const useTabHistoryNavigation = () => {
   const goBack = useCallback(() => applyNavigation(goBackReducer), [applyNavigation]);
   const goForward = useCallback(() => applyNavigation(goForwardReducer), [applyNavigation]);
 
-  return { canGoBack, canGoForward, goBack, goForward };
+  return { canGoBack, canGoForward, backEntry, forwardEntry, goBack, goForward };
 };

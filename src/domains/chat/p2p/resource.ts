@@ -52,6 +52,7 @@ export const p2pMessagesResource = createStreamResource<{ sessionId: string }>({
       return () => subscription.unsubscribe();
     });
   })
+  .mock(() => of([]))
   .cache<Record<string, ChatMessage[]>>({
     initial: {},
     map(cache, messages, { sessionId }) {
@@ -179,6 +180,7 @@ export const p2pRoomsResource = createStreamResource<{ userId: string }>({
       return () => subscription.unsubscribe();
     });
   })
+  .mock(() => of([]))
   .cache<Record<string, P2PRoom[]>>({
     initial: {},
     map(cache, rooms, { userId }) {
@@ -247,6 +249,7 @@ export const p2pRequestsResource = createStreamResource<{ userId: string }>({
       return () => subscription.unsubscribe();
     });
   })
+  .mock(() => of([]))
   .cache<Record<string, P2PChatRequest[]>>({
     initial: {},
     map(cache, reqs, { userId }) {

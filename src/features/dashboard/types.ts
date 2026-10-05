@@ -21,7 +21,6 @@ export type CardRenderProps = {
   onResizeCard: (size: WidgetSize) => void;
   onRemoveCard: () => void;
   onCleanupCards: () => void;
-  onOpenAddWidgetModal?: VoidFunction;
 };
 
 // Visual metadata for one card kind, consumed by `DashboardCardChrome` to
@@ -32,3 +31,8 @@ export type DashboardCardMetadata = {
   icon?: ReactNode;
   removeLabel?: ReactNode;
 };
+
+// The app-icon size a favourites-folder cell renders at. The macro scales the
+// tile with the widget: 44px in the small and medium folders, 64px in the large
+// one. Values match `AppIcon`'s size aliases.
+export type FolderItemIconSize = '44' | '64';

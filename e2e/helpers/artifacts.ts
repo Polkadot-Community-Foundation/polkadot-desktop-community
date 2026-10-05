@@ -1,19 +1,18 @@
 import { type TestInfo } from '@playwright/test';
 
-import { disconnectBotSession } from './cleanup';
 import { type ElectronAppContext, closeElectronApp, getRecordedVideoPath } from './electron';
 import { errorMessage } from './errors';
 
 /**
- * Best-effort Electron teardown: disconnect bot sessions, then close the app.
- * Never throws — each step logs its own warning and continues, so a failure in
- * one cleanup doesn't abort the next.
+ * Best-effort Electron teardown. Never throws — it logs a warning and continues, so a
+ * failed close doesn't abort the rest of a fixture's cleanup.
+ *
+ * The signer is torn down separately, by whichever fixture owns its `SigningHost`: its
+ * pairings must be cleared after the process is stopped, which is a different lifetime
+ * from the Electron window's.
  */
 export async function shutdownElectronApp(context: ElectronAppContext): Promise<void> {
-  await disconnectBotSession(context.window).catch(err =>
-    console.warn('[CLEANUP] disconnectBotSession failed:', errorMessage(err)),
-  );
-  await closeElectronApp(context).catch(err => console.warn('[CLEANUP] closeElectronApp failed:', errorMessage(err)));
+  await closeElectronApp(context).catch(err => console.warn(`[cleanup] close app: ${errorMessage(err)}`));
 }
 
 /**
@@ -28,7 +27,7 @@ export async function attachFailureScreenshot(context: ElectronAppContext, testI
     const screenshot = await context.window.screenshot();
     await testInfo.attach('screenshot', { body: screenshot, contentType: 'image/png' });
   } catch (err) {
-    console.warn('[SCREENSHOT] capture failed (window likely closed):', errorMessage(err));
+    console.warn(`[artifact] screenshot skipped, window likely closed: ${errorMessage(err)}`);
   }
 }
 
@@ -71,7 +70,7 @@ export async function attachFailureConsole(readConsole: () => string, testInfo: 
 
   await testInfo
     .attach(`${label}-console`, { body, contentType: 'text/plain' })
-    .catch(err => console.warn('[CONSOLE] attach failed:', errorMessage(err)));
+    .catch(err => console.warn(`[artifact] console attach: ${errorMessage(err)}`));
 }
 
 /**
@@ -83,10 +82,10 @@ export async function attachFailureConsole(readConsole: () => string, testInfo: 
 export async function attachRecordedVideo(context: ElectronAppContext, testInfo: TestInfo): Promise<void> {
   const videoPath = await getRecordedVideoPath(context);
   if (!videoPath) {
-    console.warn('[VIDEO] no recorded video path available');
+    console.warn('[artifact] no recorded video path');
     return;
   }
   await testInfo
     .attach('video', { path: videoPath, contentType: 'video/webm' })
-    .catch(err => console.warn('[VIDEO] attach failed:', errorMessage(err)));
+    .catch(err => console.warn(`[artifact] video attach: ${errorMessage(err)}`));
 }

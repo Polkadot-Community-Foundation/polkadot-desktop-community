@@ -1,7 +1,7 @@
 import { themes, useTheme } from '@novasamatech/tr-ui';
 import { useEffect } from 'react';
 
-import { useThemeName } from '@/shared/hooks';
+import { useThemeName } from '@/domains/application';
 
 export const ThemeNameSyncer = () => {
   const { setTheme } = useTheme();

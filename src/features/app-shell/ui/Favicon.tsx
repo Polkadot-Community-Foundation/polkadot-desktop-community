@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 
 import { isDev } from '@/shared/env';
-import { useBrowserTheme } from '@/shared/hooks';
+import { useThemeVariant } from '@/domains/application';
 import { useFavicon } from '../context/FaviconContext';
 
 import faviconProdDark from '@/favicon.dark.png';
@@ -57,7 +57,7 @@ const createBadgedFaviconDataUrl = (canvas: HTMLCanvasElement, imageSrc: string)
 
 export const Favicon = () => {
   const { hasBadge } = useFavicon();
-  const browserTheme = useBrowserTheme();
+  const browserTheme = useThemeVariant();
   const canvasRef = useRef<HTMLCanvasElement>(document.createElement('canvas'));
 
   useEffect(() => {

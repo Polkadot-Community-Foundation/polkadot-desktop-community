@@ -1,20 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const signalLocalChange = vi.fn();
-vi.mock('@/domains/device-sync', () => ({ signalLocalChange: () => signalLocalChange() }));
-
-const upsert = vi.fn().mockResolvedValue(undefined);
-const del = vi.fn().mockResolvedValue(undefined);
-const applyRemoteDelete = vi.fn().mockResolvedValue(undefined);
-vi.mock('../identity/repository', () => ({
-  contactRepository: {
-    upsert: (...a: unknown[]) => upsert(...a),
-    delete: (...a: unknown[]) => del(...a),
-    applyRemoteDelete: (...a: unknown[]) => applyRemoteDelete(...a),
-  },
+vi.mock(import('@/domains/device-sync'), async importOriginal => ({
+  ...(await importOriginal()),
+  signalLocalChange: () => signalLocalChange(),
 }));
 
+import { contactRepository } from '../identity/repository';
+
 import { contactWriteUseCase } from './write';
+
+// The repository is a plain object, spied in place; nothing reaches Dexie.
+const upsert = vi.spyOn(contactRepository, 'upsert').mockResolvedValue();
+const del = vi.spyOn(contactRepository, 'delete').mockResolvedValue();
+const applyRemoteDelete = vi.spyOn(contactRepository, 'applyRemoteDelete').mockResolvedValue();
 
 const contact = { accountId: '0xabc', identityChatPublicKey: '0x04', devices: [] };
 

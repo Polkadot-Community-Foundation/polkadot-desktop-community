@@ -19,12 +19,8 @@ Then('the alias permission dialog is shown', async ({ testProductPage }) => {
   await testProductPage.expectAliasPermissionDialog();
 });
 
-When('the user approves alias access always', async ({ testProductPage }) => {
-  await testProductPage.allowAliasAlways();
-});
-
-When('the user approves alias access once', async ({ testProductPage }) => {
-  await testProductPage.allowAliasOnce();
+When('the user approves alias access', async ({ testProductPage }) => {
+  await testProductPage.allowAlias();
 });
 
 When('the user denies alias access', async ({ testProductPage }) => {

@@ -95,6 +95,7 @@ export const executableArchiveResource = createQueryResource<{
   },
 })
   .request<ExecutableContent | null>(({ product, kind, ipfsGatewayUrl }) => loadExecutableArchive(product, kind, ipfsGatewayUrl))
+  .mock(() => null)
   .timeout(60_000)
   .cache<Record<string, ExecutableContent | null>>({
     staleAfter: Number.POSITIVE_INFINITY,
@@ -219,6 +220,7 @@ export const liveExecutableResource = createQueryResource<{
     const fresh = await readFreshExecutable(environment, product.baseName, executable);
     return fresh ? { contenthash: fresh.contenthash, version: fresh.appVersion } : null;
   })
+  .mock(() => null)
   .timeout(15_000)
   .cache<Record<string, LiveExecutable | null>>({
     staleAfter: 30_000,

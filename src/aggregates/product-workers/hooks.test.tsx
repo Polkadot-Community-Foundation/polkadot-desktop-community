@@ -1,110 +1,39 @@
 // @vitest-environment happy-dom
 
-import { act, cleanup, render } from '@testing-library/react';
+import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { type HexString } from '@/shared/types';
-import type * as productDomain from '@/domains/product';
-import { type Product, type ProductWorkerInstance } from '@/domains/product';
+import { type ProductWorkerInstance } from '@/domains/product';
+import { truapiRuntimeUseCase } from '@/aggregates/truapi-runtime';
 
-const TEST_HASH = '0xdeadbeef' as HexString;
-
-import { useProductWorker } from './hooks';
+import { useProductWorkerInstance, useWorkerDemand } from './hooks';
 import { productWorkerRegistry } from './state/registry';
 
-const { useExecutableArchiveMock, useSessionMock, useProductSessionsMock, createProductWorkerMock } = vi.hoisted(() => ({
-  useExecutableArchiveMock: vi.fn(),
-  useSessionMock: vi.fn(() => ({ session: null })),
-  useProductSessionsMock: vi.fn(() => ({ data: [] })),
-  createProductWorkerMock: vi.fn(),
-}));
+// The hooks no longer own a worker's lifetime — they declare demand for one and read
+// back whatever the demand watcher registered. Building, registering and disposing is
+// `productWorkersUseCase`'s job and is covered in its own spec.
+//
+// Spied in place rather than mocked: `acquireWorker` awaits a runtime that no test
+// here boots, so without a double every call would hang on `whenRuntimeReady`.
+const acquire = vi.spyOn(truapiRuntimeUseCase, 'acquireWorker').mockResolvedValue(undefined);
+const release = vi.spyOn(truapiRuntimeUseCase, 'releaseWorker').mockResolvedValue(undefined);
 
-vi.mock('@/domains/product', async importOriginal => {
-  const real = await importOriginal<typeof productDomain>();
-  return {
-    ...real,
-    useExecutableArchive: (...args: unknown[]) => useExecutableArchiveMock(...args),
-    createProductWorker: (...args: unknown[]) => createProductWorkerMock(...args),
-  };
-});
-
-vi.mock('@novasamatech/host-papp-react-ui', () => ({ useSession: () => useSessionMock() }));
-
-vi.mock('@/domains/chat', async importOriginal => {
-  const real = await importOriginal<Record<string, unknown>>();
-  return { ...real, useProductSessions: () => useProductSessionsMock() };
-});
-
-const WORKER_ENTRYPOINT = 'index.js';
-
-const product: Product = {
-  baseName: 'a.dot',
-  displayName: 'A',
-  description: '',
-  icon: { cid: '', format: 'png' },
-  executables: {
-    worker: {
-      kind: 'worker',
-      identifier: 'worker.a.dot',
-      appVersion: [0, 0, 1],
-      entrypoint: WORKER_ENTRYPOINT,
-      includes: { chat: true, pocket: false },
-      contenthash: TEST_HASH,
-    },
-  },
-};
-
-const content1 = {
-  contenthash: 'cid-1',
-  archive: { domain: 'worker.a.dot', origin: 'polkadot://worker.a.dot', files: { [WORKER_ENTRYPOINT]: 'CODE-1' } },
-};
-const content2 = {
-  contenthash: 'cid-2',
-  archive: { domain: 'worker.a.dot', origin: 'polkadot://worker.a.dot', files: { [WORKER_ENTRYPOINT]: 'CODE-2' } },
-};
-
-function fakeInstance(productId: string, contenthash: string): ProductWorkerInstance {
-  let disposed = false;
+function fakeInstance(productId: string): ProductWorkerInstance {
   return {
     productId,
-    contenthash,
-
+    contenthash: 'cid-1',
     sandbox: {} as ProductWorkerInstance['sandbox'],
-
-    container: {} as ProductWorkerInstance['container'],
-
-    events: {} as ProductWorkerInstance['events'],
-    get disposed() {
-      return disposed;
-    },
-    dispose: vi.fn(() => {
-      disposed = true;
-    }),
+    coreProvider: {} as ProductWorkerInstance['coreProvider'],
+    disposed: false,
+    dispose: vi.fn(),
   };
 }
 
-function deferred<T>() {
-  let resolve!: (v: T) => void;
-  let reject!: (e: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
-}
+const Probe = ({ productId }: { productId: string }) => {
+  useWorkerDemand(productId);
 
-const Probe = ({ product: p }: { product: Product }) => {
-  useProductWorker(p);
   return null;
 };
-
-async function flush() {
-  // Two microtask boundaries: one for createProductWorker.then, one for setState.
-  await act(async () => {
-    await Promise.resolve();
-    await Promise.resolve();
-  });
-}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -112,80 +41,58 @@ beforeEach(() => {
     const inst = productWorkerRegistry.get(id);
     if (inst) productWorkerRegistry.unregister(inst);
   }
-  useExecutableArchiveMock.mockReturnValue({ data: content1, pending: false, error: null });
 });
 
 afterEach(() => {
   cleanup();
 });
 
-describe('useProductWorker — lifecycle', () => {
-  it('builds, registers, and disposes on unmount', async () => {
-    const inst = fakeInstance('a.dot', 'cid-1');
-    createProductWorkerMock.mockResolvedValueOnce(inst);
+describe('useWorkerDemand', () => {
+  it('holds one reference for the mount and drops it on unmount', async () => {
+    const { unmount } = render(<Probe productId="a.dot" />);
 
-    const { unmount } = render(<Probe product={product} />);
-    await flush();
-
-    expect(createProductWorkerMock).toHaveBeenCalledTimes(1);
-    expect(productWorkerRegistry.get('a.dot')).toBe(inst);
-    expect(inst.dispose).not.toHaveBeenCalled();
+    await waitFor(() => expect(acquire).toHaveBeenCalledWith('a.dot'));
+    expect(release).not.toHaveBeenCalled();
 
     unmount();
-    expect(inst.dispose).toHaveBeenCalledTimes(1);
-    expect(productWorkerRegistry.get('a.dot')).toBeNull();
+
+    expect(release).toHaveBeenCalledExactlyOnceWith('a.dot');
   });
 
-  it('archive change disposes the old instance and registers the new one', async () => {
-    const inst1 = fakeInstance('a.dot', 'cid-1');
-    const inst2 = fakeInstance('a.dot', 'cid-2');
-    createProductWorkerMock.mockResolvedValueOnce(inst1).mockResolvedValueOnce(inst2);
+  // A redeploy changes the product's bytes, not which product is wanted. Releasing
+  // and re-acquiring would drop demand to zero and bounce a worker the user is using.
+  it('does not re-acquire while the product id is unchanged', async () => {
+    const { rerender } = render(<Probe productId="a.dot" />);
+    await waitFor(() => expect(acquire).toHaveBeenCalledTimes(1));
 
-    const { rerender } = render(<Probe product={product} />);
-    await flush();
-    expect(productWorkerRegistry.get('a.dot')).toBe(inst1);
+    rerender(<Probe productId="a.dot" />);
 
-    useExecutableArchiveMock.mockReturnValue({ data: content2, pending: false, error: null });
-    rerender(<Probe product={product} />);
-    await flush();
-
-    expect(inst1.dispose).toHaveBeenCalledTimes(1);
-    expect(productWorkerRegistry.get('a.dot')).toBe(inst2);
-    expect(inst2.dispose).not.toHaveBeenCalled();
+    expect(acquire).toHaveBeenCalledTimes(1);
+    expect(release).not.toHaveBeenCalled();
   });
+});
 
-  it('rapid archive change before first build resolves: in-flight instance self-disposes, only the latest lands', async () => {
-    const inst1 = fakeInstance('a.dot', 'cid-1');
-    const inst2 = fakeInstance('a.dot', 'cid-2');
-    const d1 = deferred<ProductWorkerInstance>();
-    const d2 = deferred<ProductWorkerInstance>();
-    createProductWorkerMock.mockReturnValueOnce(d1.promise).mockReturnValueOnce(d2.promise);
+describe('useProductWorkerInstance', () => {
+  it('reports the registered instance and follows registration changes', async () => {
+    const seen: (ProductWorkerInstance | null)[] = [];
+    const Reader = () => {
+      seen.push(useProductWorkerInstance('a.dot'));
 
-    const { rerender } = render(<Probe product={product} />);
+      return null;
+    };
 
-    // archive changes BEFORE first build resolves
-    useExecutableArchiveMock.mockReturnValue({ data: content2, pending: false, error: null });
-    rerender(<Probe product={product} />);
+    render(<Reader />);
+    expect(seen.at(-1)).toBeNull();
 
-    // first build now resolves — its build effect was already cancelled, so
-    // the .then() must dispose inst1 and never register/setState.
-    await act(async () => {
-      d1.resolve(inst1);
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    const inst = fakeInstance('a.dot');
+    // The registry write is what re-renders the reader, so it is the call that has to
+    // happen inside `act`.
+    act(() => productWorkerRegistry.register(inst));
 
-    expect(inst1.dispose).toHaveBeenCalledTimes(1);
-    expect(productWorkerRegistry.get('a.dot')).toBeNull();
+    await waitFor(() => expect(seen.at(-1)).toBe(inst));
 
-    // second build resolves — this one wins.
-    await act(async () => {
-      d2.resolve(inst2);
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    act(() => productWorkerRegistry.unregister(inst));
 
-    expect(productWorkerRegistry.get('a.dot')).toBe(inst2);
-    expect(inst2.dispose).not.toHaveBeenCalled();
+    await waitFor(() => expect(seen.at(-1)).toBeNull());
   });
 });

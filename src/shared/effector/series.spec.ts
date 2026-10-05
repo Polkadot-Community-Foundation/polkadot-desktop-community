@@ -1,4 +1,5 @@
 import { allSettled, createEffect, createEvent, createWatch, fork, sample } from 'effector';
+import { describe, expect, it } from 'vitest';
 
 import { series } from './series';
 

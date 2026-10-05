@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { dependentRead } from './dependentRead';
 
-const settled = { data: null, pending: false, error: null, refresh: () => {} };
+const settled = { data: null, pending: false, error: null, fulfilled: false, refresh: () => {} };
 
 describe('dependentRead', () => {
   it('reports pending while the dependency is loading', () => {
@@ -15,6 +15,22 @@ describe('dependentRead', () => {
     const result = dependentRead(settled, { pending: false, error: null }, { enabled: true });
 
     expect(result.pending).toBe(false);
+  });
+
+  // A read whose dependency is loading again (a refetch) holds a result for params
+  // that may be about to change.
+  it('is not fulfilled while the dependency is loading', () => {
+    const fulfilled = { ...settled, fulfilled: true };
+    const result = dependentRead(fulfilled, { pending: true, error: null }, { enabled: true });
+
+    expect(result.fulfilled).toBe(false);
+  });
+
+  it('keeps a fulfilled read fulfilled once the dependency has resolved', () => {
+    const fulfilled = { ...settled, fulfilled: true };
+    const result = dependentRead(fulfilled, { pending: false, error: null }, { enabled: true });
+
+    expect(result.fulfilled).toBe(true);
   });
 
   it('stays pending while the read itself is in flight', () => {

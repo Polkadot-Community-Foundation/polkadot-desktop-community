@@ -4,6 +4,7 @@ import { createBdd } from 'playwright-bdd';
 import { TEST_IDS } from '@/shared/test-ids';
 import { authenticatedTest } from '../fixtures/authenticated';
 import { DEFAULT_TIMEOUT } from '../helpers/timeouts';
+import { ChatPage } from '../page-objects/ChatPage';
 import { ContactSearchPage } from '../page-objects/ContactSearchPage';
 
 const { When, Then } = createBdd(authenticatedTest);
@@ -16,8 +17,16 @@ Then('the contact search is open', async ({ authenticatedApp }) => {
   await expect(new ContactSearchPage(authenticatedApp.window).searchInput).toBeVisible({ timeout: DEFAULT_TIMEOUT });
 });
 
-// Reuses "the user opens the chat as a tab" and "the user opens the contact
-// search" from chat-p2p.steps (same chat project). Single-client, no peer.
+// Single-client chat navigation, shared with chat-list.feature. The two-client
+// pair suite has its own Alice/Bob-prefixed wording in chat-p2p-pair.steps.ts.
+
+When('the user opens the chat as a tab', async ({ authenticatedApp }) => {
+  await new ChatPage(authenticatedApp.window).openFullscreen();
+});
+
+When('the user opens the contact search', async ({ authenticatedApp }) => {
+  await new ContactSearchPage(authenticatedApp.window).openFromFullscreen();
+});
 
 When('the user searches contacts for {string}', async ({ authenticatedApp }, query: string) => {
   await new ContactSearchPage(authenticatedApp.window).typeQuery(query);

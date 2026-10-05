@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const createWsJsonRpcProviderMock = vi.hoisted(() => vi.fn());
+// The socket is the boundary; everything above it — `createLazyClient` included — is the
+// real thing. The lazy client only ever builds a request function here, and the relay
+// call that would use it is mocked below, so nothing reaches the wire.
 vi.mock('@novasamatech/host-substrate-chain-connection', () => ({
   createWsJsonRpcProvider: createWsJsonRpcProviderMock,
-}));
-vi.mock('@novasamatech/statement-store', () => ({
-  createLazyClient: () => ({ getRequestFn: () => async () => null }),
 }));
 
 const uploadMock = vi.hoisted(() => vi.fn());
@@ -29,7 +29,8 @@ const file = () => new File([new Uint8Array([1, 2, 3])], 'a.png', { type: 'image
 
 beforeEach(() => {
   createWsJsonRpcProviderMock.mockReset();
-  createWsJsonRpcProviderMock.mockImplementation(() => ({ start: vi.fn(), stop: vi.fn() }));
+  // A `JsonRpcProvider`: called with the message sink, it hands back the connection.
+  createWsJsonRpcProviderMock.mockImplementation(() => () => ({ send: vi.fn(), disconnect: vi.fn() }));
   createHopClientMock.mockReset();
   createHopClientMock.mockImplementation(() => ({ submit: vi.fn(), claim: vi.fn(), ack: vi.fn() }));
   uploadMock.mockReset();

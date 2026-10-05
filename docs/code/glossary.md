@@ -45,7 +45,7 @@ Anything else touched outside the plan's stated files that is **not** a peer is 
 
 **Data access** — obtaining or persisting a value, including retries and fallback chains ("try disk, then the network"). Always a `resource.ts`, whatever its source count. A resource may not read another resource or a use case; a value it may not fetch itself arrives as a **parameter** supplied by the use case that read it.
 
-**Business invariant** vs data access — see below. Composing two resources is a use case because of the second resource, not because a rule is being enforced; enforcing a rule makes it a use case even over one resource. A use case wrapping one resource and enforcing nothing is a passthrough (`project-structure.md` anti-pattern 1) — inline it.
+**Business invariant** vs data access — see below. Composing two resources is a use case because of the second resource, not because a rule is being enforced; enforcing a rule makes it a use case even over one resource. A use case wrapping one resource and enforcing nothing is data access — inline it or expose it as a resource accessor — **unless** it encapsulates that resource for a consumer that cannot use a hook, keeping the resource object off the domain barrel; that surface control is what makes it a use case rather than a passthrough (`code-placement.md § Cut rules`).
 
 ## Trust boundary
 

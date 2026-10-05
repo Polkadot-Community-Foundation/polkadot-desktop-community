@@ -1,7 +1,6 @@
 import { createFileRoute, redirect } from '@tanstack/react-router';
 
-import { hydrateUserIdentity } from '@/domains/application';
-import { userIdentity$ } from '@/domains/sso';
+import { truapiRuntimeUseCase } from '@/aggregates/truapi-runtime';
 
 const Index = () => {
   return null;
@@ -9,15 +8,13 @@ const Index = () => {
 
 export const Route = createFileRoute('/_app/')({
   component: Index,
-  // Await identity hydration before deciding the destination — otherwise a
-  // user who is already paired briefly bounces through /onboarding (and starts
-  // a spurious V2 handshake subscription) while bootstrap's hydration is in
-  // flight. `hydrateUserIdentity` is idempotent so cold-start +
-  // bootstrap's fire-and-forget call is fine.
+  // Await the core's first auth emission before deciding the destination.
+  // `null` is "the worker has not answered yet", not "signed out" — deciding on
+  // it bounces an already-paired user through /onboarding on every cold start.
   loader: async () => {
-    await hydrateUserIdentity();
+    const auth = await truapiRuntimeUseCase.whenAuthResolved();
     redirect({
-      to: userIdentity$.get() !== null ? '/dashboard' : '/onboarding',
+      to: auth.tag === 'Connected' ? '/dashboard' : '/onboarding',
       throw: true,
     });
   },

@@ -1,13 +1,13 @@
 // @vitest-environment happy-dom
 import { act, renderHook } from '@testing-library/react';
+import { type Subscription } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { readLocale, saveLocale, useLocalePreference } from './localePreference';
+import { readLocale, saveLocale, useLocalePreference, watchLocale } from './localePreference';
 
 const STORAGE_KEY = 'polkadot_locale';
 
 afterEach(() => {
-  localStorage.clear();
   vi.restoreAllMocks();
 });
 
@@ -69,5 +69,53 @@ describe('useLocalePreference', () => {
     act(() => saveLocale('ru'));
 
     expect(result.current).toBe('ru');
+  });
+});
+
+describe('watchLocale', () => {
+  it('emits the stored locale first', () => {
+    localStorage.setItem(STORAGE_KEY, 'de');
+
+    const emissions: string[] = [];
+    const subscription: Subscription = watchLocale().subscribe(locale => emissions.push(locale));
+
+    expect(emissions[0]).toBe('de');
+
+    subscription.unsubscribe();
+  });
+
+  it('emits on saveLocale', () => {
+    const emissions: string[] = [];
+    const subscription: Subscription = watchLocale().subscribe(locale => emissions.push(locale));
+
+    saveLocale('ru');
+
+    expect(emissions).toEqual(['en', 'ru']);
+
+    subscription.unsubscribe();
+  });
+
+  it('does not re-emit an unchanged value', () => {
+    const emissions: string[] = [];
+    const subscription: Subscription = watchLocale().subscribe(locale => emissions.push(locale));
+
+    saveLocale('en');
+
+    expect(emissions).toEqual(['en']);
+
+    subscription.unsubscribe();
+  });
+
+  it('reads at subscribe time', () => {
+    const locale$ = watchLocale();
+
+    saveLocale('de');
+
+    const emissions: string[] = [];
+    const subscription: Subscription = locale$.subscribe(locale => emissions.push(locale));
+
+    expect(emissions[0]).toBe('de');
+
+    subscription.unsubscribe();
   });
 });

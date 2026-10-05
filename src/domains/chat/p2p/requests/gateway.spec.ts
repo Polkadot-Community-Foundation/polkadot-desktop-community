@@ -44,7 +44,7 @@ afterEach(() => {
 });
 
 describe('chatRequestGateway.sendChatRequestV2 (v0.2 spec-shape RequestContentV2: identityProof + deviceEncPubKey)', () => {
-  it('round-trips: desktop (Alice device) → wallet-bearing peer (Bob); recipient decrypts with identity chat priv', async () => {
+  it('round-trips from a desktop device to a wallet-bearing peer, decrypted with the identity chat key', async () => {
     const aliceDevice = makeDevice(0x01);
     const aliceUserChat = makeUserChatKey();
     const bobUserChat = makeUserChatKey();

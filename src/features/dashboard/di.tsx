@@ -13,7 +13,7 @@ import {
 // genericising the variant to `unknown` would only force casts for no gain.
 import { type Product } from '@/domains/product';
 
-import { type CardRenderProps, type DashboardCardMetadata } from './types';
+import { type CardRenderProps, type DashboardCardMetadata, type FolderItemIconSize } from './types';
 import { type AddWidgetSidebarEntry } from './ui/add-widget/types';
 
 // Opening a favourites-folder icon that is a native entry (e.g. chat) has no
@@ -25,6 +25,11 @@ export const openFavoriteItemSideEffect = createSideEffect<{ itemId: string }>({
 // the folder card doesn't import the favourites route/tab machinery.
 export const openFavoritesSideEffect = createSideEffect<void>({ name: 'openFavorites' });
 
+// Opens the Add-to-Favorites dialog (the folder card's empty-state action). The
+// dashboard host owns the seam; the favourites feature registers the handler, so
+// the folder card doesn't reach into the favourites dialog itself.
+export const openAddToFavoritesSideEffect = createSideEffect<void>({ name: 'openAddToFavorites' });
+
 export const dashboardCardContentTransformer = createTransformer<CardRenderProps, ReactNode>({
   name: 'dashboardCardContent',
 });
@@ -35,7 +40,7 @@ export const dashboardCardContentTransformer = createTransformer<CardRenderProps
 // "the one cell for this item" without the host importing product/native code.
 // The folder still owns the grid layout, positions, drag, and remove menu —
 // only the per-item icon+label CONTENT is provider-supplied.
-export const folderItemContentTransformer = createTransformer<{ itemId: string }, ReactNode>({
+export const folderItemContentTransformer = createTransformer<{ itemId: string; iconSize: FolderItemIconSize }, ReactNode>({
   name: 'folderItemContent',
 });
 

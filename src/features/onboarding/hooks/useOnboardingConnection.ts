@@ -1,9 +1,9 @@
-import { useAuthentication } from '@novasamatech/host-papp-react-ui';
 import { type Observable, concat, distinctUntilChanged, map, of, pairwise, shareReplay, startWith, switchMap, timer } from 'rxjs';
 
 import { online$ } from '@/shared/env';
 import { useRead } from '@/shared/hooks';
 import { usePeopleChainStatus } from '@/aggregates/network-settings';
+import { useTruapiAuthState } from '@/aggregates/truapi-runtime';
 import { deriveOnboardingConnectionState } from '../connectionState';
 import { type OnboardingConnectionState } from '../types';
 
@@ -35,11 +35,11 @@ const restoredSource = (): Observable<boolean> => justRestored$;
 
 export const useOnboardingConnection = (): OnboardingConnectionState => {
   const { status } = usePeopleChainStatus();
-  const { pairingStatus } = useAuthentication();
+  const authState = useTruapiAuthState();
   const { data: justRestored } = useRead(restoredSource, { params: true, defaultValue: false });
 
-  // Non-null only in the pairing error step; its presence implies the error step.
-  const pairingMessage = pairingStatus.step === 'pairingError' ? pairingStatus.message : null;
+  // Non-null only on a failed login; its presence implies the error step.
+  const pairingMessage = authState?.tag === 'LoginFailed' ? authState.value.reason : null;
 
   return deriveOnboardingConnectionState({ peopleStatus: status, justRestored, pairingMessage });
 };

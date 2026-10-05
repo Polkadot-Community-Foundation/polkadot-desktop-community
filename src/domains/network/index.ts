@@ -4,7 +4,22 @@ export { chainService } from './chain/service';
 export { type RemoteChain, chainAssetId, genesisHash, localAssetId, remoteChainsSchema } from './chain/schemas';
 export { useChains, useChainsMap } from './chain/hooks';
 
-export { chainRegistry, initChainConnectionLifecycle } from './api/registry';
+export type { ChainConnectionMode, ConnectionMode, ConnectionPreference, ConnectionSettings } from './connection/types';
+export { CONNECTION_TIMEOUT_THRESHOLD_MS, SLOW_CONNECTION_THRESHOLD_MS } from './connection/constants';
+export { connectionService } from './connection/service';
+export { connectionSettingsResource } from './connection/resource';
+export {
+  useChainConnectionMode,
+  useConnectionSettings,
+  useSetChainConnectionMode,
+  useSetConnectionPreference,
+} from './connection/hooks';
+
+export { chainRegistry, initChainConnectionLifecycle, initConnectionModeSwitch } from './api/registry';
+export { initLightClient } from './api/lightClient';
+
+export type { DecodedCall } from './call/types';
+export { useDecodedCall } from './call/hooks';
 export { useApi } from './api/hooks';
 export { chainConnectionStatusResource } from './api/resource';
 export type { ChainApi, ConnectionStatus, TypedClient } from './api/types';
@@ -36,3 +51,12 @@ export { customChainService } from './custom-chain/service';
 export { useAllChainsMap, useCustomChains, useCustomChainsMap, useRemoveCustomChain } from './custom-chain/hooks';
 export { type AddCustomChainResult, customChainUseCase } from './$usecase/customChain';
 export { useDiscoverAndAddChain } from './$usecase/customChain.hooks';
+
+export type { ConsumerIdentity, Credibility } from './identity/types';
+export { consumerIdentityService } from './identity/service';
+export { useConsumerIdentity } from './identity/hooks';
+export { consumerIdentityUseCase } from './$usecase/identity';
+export { bestBlockResource, blockTimeResource, finalizedBlockResource } from './block/resource';
+export { decodedCallResource } from './call/resource';
+export { customChainsResource } from './custom-chain/resource';
+export { consumerIdentityResource } from './identity/resource';

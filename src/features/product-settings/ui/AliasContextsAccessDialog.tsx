@@ -1,33 +1,27 @@
 import { Link2 } from 'lucide-react';
 
 import { useTranslation } from '@/shared/translation';
-import { type AliasPermission, type PermissionStatus } from '@/domains/product';
+import { type GrantedAccountAccess, type PermissionStatus } from '@/domains/product';
 
 import { PermissionEntriesDialog } from './PermissionEntriesDialog';
 
 type Props = {
   productName: string;
   open: boolean;
-  aliasPermissions: AliasPermission[];
+  /** Products whose account context this product may access, as the core holds them. */
+  accountAccess: GrantedAccountAccess[];
   onOpenChange: (open: boolean) => void;
-  onStatusChange: (aliasPermission: AliasPermission, status: PermissionStatus) => void;
+  onStatusChange: (targetProductId: string, status: PermissionStatus) => void;
 };
 
-const keyOf = (permission: AliasPermission) => `${permission.requesterProductId}:${permission.requestedContextId}`;
-
-export const AliasContextsAccessDialog = ({ productName, open, aliasPermissions, onOpenChange, onStatusChange }: Props) => {
+export const AliasContextsAccessDialog = ({ productName, open, accountAccess, onOpenChange, onStatusChange }: Props) => {
   const { t } = useTranslation();
 
-  const entries = aliasPermissions.map(permission => ({
-    key: keyOf(permission),
-    label: permission.requestedContextId,
-    status: permission.status,
+  const entries = accountAccess.map(({ targetProductId, status }) => ({
+    key: targetProductId,
+    label: targetProductId,
+    status,
   }));
-
-  const handleStatusChange = (key: string, status: PermissionStatus) => {
-    const target = aliasPermissions.find(permission => keyOf(permission) === key);
-    if (target) onStatusChange(target, status);
-  };
 
   return (
     <PermissionEntriesDialog
@@ -36,7 +30,7 @@ export const AliasContextsAccessDialog = ({ productName, open, aliasPermissions,
       icon={<Link2 size={20} />}
       entries={entries}
       onOpenChange={onOpenChange}
-      onStatusChange={handleStatusChange}
+      onStatusChange={onStatusChange}
     />
   );
 };

@@ -31,10 +31,17 @@ export {
 } from './calls';
 
 export { fileTransferUseCase } from './$usecase/fileTransfer';
-export { productRoomUseCase } from './$usecase/productRoom';
+export { type OutgoingProductMessage, productRoomUseCase } from './$usecase/productRoom';
 export { useCurrentUserPeer, useProductRooms, useProductSessions, useUserProductRooms } from './product/hooks';
+export type { ProductChatRoom } from './product/types';
 export { productChatService } from './product/service';
-export { createMessageInProductRoom, deleteProductRoom, markProductMessagesAsRead } from './product/resource';
+export {
+  createMessageInProductRoom,
+  deleteProductRoom,
+  markProductMessagesAsRead,
+  messagesResource,
+  roomsResource,
+} from './product/resource';
 // DEBT: on the public surface for `application/$usecase/session.ts` (sign-out teardown).
 // Fix: expose it as a chat use case that session.ts composes.
 // eslint-disable-next-line local-rules/enforce-import-restrictions
@@ -61,3 +68,5 @@ export type { ReactionAggregate, ReactorInfo } from './reaction/types';
 export { useMessageReactions, useToggleReaction } from './reaction/hooks';
 
 export { useHideRequestsByDefault, useSetHideRequestsByDefault } from './request-preferences/hooks';
+export { p2pMessagesResource, p2pRequestsResource, p2pRoomsResource } from './p2p/resource';
+export { hideRequestsByDefaultResource } from './request-preferences/resource';

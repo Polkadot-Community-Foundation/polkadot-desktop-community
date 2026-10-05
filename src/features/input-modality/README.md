@@ -36,7 +36,7 @@ Every block is marked `PARKED` in the source. Nothing is deleted.
 
 Untouched and still live in the tree, just unreached: `state/round.ts`, `state/composer.ts`, `service.ts`,
 `hooks/useInputContext.ts`, `ui/CandidateCard.tsx`, `ui/CustomCandidate.tsx`, `ui/AttachmentChip.tsx`,
-`ui/AttachmentPicker.tsx`, `ui/ProductIdentity.tsx`, `demoAnswers.ts`, `@/widgets/CustomRenderer` and all of
+`ui/AttachmentPicker.tsx`, `ui/ProductIdentity.tsx`, `demoAnswers.ts`, `@/widgets/RendererTree` and all of
 `@/domains/input-routing`. `service.spec.ts`, `state/round.spec.ts` and `ProductIdentity.test.tsx` still run, so
 the parked logic cannot rot silently.
 

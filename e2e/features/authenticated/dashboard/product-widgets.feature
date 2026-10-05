@@ -11,7 +11,10 @@ Feature: Product widgets
 
   # Overlaps TC-3.2.4 / TC-3.3.1 (a different TestOps case, id 14780): a thin
   # render check that a product widget mounts and loads its webview body.
-  @allure.id:14780
+  # @skip: blocked by the deployment, not by the app — see the note in
+  # `products/product-actions.feature` (no widget-capable product is published on
+  # the environment `AUTH_ENVIRONMENT_ID` names).
+  @allure.id:14780 @skip
   Scenario: TC-5.2.1 Render a product widget on the dashboard
     Given the user starts with only a CoinFlip widget on the dashboard
     Then the product widget body loads its webview
@@ -26,7 +29,10 @@ Feature: Product widgets
 
   # Overlaps TC-3.3.2 (a different TestOps case, id 14782): reload the widget via
   # its card reload control and prove the webview remounted (probe cleared).
-  @allure.id:14782
+  # @skip: blocked by the deployment, not by the app — see the note in
+  # `products/product-actions.feature` (no widget-capable product is published on
+  # the environment `AUTH_ENVIRONMENT_ID` names).
+  @allure.id:14782 @skip
   Scenario: TC-5.2.3 Reload a product widget via its reload control
     Given the user starts with only a CoinFlip widget on the dashboard
     And a reload probe is set in the product widget

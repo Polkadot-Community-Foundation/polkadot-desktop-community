@@ -103,17 +103,10 @@
       "navigationBackAria": "Zurück",
       "navigationForwardAria": "Vorwärts",
       "addressWelcome": "Willkommen bei Polkadot! Gib hier eine .dot-Adresse ein",
-      "addressFavorites": "Favoriten",
-      "suggestionSeparator": "—",
       "removeFromDashboard": "Produkt vom Dashboard entfernen",
       "addressSuggestions": "Alle Apps",
       "addressNoResults": "Keine Apps gefunden",
-      "recentlyVisited": "Zuletzt geöffnet",
       "recentlyOpened": "Zuletzt geöffnet",
-      "clearRecent": "Leeren",
-      "recents": {
-        "header": "Zuletzt"
-      },
       "recentClearedTitle": "Zuletzt geöffnete Tabs wurden erfolgreich geleert",
       "undoLabel": "Rückgängig {seconds}s",
       "ramUsage": "RAM-Nutzung: {value}",
@@ -194,7 +187,8 @@
       "zoomIn": "Vergrößern",
       "zoomOut": "Verkleinern",
       "zoomReset": "Zoom zurücksetzen",
-      "zoomPercent": "{percent}%"
+      "zoomPercent": "{percent}%",
+      "clearRecent": "Leeren"
     },
     "userManager": {
       "connectionStatus": {
@@ -347,8 +341,7 @@
           "sending": "Wird gesendet",
           "sent": "Gesendet",
           "delivered": "Zugestellt",
-          "claimed": "Eingelöst",
-          "currencyLabel": "CASH"
+          "claimed": "Eingelöst"
         }
       },
       "call": {
@@ -370,7 +363,11 @@
           "openToCall": "Mobile App zum Anrufen öffnen",
           "openToReturn": "Mobile App öffnen, um zurückzukehren",
           "openToCallBack": "Mobile App öffnen, um zurückzurufen",
-          "openToCallAgain": "Mobile App öffnen, um erneut anzurufen"
+          "openToCallAgain": "Mobile App öffnen, um erneut anzurufen",
+          "tapToCall": "Zum Anrufen tippen",
+          "tapToReturn": "Zum Zurückkehren tippen",
+          "tapToCallBack": "Zum Zurückrufen tippen",
+          "tapToCallAgain": "Zum erneuten Anrufen tippen"
         }
       }
     },
@@ -407,23 +404,6 @@
           "subtitle": "Bitte versuche es später erneut"
         }
       }
-    },
-    "signingBotAutopair": {
-      "title": "Signatur-Bot",
-      "statusIdle": "Bereit zum Verbinden",
-      "statusConnecting": "Bot wird geprüft...",
-      "statusPairing": "Kopplung über Bot...",
-      "statusPaired": "Gekoppelt als \"{user}\"",
-      "statusError": "Kopplung fehlgeschlagen",
-      "botUrlLabel": "Bot-URL",
-      "botReachable": "Bot erreichbar",
-      "botUnreachable": "Bot nicht erreichbar",
-      "tokenLabel": "Token",
-      "usernameLabel": "Benutzername",
-      "connectingButton": "Kopplung läuft...",
-      "connectButton": "Mit Bot verbinden",
-      "connected": "Verbunden",
-      "waitingQr": "Warte auf QR-Daten..."
     },
     "dashboard": {
       "title": "Dashboard",
@@ -625,7 +605,7 @@
         "description": "Dadurch werden alle Website-Daten gelöscht und die Berechtigungen für {productName} zurückgesetzt. Der Tab bleibt geöffnet; beim nächsten Öffnen wird alles neu geladen."
       },
       "webDomains": {
-        "dialogTitle": "Zugriff auf Web-Domains für {productName} {modality} verwalten"
+        "dialogTitle": "Zugriff auf Web-Domains für {productName} verwalten"
       },
       "appPermission": {
         "title": "{permission}-Zugriff für {productName}",
@@ -660,6 +640,7 @@
           "Clipboard": "Zwischenablage",
           "OpenUrl": "Externe URL öffnen",
           "Biometrics": "Biometrie",
+          "NFC": "NFC",
           "Files": "Dateien",
           "Remote": "Web-Domains",
           "WebRtc": "WebRTC",
@@ -677,6 +658,7 @@
           "Clipboard": "Wird zum Kopieren und Einfügen von Inhalten verwendet, die du teilen möchtest",
           "OpenUrl": "Wird verwendet, um externe Links in deinem Standardbrowser zu öffnen",
           "Biometrics": "Wird für Funktionen verwendet, die deine Identität bestätigen müssen",
+          "NFC": "Wird zum kontaktlosen Lesen und Schreiben mit Tags und Geräten in der Nähe verwendet",
           "Files": "Wird für Funktionen wie Hoch- und Herunterladen sowie Verwalten von Dateien verwendet",
           "Remote": "Wird verwendet, um Anfragen an die folgenden Domains zu senden",
           "WebRtc": "Wird für Echtzeitkommunikation wie Sprach- und Videoanrufe verwendet",
@@ -974,6 +956,132 @@
         "hi": "Hindi",
         "tr": "Türkisch"
       }
+    },
+    "inputModality": {
+      "title": "Suche",
+      "placeholder": "Suchen oder {tld}-Adresse eingeben",
+      "attach": "Dateien anhängen",
+      "removeAttachment": "Anhang entfernen",
+      "loadingAttachment": "Anhang wird geladen…",
+      "asked": "{count} Produkte auf diesem Bildschirm gefragt…",
+      "noContext": "Nichts auf diesem Bildschirm kann das beantworten.",
+      "noCandidates": "Nichts kann das verarbeiten.",
+      "goTo": "Gehe zu",
+      "pickerPrompt": "Welches Produkt soll „{fileName}“ erhalten?",
+      "pickerEmpty": "Kein Produkt auf diesem Bildschirm akzeptiert diesen Dateityp.",
+      "attachmentTooLarge": "Zu groß zum Weiterleiten: {fileName}",
+      "scan": "Code scannen",
+      "scanPrompt": "Gescannter Code",
+      "scanWillOpen": "Damit wird {productId} geöffnet.",
+      "scanWillAsk": "Das wird den Produkten auf diesem Bildschirm gestellt.",
+      "scanConfirm": "Weiter",
+      "scanCancel": "Abbrechen",
+      "scanUnavailable": "Dieses Gerät hat keine Kamera.",
+      "scanDenied": "Kamerazugriff wurde verweigert.",
+      "fromThisScreen": "Von diesem Bildschirm",
+      "recentlyVisited": "Zuletzt geöffnet",
+      "clearRecent": "Löschen",
+      "addressFavorites": "Favoriten",
+      "suggestionSeparator": "—"
+    },
+    "networkConnection": {
+      "title": "Netzwerkverbindungen",
+      "chainsLoading": "Netzwerke werden geladen…",
+      "chainsEmpty": "Keine Netzwerke konfiguriert.",
+      "noLightClient": "Kein Light Client verfügbar",
+      "mode": {
+        "lightClient": "Light Client",
+        "rpc": "Vertrauenswürdige Anbieter",
+        "lightClientHint": "Netzwerkdaten direkt auf deinem Gerät prüfen, ohne Anbietern zu vertrauen",
+        "rpcHint": "Schnellerer Zugriff über vertrauenswürdige Anbieter, aber weniger Privatsphäre"
+      },
+      "advanced": {
+        "title": "Erweitert",
+        "description": "Verbindungsmethoden konfigurieren"
+      },
+      "slowLoad": {
+        "title": "Das Laden dauert länger als gewöhnlich",
+        "description": "Warten überspringen und für diese Sitzung schneller über vertrauenswürdige Anbieter laden",
+        "action": "Schneller laden"
+      },
+      "loadFailed": {
+        "title": "Diese Seite konnte nicht geladen werden",
+        "description": "Die Verbindung hat zu lange gedauert. Erneut versuchen oder eine schnellere Verbindung nutzen.",
+        "descriptionReloadOnly": "Die Verbindung hat zu lange gedauert. Seite neu laden.",
+        "reload": "Seite neu laden"
+      },
+      "role": {
+        "identity": "Identität",
+        "apps": "Apps",
+        "transactions": "Transaktionen"
+      }
+    },
+    "productRuntime": {
+      "permissionDenied": {
+        "systemDeviceSettings": "Geräteeinstellungen",
+        "Camera": {
+          "title": "Kamerazugriff erforderlich",
+          "description": "Wird für Funktionen wie Videoanrufe, QR-Scans und Medienaufnahmen verwendet"
+        },
+        "Microphone": {
+          "title": "Mikrofonzugriff erforderlich",
+          "description": "Wird für Funktionen wie Sprachanrufe, Nachrichten und Audioaufnahmen verwendet"
+        }
+      },
+      "review": {
+        "deny": "Ablehnen",
+        "signPayload": {
+          "title": "Transaktions-Payload signieren",
+          "subtitle": "Prüfe die Payload, bevor sie signiert wird."
+        },
+        "signRaw": {
+          "title": "Nachricht signieren",
+          "subtitle": "Prüfe die Nachricht, bevor sie signiert wird."
+        },
+        "createTransaction": {
+          "title": "Transaktion erstellen",
+          "subtitle": "Prüfe die Transaktion, bevor sie gesendet wird."
+        },
+        "signVrf": {
+          "title": "VRF-Transkript signieren",
+          "subtitle": "Prüfe das Transkript, bevor es signiert wird."
+        },
+        "allowance": {
+          "title": "Ressourcen zuweisen",
+          "subtitle": "Prüfe die Ressourcen, die diese App anfordert."
+        },
+        "statementSign": {
+          "title": "Statement signieren",
+          "subtitle": "Prüfe das Statement, bevor es signiert wird."
+        },
+        "createProof": {
+          "title": "Nachweis erstellen",
+          "subtitle": "Prüfe den Nachweis, den diese App anfordert."
+        },
+        "permission": {
+          "IdentityDisclosure": "Diese App möchte deine Identität erfahren.",
+          "PreimageSubmit": "Diese App möchte Inhalte einreichen.",
+          "AccountAccess": "Diese App möchte das Konto einer anderen App nutzen.",
+          "AccountAlias": "Diese App möchte einen Alias ableiten.",
+          "title": "Berechtigungsanfrage"
+        },
+        "legacyAccountNotice": "Signieren mit einem Legacy-Konto.",
+        "resource": {
+          "statementStore": "Statement-Store-Slot",
+          "bulletin": "Bulletin-Speicher-Slot",
+          "smartContract": "Smart-Contract-Gas für Konto {account}",
+          "autoSigning": "In deinem Namen signieren, ohne jedes Mal zu fragen"
+        },
+        "accountAccess": {
+          "title": "Zugriff auf das Konto von {targetIdentifier} erlauben?",
+          "subtitle": "Erlaubt dieser App, mit einem Konto zu handeln, das einer anderen App gehört",
+          "warning": "Wenn du das erlaubst, kann diese App das Konto der anderen App in deinem Namen nutzen"
+        },
+        "productSubtree": {
+          "title": "Dieser App Zugriff auf ihr Konto erlauben?",
+          "subtitle": "Holt das Konto dieser App von deinem gekoppelten Gerät"
+        }
+      }
     }
   },
   "widget": {
@@ -1131,10 +1239,6 @@
         "Clipboard": {
           "title": "Zugriff auf die Zwischenablage erforderlich",
           "description": "Wird zum Kopieren und Einfügen von Inhalten verwendet, die du teilen möchtest"
-        },
-        "Files": {
-          "title": "Festplattenzugriff erforderlich",
-          "description": "Wird für Funktionen wie Hoch- und Herunterladen sowie Verwalten von Dateien verwendet"
         },
         "OpenUrl": {
           "title": "Zugriff auf externe Links erforderlich",

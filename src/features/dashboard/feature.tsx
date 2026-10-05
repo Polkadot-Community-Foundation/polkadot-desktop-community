@@ -61,9 +61,9 @@ dashboardFeature.inject(addToDashboardModalTransformer, ({ targetId, onClose }) 
 // keeps the prior "skip the product round-trip for native entries" behavior
 // (chat's native entry rendering goes through the native handler). Content
 // providers claim every non-native id with their own handler.
-dashboardFeature.inject(folderItemContentTransformer, ({ itemId }) => {
+dashboardFeature.inject(folderItemContentTransformer, ({ itemId, iconSize }) => {
   if (!isNativeAddableDashboardId(itemId)) return null;
-  return <NativeFolderItemContent itemId={itemId} />;
+  return <NativeFolderItemContent itemId={itemId} iconSize={iconSize} />;
 });
 
 // The dashboard owns the native Add-Widget panel handler — native entries route
@@ -126,6 +126,9 @@ dashboardCardSDK(dashboardFeature, {
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     const folderPayload = props.card.payload as FolderPayload;
     const maxVisibleItems = dashboardLayoutService.getMaxVisibleFavorites(props.width, props.height);
+    // The macro scales the app icon with the folder, so the domain's size variant
+    // (not a pixel value — that vocabulary stays out of the domain) picks it here.
+    const iconSize = dashboardLayoutService.getVariantFromGridSize(props.width, props.height) === 'large' ? '64' : '44';
     return (
       <DashboardCardChrome
         card={props.card}
@@ -144,7 +147,7 @@ dashboardCardSDK(dashboardFeature, {
           items={folderPayload.items}
           isActivePage={props.isActivePage}
           maxVisibleItems={maxVisibleItems}
-          onBrowseApps={props.onOpenAddWidgetModal}
+          iconSize={iconSize}
         />
       </DashboardCardChrome>
     );

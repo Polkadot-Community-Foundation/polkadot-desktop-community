@@ -1,8 +1,10 @@
 import { type ResultAsync } from 'neverthrow';
+import { of } from 'rxjs';
 
 import { createStreamResource } from '@/shared/resource';
 
-import { type MainDashboardLayoutSnapshot, dashboardLayoutDb } from './repository';
+import { dashboardLayoutDb } from './repository';
+import { type MainDashboardLayoutSnapshot } from './types';
 import { type DashboardCard, type DashboardLayout } from './types';
 
 // Live snapshot of the main dashboard layout. A single liveQuery subscription
@@ -14,6 +16,7 @@ export const mainDashboardLayoutResource = createStreamResource({
   key: () => 'main',
 })
   .subscribe<MainDashboardLayoutSnapshot | null>(() => dashboardLayoutDb.subscribeToMain())
+  .mock(() => of(null))
   .cache<MainDashboardLayoutSnapshot | null>({
     initial: null,
     map: (_, snapshot) => snapshot,

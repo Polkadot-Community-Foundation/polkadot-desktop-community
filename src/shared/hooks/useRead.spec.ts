@@ -258,7 +258,10 @@ describe('useRead', () => {
 
   it('keeps defaultValue when map returns undefined', () => {
     type Product = { baseName: string };
-    const fn = vi.fn().mockResolvedValue({ baseName: 'x.dot' });
+    // Pending read: the cache never populates, so `map` sees an empty cache and
+    // returns undefined — the scenario under test. A resolving mock would fill
+    // the cache a tick later and make `map` return a value instead.
+    const fn = vi.fn<() => Promise<Product>>(() => new Promise(() => {}));
     const resource = createQueryResource<{ identifier: string }>({ key: ({ identifier }) => identifier })
       .request<Product>(fn)
       .cache<Record<string, Product>>({
@@ -410,6 +413,126 @@ describe('useRead — pending lifecycle', () => {
     rerender({ params: null });
 
     expect(result.current.pending).toBe(false);
+  });
+});
+
+// `pending: false` alone cannot tell "the read settled with nothing" from "the result
+// this read held is gone and nothing is reading it again" — `fulfilled` can.
+describe('useRead — fulfilled', () => {
+  const createProductResource = () =>
+    createQueryResource<{ identifier: string }>({ key: ({ identifier }) => `fulfilled-${identifier}` })
+      .request<string | null>(async ({ identifier }) => (identifier === 'missing' ? null : `product-${identifier}`))
+      .cache<Record<string, string | null>>({
+        initial: {},
+        staleAfter: Number.POSITIVE_INFINITY,
+        map: (cache, value, { identifier }) => ({ ...cache, [`fulfilled-${identifier}`]: value }),
+      })
+      .build();
+
+  it('is not fulfilled while idle', () => {
+    const { result } = renderHook(() => useRead(vi.fn(), { params: null }));
+
+    expect(result.current.fulfilled).toBe(false);
+  });
+
+  it('is fulfilled only once a read settles', async () => {
+    let resolve: (value: string) => void = () => {};
+    const fn = vi.fn(() => new Promise<string>(r => (resolve = r)));
+    const { result } = renderHook(() => useRead(fn, { params: { id: 1 } }));
+
+    expect(result.current.fulfilled).toBe(false);
+
+    resolve('done');
+
+    await waitFor(() => expect(result.current.fulfilled).toBe(true));
+  });
+
+  it('is fulfilled when a read settles with nothing', async () => {
+    const { result } = renderHook(() => useRead(() => EMPTY, { params: { id: 1 } }));
+
+    await waitFor(() => expect(result.current.pending).toBe(false));
+    expect(result.current.fulfilled).toBe(true);
+  });
+
+  it('is not fulfilled when the read fails', async () => {
+    const fn = vi.fn().mockRejectedValue(new Error('boom'));
+    const { result } = renderHook(() => useRead(fn, { params: { id: 1 } }));
+
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+    expect(result.current.fulfilled).toBe(false);
+  });
+
+  it('is not fulfilled between a key change and the new read settling', async () => {
+    const fn = vi.fn((p: { id: number }) => (p.id === 1 ? Promise.resolve('v-1') : new Promise<string>(() => {})));
+    const seen: boolean[] = [];
+    const { result, rerender } = renderHook(
+      ({ p }: { p: { id: number } }) => {
+        const state = useRead(fn, { params: p });
+        seen.push(state.fulfilled);
+
+        return state;
+      },
+      { initialProps: { p: { id: 1 } } },
+    );
+    await waitFor(() => expect(result.current.fulfilled).toBe(true));
+
+    seen.length = 0;
+    rerender({ p: { id: 2 } });
+
+    expect(seen).not.toContain(true);
+  });
+
+  it('is fulfilled for a resource read whose cached value is null', async () => {
+    const resource = createProductResource();
+    const { result } = renderHook(() =>
+      useRead(resource, {
+        params: { identifier: 'missing' },
+        defaultValue: 'default',
+        map: (cache, { identifier }) => cache[`fulfilled-${identifier}`],
+      }),
+    );
+
+    await waitFor(() => expect(result.current.fulfilled).toBe(true));
+    expect(result.current.data).toBeNull();
+  });
+
+  it('stops being fulfilled when its cache entry is invalidated', async () => {
+    const resource = createProductResource();
+    const { result } = renderHook(() =>
+      useRead(resource, {
+        params: { identifier: 'x' },
+        defaultValue: null,
+        map: (cache, { identifier }) => cache[`fulfilled-${identifier}`],
+      }),
+    );
+    await waitFor(() => expect(result.current.fulfilled).toBe(true));
+
+    act(() => {
+      resource.invalidate({ identifier: 'x' });
+    });
+
+    expect(result.current.fulfilled).toBe(false);
+    expect(result.current.pending).toBe(false);
+  });
+
+  it('is fulfilled again after refresh re-reads an invalidated entry', async () => {
+    const resource = createProductResource();
+    const { result } = renderHook(() =>
+      useRead(resource, {
+        params: { identifier: 'x' },
+        defaultValue: null,
+        map: (cache, { identifier }) => cache[`fulfilled-${identifier}`],
+      }),
+    );
+    await waitFor(() => expect(result.current.fulfilled).toBe(true));
+    act(() => {
+      resource.invalidate({ identifier: 'x' });
+    });
+
+    act(() => result.current.refresh());
+
+    await waitFor(() => expect(result.current.fulfilled).toBe(true));
+    expect(result.current.data).toBe('product-x');
   });
 });
 

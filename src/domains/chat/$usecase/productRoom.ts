@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import { type Observable, from, lastValueFrom, map, merge } from 'rxjs';
+import { type Observable, concatMap, from, lastValueFrom, map, merge, mergeMap, pairwise } from 'rxjs';
 
 import { type AccountId } from '@/domains/network';
 import { commitmentUseCase, productsResource } from '@/domains/product';
@@ -52,6 +52,52 @@ function watchProductRooms(params: { productId: string; userId: AccountId }): Ob
   return roomsResource
     .read$({ accountId: params.userId })
     .pipe(map(rooms => rooms.filter(room => productChatService.belongsToProduct(room, params.productId))));
+}
+
+/** One message the user sent into a product's room, addressed for delivery. */
+export type OutgoingProductMessage = {
+  roomId: string;
+  /** Who sent it, as the product should see the sender. */
+  peerId: string;
+  content: MessageContent;
+};
+
+function messagePeerId(message: ChatMessage): string {
+  return message.peer.type === 'product' ? message.peer.productId : message.peer.accountId;
+}
+
+/**
+ * Messages the user sends into this product's rooms, from the moment of
+ * subscription onward.
+ *
+ * Two filters carry the whole correctness of this stream. `pairwise` drops the
+ * backlog: the resource re-emits each room's full list, so without it every existing
+ * message would replay as new on subscribe. And only `outgoing` messages qualify —
+ * the product's own replies persist as `incoming`, so relaying those would feed a
+ * product its own output and loop.
+ */
+function watchOutgoingMessages(params: { productId: string; userId: AccountId }): Observable<OutgoingProductMessage> {
+  return watchProductRooms(params).pipe(
+    mergeMap(rooms =>
+      merge(
+        ...rooms.map(room =>
+          messagesResource.read$({ sessionId: room.sessionId }).pipe(
+            pairwise(),
+            concatMap(([previous, next]) => {
+              const seen = new Set(previous.map(message => message.messageId));
+
+              return next.filter(message => !seen.has(message.messageId) && message.status.direction === 'outgoing');
+            }),
+            map((message): OutgoingProductMessage => ({
+              roomId: room.roomId,
+              peerId: messagePeerId(message),
+              content: message.content,
+            })),
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 function createProductChatSession(peer: UserPeer, room: ProductChatRoom): ChatSession {
@@ -125,6 +171,7 @@ function createProductChatSession(peer: UserPeer, room: ProductChatRoom): ChatSe
 
 export const productRoomUseCase = {
   createProductRoom,
+  watchOutgoingMessages,
   createProductChatSession,
   watchProductRooms,
 };

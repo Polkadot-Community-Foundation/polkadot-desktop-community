@@ -1,9 +1,11 @@
 import { createFeature } from '@/shared/feature';
 import { persistentSlot } from '@/features/app-shell';
 import { tabContentSlot, tabHoverSlot } from '@/features/browser';
-import { dashboardCardActionsSlot } from '@/features/dashboard';
+import { dashboardCardActionsSlot, openAddToFavoritesSideEffect } from '@/features/dashboard';
 
+import { openAddToFavoritesDialog } from './state/addToFavoritesDialog';
 import { FAVORITES } from './tabs';
+import { AddToFavoritesDialogHost } from './ui/AddToFavoritesDialogHost';
 import { FavoritesFullscreenAction } from './ui/FavoritesFullscreenAction';
 import { FavoritesOpenBinding } from './ui/FavoritesOpenBinding';
 import { FavoritesTabBinding } from './ui/FavoritesTabBinding';
@@ -30,3 +32,11 @@ favoritesFeature.inject(tabContentSlot, ({ tab, isActive }) =>
 favoritesFeature.inject(tabHoverSlot, ({ tab }) => (tab.type === FAVORITES ? <FavoritesTabHover /> : null));
 favoritesFeature.inject(persistentSlot, () => <FavoritesTabBinding />);
 favoritesFeature.inject(persistentSlot, () => <FavoritesOpenBinding />);
+
+// Mounted persistently rather than inside the SPA: the folder widget on the
+// dashboard opens this dialog while the Favorites tab is closed.
+favoritesFeature.inject(persistentSlot, () => <AddToFavoritesDialogHost />);
+
+// This feature owns the dialog, so it answers the dashboard's seam. The SPA's own
+// buttons set the same state directly — they don't need to leave the feature.
+favoritesFeature.inject(openAddToFavoritesSideEffect, openAddToFavoritesDialog);

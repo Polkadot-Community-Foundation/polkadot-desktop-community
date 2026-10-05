@@ -122,9 +122,14 @@ export class AddressBarPage {
     await expect(async () => {
       await this.open();
       await this.input.fill(value, { timeout: SHORT_TIMEOUT });
+      // Commit inside the retried block, not after it. The surface re-renders
+      // between the fill and the commit — suggestions settle, the ghost suffix
+      // resolves once the network's TLD does — and that detaches the field. A
+      // press left outside then waits out its whole timeout on a node that will
+      // never be actionable again. Re-opening and re-submitting the same value is
+      // idempotent: it routes to the same product either way.
+      await this.input.press('Enter', { timeout: SHORT_TIMEOUT });
     }).toPass({ timeout: DEFAULT_TIMEOUT });
-
-    await this.input.press('Enter');
   }
 
   /**

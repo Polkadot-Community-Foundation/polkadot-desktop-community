@@ -15,16 +15,19 @@ const defaultHandlers = {
   onDismiss: vi.fn(),
 };
 
-const renderDialog = (props: Parameters<typeof RemotePermissionRequestDialog>[0]) =>
-  render(
+const renderDialog = async (props: Parameters<typeof RemotePermissionRequestDialog>[0]) => {
+  const result = render(
     <TranslationProvider>
       <RemotePermissionRequestDialog {...props} />
     </TranslationProvider>,
   );
+  await screen.findByText(/my-app\.dot/);
+  return result;
+};
 
 describe('RemotePermissionRequestDialog', () => {
-  it('shows the product id', () => {
-    renderDialog({
+  it('shows the product id', async () => {
+    await renderDialog({
       isOpen: true,
       productId: 'my-app.dot',
       permission: 'Remote',
@@ -34,8 +37,8 @@ describe('RemotePermissionRequestDialog', () => {
     expect(screen.getByText(/my-app\.dot/)).toBeTruthy();
   });
 
-  it('shows the permission string in the domains box', () => {
-    renderDialog({
+  it('shows the permission string in the domains box', async () => {
+    await renderDialog({
       isOpen: true,
       productId: 'my-app.dot',
       permission: 'Remote',
@@ -46,8 +49,8 @@ describe('RemotePermissionRequestDialog', () => {
     expect(screen.getByText(/https:\/\/\*\.example\.com/)).toBeTruthy();
   });
 
-  it('shows Web Domains title and connection description for external URL permission', () => {
-    renderDialog({
+  it('shows Web Domains title and connection description for external URL permission', async () => {
+    await renderDialog({
       isOpen: true,
       productId: 'my-app.dot',
       permission: 'Remote',
@@ -59,8 +62,8 @@ describe('RemotePermissionRequestDialog', () => {
     expect(document.querySelector('.bg-bg-illustration-light')).toBeNull();
   });
 
-  it('treats wss URLs as external requests (Web Domains)', () => {
-    renderDialog({
+  it('treats wss URLs as external requests (Web Domains)', async () => {
+    await renderDialog({
       isOpen: true,
       productId: 'my-app.dot',
       permission: 'Remote',
@@ -73,7 +76,7 @@ describe('RemotePermissionRequestDialog', () => {
 
   it('calls onAllowOnce when Allow Once is clicked', async () => {
     const onAllowOnce = vi.fn();
-    renderDialog({
+    await renderDialog({
       isOpen: true,
       productId: 'my-app.dot',
       permission: 'Remote',
@@ -87,7 +90,7 @@ describe('RemotePermissionRequestDialog', () => {
 
   it('calls onAllowAlways when Always Allow is clicked', async () => {
     const onAllowAlways = vi.fn();
-    renderDialog({
+    await renderDialog({
       isOpen: true,
       productId: 'my-app.dot',
       permission: 'Remote',
@@ -101,7 +104,7 @@ describe('RemotePermissionRequestDialog', () => {
 
   it("calls onDeny when Don't Allow is clicked", async () => {
     const onDeny = vi.fn();
-    renderDialog({
+    await renderDialog({
       isOpen: true,
       productId: 'my-app.dot',
       permission: 'Remote',
@@ -116,7 +119,7 @@ describe('RemotePermissionRequestDialog', () => {
   it('calls onDismiss when dialog is closed via Escape', async () => {
     const onDismiss = vi.fn();
     const onDeny = vi.fn();
-    renderDialog({
+    await renderDialog({
       isOpen: true,
       productId: 'my-app.dot',
       permission: 'Remote',
@@ -130,8 +133,8 @@ describe('RemotePermissionRequestDialog', () => {
     expect(onDeny).not.toHaveBeenCalled();
   });
 
-  it('does not render a top close button', () => {
-    renderDialog({
+  it('does not render a top close button', async () => {
+    await renderDialog({
       isOpen: true,
       productId: 'my-app.dot',
       permission: 'Remote',

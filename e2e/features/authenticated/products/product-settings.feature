@@ -4,7 +4,7 @@ Feature: Product settings — clear cache & forget
   Background:
     Given the user is authenticated
     And the user is on the dashboard
-    And the user opens "coinflipgame03" in a new tab
+    And the user opens "host-playground" in a new tab
 
   @allure.id:14785
   Scenario: TC-5.3.3 Cancel Forget app dialog leaves the product intact

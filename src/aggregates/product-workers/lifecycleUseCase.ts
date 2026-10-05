@@ -1,15 +1,9 @@
-import { type UserSession } from '@novasamatech/host-papp';
 import { Observable } from 'rxjs';
 
-import { type ChatSession } from '@/domains/chat';
-import {
-  type FetchResolver,
-  type Product,
-  type ProductWorkerInstance,
-  createProductWorker,
-  defaultWorkerBindings,
-} from '@/domains/product';
+import { type FetchResolver, type Product, type ProductWorkerInstance, createProductWorker } from '@/domains/product';
+import { truapiRuntimeUseCase } from '@/aggregates/truapi-runtime';
 
+import { chatDeliveryUseCase } from './chatDeliveryUseCase';
 import { productWorkerRegistry } from './state/registry';
 
 type CreateInstanceParams = {
@@ -18,8 +12,6 @@ type CreateInstanceParams = {
   entrypoint: string;
   fetchResolver: FetchResolver;
   getProduct: () => Product;
-  getSession: () => UserSession | null;
-  getChatSessions: () => ChatSession[];
 };
 
 /**
@@ -33,33 +25,36 @@ function createInstance$({
   entrypoint,
   fetchResolver,
   getProduct,
-  getSession,
-  getChatSessions,
 }: CreateInstanceParams): Observable<ProductWorkerInstance> {
   return new Observable<ProductWorkerInstance>(subscriber => {
     const baseName = getProduct().baseName;
     let instance: ProductWorkerInstance | null = null;
+    let stopChatDelivery: VoidFunction | null = null;
     let cancelled = false;
 
-    createProductWorker({
-      productId: baseName,
-      contenthash,
-      files,
-      entrypoint,
-      fetchResolver,
-      deps: {
-        getProduct,
-        getSession,
-        getChatSessions,
-      },
-      bindings: defaultWorkerBindings,
-    })
+    // The core gates its Chat trait on `Worker` by exact equality, so a worker that
+    // opened under any other kind would be denied the chat it exists to serve.
+    truapiRuntimeUseCase
+      .createProvider({ productId: baseName, executionKind: 'Worker' })
+      .then(coreProvider =>
+        createProductWorker({
+          productId: baseName,
+          contenthash,
+          files,
+          entrypoint,
+          fetchResolver,
+          coreProvider,
+        }),
+      )
       .then(inst => {
         if (cancelled) {
           inst.dispose();
           return;
         }
         instance = inst;
+        // Started here rather than by whatever renders the worker: delivery has to
+        // live exactly as long as the instance, and this subscription is that lifetime.
+        stopChatDelivery = chatDeliveryUseCase.start(baseName, inst.coreProvider);
         productWorkerRegistry.register(inst);
         subscriber.next(inst);
       })
@@ -70,6 +65,7 @@ function createInstance$({
 
     return () => {
       cancelled = true;
+      stopChatDelivery?.();
       if (instance) {
         productWorkerRegistry.unregister(instance);
         instance.dispose();

@@ -3,7 +3,8 @@ import { useCallback, useMemo, useState } from 'react';
 import { WidgetPlaceholder } from '@/shared/components';
 import { useTranslation } from '@/shared/translation';
 import { dashboardLayoutService, foldersUseCase } from '@/domains/application';
-import { openFavoriteItemSideEffect, openFavoritesSideEffect } from '../../di';
+import { openAddToFavoritesSideEffect, openFavoriteItemSideEffect, openFavoritesSideEffect } from '../../di';
+import { type FolderItemIconSize } from '../../types';
 import { FolderGrid } from '../folder/FolderGrid';
 
 type Props = {
@@ -11,7 +12,7 @@ type Props = {
   items: string[];
   isActivePage: boolean;
   maxVisibleItems: number;
-  onBrowseApps?: VoidFunction;
+  iconSize: FolderItemIconSize;
 };
 
 // Folder body — the grid of icon-sized shortcuts. The surrounding card frame
@@ -20,7 +21,7 @@ type Props = {
 // and the open action are content-generic: rendering goes through
 // `folderItemContentTransformer` (per cell) and opening through
 // `openFavoriteItemSideEffect`, so the dashboard host stays product-agnostic.
-export const FolderCardContent = ({ cardId, items, isActivePage, maxVisibleItems, onBrowseApps }: Props) => {
+export const FolderCardContent = ({ cardId, items, isActivePage, maxVisibleItems, iconSize }: Props) => {
   const { t } = useTranslation();
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
@@ -38,6 +39,11 @@ export const FolderCardContent = ({ cardId, items, isActivePage, maxVisibleItems
 
   const handleOpenViewMore = () => {
     void openFavoritesSideEffect.apply(undefined);
+  };
+
+  const handleBrowseApps = () => {
+    if (!isActivePage) return;
+    void openAddToFavoritesSideEffect.apply(undefined);
   };
 
   const handleRemove = (widgetId: string) => {
@@ -58,17 +64,18 @@ export const FolderCardContent = ({ cardId, items, isActivePage, maxVisibleItems
       <WidgetPlaceholder
         message={t('feature.dashboard.favorites.emptyPlaceholder')}
         actionLabel={t('feature.dashboard.favorites.browseApps')}
-        onAction={onBrowseApps}
+        onAction={handleBrowseApps}
       />
     );
   }
 
   return (
-    <div className="h-full w-full overflow-hidden">
+    <div className="h-full w-full overflow-hidden p-2">
       <FolderGrid
         folderId={cardId}
         items={visibleIds}
         maxVisibleItems={maxVisibleItems}
+        iconSize={iconSize}
         hasViewMore={hasViewMore}
         openMenuId={openMenuId}
         onMenuOpenChange={(menuId, open) => setOpenMenuId(prev => (open ? menuId : prev === menuId ? null : prev))}

@@ -1,3 +1,5 @@
+import { describe, expect, it } from 'vitest';
+
 import { type ProductExecutables } from '@/domains/product';
 
 import { pickProductSurface } from './pickProductSurface';

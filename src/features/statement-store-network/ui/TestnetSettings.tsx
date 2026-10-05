@@ -1,4 +1,3 @@
-import { useAuthentication, useSession } from '@novasamatech/host-papp-react-ui';
 import { Select } from '@novasamatech/tr-ui';
 import { memo, useState } from 'react';
 
@@ -8,13 +7,13 @@ import { useRxState } from '@/shared/rxstate';
 import { useTranslation } from '@/shared/translation';
 import { type EnvironmentId, environmentService } from '@/domains/application';
 import { networkSettings } from '@/aggregates/network-settings';
+import { truapiRuntimeUseCase, useTruapiSession } from '@/aggregates/truapi-runtime';
 
 import { NetworkChangeLogoutDialog } from './NetworkChangeLogoutDialog';
 
 export const TestnetSettings = memo(() => {
   const { t } = useTranslation();
-  const auth = useAuthentication();
-  const { session } = useSession();
+  const session = useTruapiSession();
   const [settings] = useRxState(networkSettings.settings$);
   const [pendingEnvironment, setPendingEnvironment] = useState<EnvironmentId | null>(null);
 
@@ -26,10 +25,10 @@ export const TestnetSettings = memo(() => {
       return;
     }
 
-    // host-papp drops the SDK session whether or not the peer could be notified,
-    // so the session-teardown watcher always runs the full logout + reload, which
-    // boots into the just-persisted environment.
-    auth.disconnect(session).catch((error: unknown) => {
+    // The core drops the session whether or not the wallet could be notified, so
+    // `watchCoreSessionTeardown` always runs the full logout + reload, which boots
+    // into the just-persisted environment.
+    truapiRuntimeUseCase.disconnectSession().catch((error: unknown) => {
       console.error('[sso] network-switch disconnect failed', error);
     });
   };

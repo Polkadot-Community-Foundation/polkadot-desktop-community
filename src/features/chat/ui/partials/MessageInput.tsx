@@ -1,4 +1,4 @@
-import { ArrowUp, X } from 'lucide-react';
+import { ArrowUp, Loader2, X } from 'lucide-react';
 import {
   type ChangeEvent,
   type KeyboardEvent,
@@ -53,12 +53,21 @@ type Props = {
   preview?: ComposerPreview;
   // Blocks typing and sending while an outgoing chat request is still pending acceptance.
   disabled?: boolean;
+  /**
+   * Keep the send button on screen while the send is in flight, disabled and spinning,
+   * instead of unmounting it.
+   *
+   * The invitation composer opts in because its `submitAction` can stay pending
+   * indefinitely (issue #873): unmounting the button there leaves the user with no
+   * control, no spinner and no error — nothing at all to say a send is happening.
+   */
+  showSendProgress?: boolean;
   submitAction(message: string, attachments?: SelectedAttachment[]): Promise<void>;
 };
 
 const MAX_HEIGHT = LINE_HEIGHT * MAX_LINES;
 
-export const MessageInput = ({ ref, initialText, preview, disabled = false, submitAction }: Props) => {
+export const MessageInput = ({ ref, initialText, preview, disabled = false, showSendProgress = false, submitAction }: Props) => {
   const { t } = useTranslation();
   const [pending, startTransition] = useTransition();
   const [text, setText] = useState('');
@@ -97,6 +106,9 @@ export const MessageInput = ({ ref, initialText, preview, disabled = false, subm
   }, [text]);
 
   const canSend = !disabled && (text.trim().length > 0 || attachments.length > 0) && !pending;
+  // `canSend` goes false the moment the send starts, which is what used to take the button
+  // off screen with it. Opted-in composers keep it mounted for the duration instead.
+  const showSendButton = canSend || (showSendProgress && pending);
 
   const send = () => {
     if (!canSend) return;
@@ -221,17 +233,23 @@ export const MessageInput = ({ ref, initialText, preview, disabled = false, subm
               onChange={handleChange}
               onKeyDown={handleKeyDown}
             />
-            {canSend && (
+            {showSendButton ? (
               <button
                 data-testid={TEST_IDS.chatSendButton}
                 // eslint-disable-next-line formatjs/no-literal-string-in-jsx -- aria-label retained for e2e selector
                 aria-label="Send"
-                className="flex size-8 shrink-0 items-center justify-center rounded-full bg-bg-action-primary transition-colors hover:bg-bg-action-primary-hover"
+                disabled={!canSend}
+                aria-busy={pending}
+                className="flex size-8 shrink-0 items-center justify-center rounded-full bg-bg-action-primary transition-colors hover:bg-bg-action-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={() => send()}
               >
-                <ArrowUp className="size-5 text-fg-primary-inverted" />
+                {pending ? (
+                  <Loader2 className="size-5 animate-spin text-fg-primary-inverted" />
+                ) : (
+                  <ArrowUp className="size-5 text-fg-primary-inverted" />
+                )}
               </button>
-            )}
+            ) : null}
           </div>
         </div>
       </div>

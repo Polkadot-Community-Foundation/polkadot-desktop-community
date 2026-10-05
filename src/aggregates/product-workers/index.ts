@@ -1,3 +1,4 @@
 export { productWorkerRegistry } from './state/registry';
 export { lifecycleUseCase as productWorkerLifecycleUseCase } from './lifecycleUseCase';
-export { useProductWorker, useProductWorkerInstance } from './hooks';
+export { productWorkersUseCase } from './productWorkersUseCase';
+export { useProductWorkerInstance, useWorkerDemand } from './hooks';

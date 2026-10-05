@@ -6,6 +6,7 @@ import { BrowserWindow, app, ipcMain, net, protocol, shell, systemPreferences, w
 import { REACT_DEVELOPER_TOOLS, installExtension } from 'electron-devtools-installer';
 
 import { type CallWindowLaunch } from '@/shared/call-bridge';
+import { type OsDevicePermissionStatus } from '@/domains/product';
 
 import { createCallWindow } from './factories/callWindow';
 import { setupAppCrashMonitoring, setupWindowCrashRecovery } from './factories/crash-recovery';
@@ -38,6 +39,17 @@ import { registerUpdateChannelSyncIpc } from './shared/update-channel';
 // can be swapped centrally without shipping new desktop builds.
 const HOST_ICON_URL =
   'https://raw.githubusercontent.com/paritytech/polkadot-desktop-community/main/src/shared/assets/images/polkadot-desktop-icon.png';
+
+// The one OS gate this host applies: macOS camera/mic. Everything else is not gated
+// by the OS as far as the app is concerned, so both the prompt and the status
+// handler answer "not applicable" from the same predicate.
+function osGatedMediaType(permission: string): 'camera' | 'microphone' | null {
+  if (process.platform !== 'darwin') return null;
+  if (permission === 'Camera') return 'camera';
+  if (permission === 'Microphone') return 'microphone';
+
+  return null;
+}
 
 // Applied before requestSingleInstanceLock — the lock is keyed on userData, so
 // isolating the userData path per e2e instance also gives each instance its own lock.
@@ -205,9 +217,7 @@ runAppSingleInstance(async () => {
   ipcMain.handle(
     'requestSystemDevicePermission',
     async (_event, permission: 'Camera' | 'Microphone' | 'Bluetooth' | 'Location'): Promise<boolean> => {
-      if (process.platform !== 'darwin') return true;
-
-      const mediaType = permission === 'Camera' ? 'camera' : permission === 'Microphone' ? 'microphone' : null;
+      const mediaType = osGatedMediaType(permission);
       if (!mediaType) return true;
 
       const status = systemPreferences.getMediaAccessStatus(mediaType);
@@ -217,6 +227,24 @@ runAppSingleInstance(async () => {
       return systemPreferences.askForMediaAccess(mediaType);
     },
   );
+
+  // Read-only twin of `requestSystemDevicePermission`: never prompts. The core revalidates
+  // a stored device grant against this before answering a product, so a capability
+  // revoked in System Settings stops reading as usable.
+  ipcMain.handle('getSystemDevicePermissionStatus', (_event, permission: string): OsDevicePermissionStatus => {
+    const mediaType = osGatedMediaType(permission);
+    if (!mediaType) return 'not-applicable';
+
+    switch (systemPreferences.getMediaAccessStatus(mediaType)) {
+      case 'granted':
+        return 'granted';
+      case 'denied':
+      case 'restricted':
+        return 'denied';
+      default:
+        return 'not-determined';
+    }
+  });
 
   ipcMain.handle('openSystemPrivacySettings', async (_event, permission: 'Camera' | 'Microphone'): Promise<boolean> => {
     const url =

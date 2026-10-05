@@ -7,7 +7,27 @@ Most rules below are enforced by ESLint (`eslint.config.js`) — `npm run lint` 
 - Source: camelCase (`createQueryResource.ts`). React components: PascalCase (`HomeButton.tsx`).
 - Unit tests co-located as `*.spec.ts`.
 - DOM/React tests co-located as `*.test.tsx`, using `@testing-library/react` with `happy-dom`.
-- Do not write tests for schemas or any other static definitions.
+- Inside a domain, what a file _is_ decides whether it gets a spec: `service.ts` and `$usecase/*.ts` always, `resource.ts` /
+  `repository.ts` / `schemas.ts` never — see [domain-development.md § Testing](./domain-development.md#testing) for the rule
+  and its reasons. One consequence worth spelling out: a resource `key` and its cache `map` computing different strings silently
+  strands `invalidate()`, and the defense is calling the same key function in both places, not a spec.
+- A resource serves its builder-declared `.mock(fn)` in every unit test (`vitest.setup.js` sets the execution environment to
+  `test`). That mock is the resource's default shape, not a scenario: to assert an exact flow on chosen inputs, call
+  `resource.instead(fn)` inside the test and return what that case needs, including a rejection or a stream you push to. `instead`
+  outranks the mock, applies to every read of that resource for the rest of the test, and is undone after each test. The same
+  `afterEach` — `resetExecutionEnvironment()` — empties every resource's cache and returns every `RxState` to its initial value, so
+  a test never inherits a value the previous one produced and never observes a cache that is already warm when it means to wait
+  for a read.
+- Avoid `vi.mock` at all cost. It replaces a module for everyone who imports it, so the test no longer exercises the wiring it
+  claims to cover, and a stub that drifts from the real signature keeps passing (a hook that returned a value synchronously on
+  every render hid a real bug in `useObservable`'s subscribe-on-commit timing). Design the code so a test can hand it a double
+  through the language instead: a collaborator arrives as a **parameter with a default** (`fn(input, deps = realDeps)`), a
+  factory takes its adapters as arguments, a resource is driven with `instead`, a DI identifier with `registerHandler`, and a
+  library boundary with the in-memory or fake implementation the library itself ships (`createInMemoryStatementStore`,
+  `fake-indexeddb`). If none of those reach the seam, the seam is missing — add the parameter rather than the mock. The only
+  `vi.mock` that has earned its place is one that cuts a genuine host boundary the code cannot take as an argument (Electron
+  IPC, a native module, the module graph cycle behind a barrel), and it says why in a comment right above it.
+- A `useRead` resource re-renders when it settles, a tick after mount, often from a hook deep in the subtree. Assert synchronously and that settle warns `not wrapped in act`. Await it: `await screen.findBy…` / `await waitFor(() => expect(...))` flushes the settle inside `act`, even an invisible one, for the whole subtree. Don't mock the child's read hook to dodge it, and don't drain a bare microtask (`await act(async () => {})`). When the test itself triggers the update, wrap that call in `act(() => ...)`.
 
 ## Imports
 
@@ -19,7 +39,7 @@ Most rules below are enforced by ESLint (`eslint.config.js`) — `npm run lint` 
 ## TypeScript
 
 - Use `type`, not `interface`.
-- No classes.
+- No classes. The one exception is a test double for a platform constructor the code under test calls with `new` (`RTCPeerConnection`, `ResizeObserver`): there is no function form that satisfies it. Production code has no such case.
 - String-literal enums.
 - No `as` assertions in production code. If unavoidable, disable the rule on that line with a justification. Tests and `**/mocks/*.ts` are exempt.
 - Array type: `T[]`, not `Array<T>`.
@@ -72,7 +92,8 @@ Not every line needs the full context of the system around it. When in doubt, le
 
 - Avoid using px units in Tailwind classes, use default grid values instead.
 - All tailwind classes outside JSX must be wrapped in `cnTw` call for correct ordering and parsing.
-- Do not defile tailwind classes as separate variable. composition should be done with React components, not low level primitives.
+- Do not extract Tailwind classes into a variable or a shared constant.
+- Reuse UI by composing components, never by sharing pieces of another component's implementation. A repeated look is a component that wants extracting: give it a name, props, and a single owner, then use it in both places. Copying its class string, importing its class constant, or passing a `className` that reproduces it spreads one visual decision across files that nothing keeps in sync.
 
 ## i18n
 
@@ -81,6 +102,6 @@ Not every line needs the full context of the system around it. When in doubt, le
 ## Feature / Resource conventions
 
 - Feature names: `domain/feature`.
-- Resources use the builder pattern ending in `.build()`.
+- Resources use the builder pattern ending in `.build()`, and every one declares a `.mock(fn)` (`project-structure.md` § Domain, `resource.ts`).
 - `immer`'s `produce` only for nested immutable updates — not for flat objects.
 - Slots define extension points for feature UI injection (see `di.md`).

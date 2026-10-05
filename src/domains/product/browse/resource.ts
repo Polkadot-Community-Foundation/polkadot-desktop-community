@@ -13,6 +13,7 @@ export const publishedWidgetListingsResource = createQueryResource<PublishedList
   key: ({ environmentId }) => `published-widgets:${environmentId}`,
 })
   .request<AppListing[]>(({ genesisHash }) => browseGateway.listPublishedWidgets(genesisHash))
+  .mock(() => [])
   .timeout(30_000)
   .cache<AppListing[]>({
     initial: [],
@@ -25,6 +26,7 @@ export const publishedAppListingsResource = createQueryResource<PublishedListing
   key: ({ environmentId }) => `published-apps:${environmentId}`,
 })
   .request<AppListing[]>(({ genesisHash }) => browseGateway.listPublishedApps(genesisHash))
+  .mock(() => [])
   .timeout(30_000)
   .cache<AppListing[]>({
     initial: [],

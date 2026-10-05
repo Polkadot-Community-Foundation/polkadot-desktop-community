@@ -2,6 +2,7 @@ import { type Page, expect } from '@playwright/test';
 
 import { TEST_IDS } from '@/shared/test-ids';
 
+import { APP_DB_NAME, CHAT_DB_NAMES } from './cleanup';
 import { setDialogAutoApprove } from './dialogs';
 import { type ElectronAppContext } from './electron';
 import { errorMessage } from './errors';
@@ -35,23 +36,18 @@ import { DEFAULT_TIMEOUT, VERY_LONG_TIMEOUT } from './timeouts';
  * test can't cascade into the rest of the worker.
  */
 
-const APP_DB_NAME = 'polkadot-desktop-app-v1';
-
-// IndexedDB object stores in the unified app DB that hold PER-TEST state. None
-// of these carry the session (the session is localStorage-only). Cleared by
-// row-wipe (not DB delete) so the app's open Dexie connection isn't disturbed.
-const APP_DB_STORES_TO_CLEAR = [
-  'products',
-  'dashboardLayouts',
-  'aliasPermissions',
-  'productPermissions',
-  'productLocalStorage',
-  'productExecutableCache',
-] as const;
+// IndexedDB object stores in the unified app DB that hold PER-TEST state.
+// Cleared by row-wipe (not DB delete) so the app's open Dexie connection isn't
+// disturbed.
+//
+// `coreStorage` is deliberately ABSENT and MUST STAY ABSENT: the TrUAPI core
+// persists the worker's auth session there (`domains/product/core-storage/`).
+// Adding it here would log every worker out on the first soft-reset and force a
+// full re-sign-in per test. The session is no longer localStorage-only.
+const APP_DB_STORES_TO_CLEAR = ['products', 'dashboardLayouts', 'productLocalStorage', 'productExecutableCache'] as const;
 
 // The chat domain keeps its own standalone Dexie DBs. Every object store in
 // these holds per-test chat state — wipe all of them.
-const CHAT_DB_NAMES = ['p2p-chat', 'products-chat'] as const;
 
 /** Every localStorage entry, as written by whatever owns it. */
 type LocalStorageSnapshot = Record<string, string>;
@@ -214,7 +210,7 @@ export async function resetToAuthenticatedBaseline(
     await attemptSoftReset(app.window, workerApp.baseline(), opts.autoApproveDialogs);
     return app;
   } catch (err) {
-    console.warn(`[reset] soft-reset failed (${errorMessage(err)}); falling back to full relaunch + re-sign-in…`);
+    console.warn(`[reset] soft reset failed (${errorMessage(err)}), relaunching and re-signing in`);
   }
 
   // Fallback: the previous test left the session dead/logged-out, or the

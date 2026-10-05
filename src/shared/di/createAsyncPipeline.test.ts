@@ -1,5 +1,7 @@
 import { setTimeout } from 'node:timers/promises';
 
+import { describe, expect, it } from 'vitest';
+
 import { createAsyncPipeline } from './createAsyncPipeline';
 
 describe('createAsyncPipeline', () => {

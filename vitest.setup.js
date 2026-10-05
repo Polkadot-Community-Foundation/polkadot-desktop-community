@@ -2,15 +2,43 @@ import '@testing-library/jest-dom/vitest';
 
 import { afterEach, vi } from 'vitest';
 
-import { resetResourceOverrides } from '@/shared/resource';
+import { resetExecutionEnvironment, setExecutionEnvironment } from '@/shared/execution-environment';
 
-// `resource.instead(fn)` swaps a request implementation in place. Resources are
-// module singletons shared by every spec in a file, so an override has to be
-// undone or it leaks into the next test. Doing it here means a spec never has to
-// remember — and the reset also drops whatever the override cached.
+// Node-env specs (no happy-dom) transitively reach persistLocalStorage, which
+// reads `localStorage`. Without a DOM the global is absent and every persisted
+// read logs a recoverable error (persist.ts). Give those specs an in-memory
+// store; DOM specs already have happy-dom's and skip this.
+const usesLocalStorageShim = typeof globalThis.localStorage === 'undefined';
+if (usesLocalStorageShim) {
+  const store = new Map();
+  globalThis.localStorage = {
+    getItem: key => store.get(key) ?? null,
+    setItem: (key, value) => void store.set(key, String(value)),
+    removeItem: key => void store.delete(key),
+    clear: () => store.clear(),
+  };
+}
+
+// Every resource (and, once it subscribes, every RxState) returns to its initial
+// value here, so a spec never inherits a cached value or an `instead` override
+// from the test before it. vitest runs `afterEach` hooks in reverse registration
+// order and this file registers before any spec is imported, so this runs after
+// Testing Library has already unmounted — nothing here emits into a mounted tree.
 afterEach(() => {
-  resetResourceOverrides();
+  resetExecutionEnvironment();
+  // A case may switch to 'runtime' to reach a real request; put every file back
+  // on the test environment so the next case's mocks are served again.
+  setExecutionEnvironment('test');
+  // Unconditionally, not only for the Node shim: a persisted state resets to its
+  // initial value without writing, so storage must be cleared with it or the
+  // next case reads a value the state no longer holds.
+  globalThis.localStorage.clear();
 });
+
+// Under the test environment every resource that declared a `.mock(...)` serves
+// it, so a spec gets a working double without wiring one. Resources with no
+// mock are untouched and still run their real request.
+setExecutionEnvironment('test');
 
 // Config is sourced entirely from Firebase Remote Config (no bundled fallback),
 // so unit tests — which have no live RC — must supply a deterministic snapshot,
@@ -19,7 +47,9 @@ afterEach(() => {
 // the chain ids here match the `alpha` roles in `vitest.config.ts`. Specs that
 // test the remote-config gateway / chain transform import those modules by
 // relative path and are NOT affected by this alias mock.
-vi.mock('@/domains/remote-config', () => {
+vi.mock('@/domains/remote-config', async () => {
+  const v = await import('valibot');
+
   const REMOTE_CONFIG_KEYS = {
     chains: 'chains_v2',
     dotNsConfig: 'dot_ns_config',
@@ -85,7 +115,7 @@ vi.mock('@/domains/remote-config', () => {
 
   return {
     REMOTE_CONFIG_KEYS,
-    remoteUrlSchema: {},
+    remoteUrlSchema: v.pipe(v.string(), v.url()),
     remoteConfigReady: Promise.resolve(),
     bootstrapRemoteConfig: () => {},
     remoteConfigGateway: {

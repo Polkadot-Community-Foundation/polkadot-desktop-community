@@ -83,7 +83,8 @@ beforeEach(async () => {
 });
 
 describe('startDeviceSyncOrchestrator', () => {
-  it('seeds knownUserDevices from the initial peer list (self entry seeded too — filtering happens at active-peers query)', async () => {
+  // The self entry is seeded too; filtering it out happens at the active-peers query.
+  it('seeds knownUserDevices from the initial peer list', async () => {
     const handle = await startDeviceSyncOrchestrator({
       ownDevice: {
         statementAccountId: new Uint8Array(32).fill(0x01),
@@ -272,7 +273,8 @@ describe('startDeviceSyncOrchestrator', () => {
     handle.stop();
   });
 
-  it('respawns the peer connection when the data channel does not open within the handshake timeout (Android CONNECT_TIMEOUT parity)', async () => {
+  // The timeout matches Android's CONNECT_TIMEOUT so both ends give up together.
+  it('respawns the peer connection when the data channel does not open within the handshake timeout', async () => {
     const handle = await startDeviceSyncOrchestrator({
       ownDevice: {
         statementAccountId: new Uint8Array(32).fill(0x01),
@@ -429,7 +431,8 @@ describe('startDeviceSyncOrchestrator', () => {
   // send above the reconnect loop — once per process — and that is what a peer
   // actually expects. Do not "fix" this to per-attempt again without a paired
   // device test.
-  it('sends Reconnected only on the first spawn, never again on respawn (chat spec: once per process)', async () => {
+  // The chat spec allows one Reconnected per process.
+  it('sends Reconnected only on the first spawn, never again on respawn', async () => {
     // own (0x05) > peer (0x02) → Desktop is the ACCEPTOR, so its signaler sends
     // NOTHING on spawn — every captured post is a restart-recovery Reconnected,
     // which lets us count them without decrypting.

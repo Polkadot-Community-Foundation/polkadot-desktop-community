@@ -13,6 +13,7 @@ import {
   useMessageReactions,
   useToggleReaction,
 } from '@/domains/chat';
+import { useTruapiSession, useTruapiUserId } from '@/aggregates/truapi-runtime';
 import { useScrollControls } from '../../hooks/useScrollControls';
 import { chatService } from '../../service';
 import { type CallState, deriveCallStates } from '../helpers/callState';
@@ -46,7 +47,11 @@ export const MessageFlow = ({ session, onReply, onEdit }: ChatConversationViewPr
   // Event rows (contactAdded/leftChat) carry the peer's accountId as `peer.name`; resolve the
   // room's attested username instead so the event line matches the header and list.
   const peerName = chatService.formatPeerName(useObservable(session.name, ''), session.roomId);
-  const { data: currentUserPeer } = useCurrentUserPeer();
+  const userSession = useTruapiSession();
+  const { data: currentUserPeer } = useCurrentUserPeer(
+    useTruapiUserId(),
+    userSession?.fullUsername ?? userSession?.liteUsername ?? '',
+  );
   const messageReactions = useMessageReactions(messages);
   const onToggleReaction = useToggleReaction(session, messages);
   const messageMap = useMemo(() => new Map(messages.map(m => [m.messageId, m])), [messages]);

@@ -23,6 +23,7 @@ export function dependentRead<D>(
   return {
     ...result,
     pending: dependency.pending || result.pending,
+    fulfilled: !dependency.pending && result.fulfilled,
     // The dependency failing is why this read never ran — surface that rather than
     // letting it read as an empty result.
     error: result.error ?? dependency.error,

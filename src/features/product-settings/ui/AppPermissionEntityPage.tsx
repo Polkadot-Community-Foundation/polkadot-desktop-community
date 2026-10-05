@@ -6,20 +6,14 @@ import { TEST_IDS } from '@/shared/test-ids';
 import { useTranslation } from '@/shared/translation';
 import { useDisplayedProduct } from '@/domains/product';
 import {
-  type AliasPermission,
-  type PermissionModality,
   type PermissionStatus,
   permissionsService,
-  useAllAliasPermissions,
-  useProductPermissions,
-  useRemoveAliasPermission,
-  useResetPermissionToDefault,
-  useSetAliasPermission,
-  useSetDevicePermission,
-  useSetRemotePermission,
-  useSetRemotePermissionsBatch,
+  useSetPermissionStatus,
+  useWatchGrantedAccountAccess,
+  useWatchGrantedPatterns,
+  useWatchProductPermissions,
 } from '@/domains/product';
-import { PermissionStatusDropdown, getModalityMeta, getPermissionMeta } from '@/widgets/Permission';
+import { PermissionStatusDropdown, getPermissionMeta } from '@/widgets/Permission';
 import { ProductIcon } from '@/widgets/ProductIcon';
 
 import { AliasContextsAccessDialog } from './AliasContextsAccessDialog';
@@ -37,80 +31,65 @@ export const AppPermissionEntityPage = ({ productId, permissionId, backLabel, on
   const { data: product } = useDisplayedProduct(productId);
   const isAliasPermission = permissionId === 'Alias';
   const meta = getPermissionMeta(permissionId);
-  const { data: allAliasPermissions } = useAllAliasPermissions();
-  const { data: permissions } = useProductPermissions(productId);
-  const setAliasPermission = useSetAliasPermission();
-  const removeAliasPermission = useRemoveAliasPermission();
-  const setDevice = useSetDevicePermission();
-  const setRemote = useSetRemotePermission();
-  const setRemoteBatch = useSetRemotePermissionsBatch();
-  const resetPermission = useResetPermissionToDefault();
-  const [webDomainsModality, setWebDomainsModality] = useState<PermissionModality | null>(null);
+  const { data: entries } = useWatchProductPermissions(productId);
+  const { data: patterns } = useWatchGrantedPatterns(productId);
+  const { data: accountAccess } = useWatchGrantedAccountAccess(productId);
+  const setStatus = useSetPermissionStatus();
+  const [webDomainsOpen, setWebDomainsOpen] = useState(false);
   const [aliasContextsDialogOpen, setAliasContextsDialogOpen] = useState(false);
 
   if (!meta && !isAliasPermission) return null;
 
   const permissionLabel = isAliasPermission ? t('feature.productSettings.aliasPermission.label') : t(meta?.labelKey ?? '');
   const productName = product?.displayName ?? productId;
-  const aliasPermissions = allAliasPermissions.filter(entry => entry.requesterProductId === productId);
-  const hasAliasContexts = aliasPermissions.length > 0;
-  const modalities = permissionsService.permissionModalitiesForProduct(product?.executables ?? null, permissions);
+  const hasAliasContexts = accountAccess.length > 0;
   const headerIcon = isAliasPermission ? <Link2 size={20} /> : meta?.icon;
 
-  const setAliasStatus = (newStatus: PermissionStatus, targetPermissions: AliasPermission[]) => {
-    for (const aliasPermission of targetPermissions) {
-      if (newStatus === 'ask') {
-        removeAliasPermission.run({
-          requesterProductId: aliasPermission.requesterProductId,
-          requestedContextId: aliasPermission.requestedContextId,
-        });
-        continue;
-      }
+  // An account-access row has no single slot to read: its key space is one slot per
+  // target product. Roll the entries up instead. The external-request row navigates to
+  // its own dialog rather than carrying a status.
+  const accountAccessStatus = permissionsService.rollupPermissionStatus(accountAccess.map(entry => entry.status));
+  const catalogueStatus = entries.find(entry => entry.permissionId === meta?.id)?.status ?? 'ask';
 
-      setAliasPermission.run({
-        requesterProductId: aliasPermission.requesterProductId,
-        requestedContextId: aliasPermission.requestedContextId,
-        status: newStatus,
-      });
-    }
+  const setAccountAccessStatus = (targetProductId: string, newStatus: PermissionStatus) => {
+    setStatus.run({ productId, request: permissionsService.toAccountAccessRequest(targetProductId), status: newStatus });
   };
 
-  const handleStatusChange = (modality: PermissionModality, newStatus: PermissionStatus) => {
+  const setEveryAccountAccessStatus = (newStatus: PermissionStatus) => {
+    for (const entry of accountAccess) setAccountAccessStatus(entry.targetProductId, newStatus);
+  };
+
+  const setPatternStatus = (pattern: string, newStatus: PermissionStatus) => {
+    const request = permissionsService.toAuthorizationRequest('ExternalRequest', { pattern });
+    if (!request) return;
+
+    setStatus.run({ productId, request, status: newStatus });
+  };
+
+  const handleStatusChange = (newStatus: PermissionStatus) => {
     if (!meta) return;
 
-    if (permissionsService.isStoredAsDevicePermission(meta.id)) {
-      const deviceName = permissionsService.getDevicePermissionName(meta.id);
-      if (!deviceName) return;
-
-      setDevice.run({
-        productId,
-        permission: { payload: { name: deviceName }, modality, status: newStatus },
-      });
-      return;
-    }
-
-    if (permissionsService.isStoredRemotePermissionType(meta.id)) {
-      setRemote.run({ productId, permission: { payload: { type: meta.id }, modality, status: newStatus } });
-      return;
-    }
-
+    // The external-request row writes through to every granted domain: it has no slot
+    // of its own to carry the answer.
     if (meta.id === 'ExternalRequest') {
-      setRemoteBatch.run({
-        productId,
-        permissions: permissionsService
-          .getExternalRequestPermissions(permissions, modality)
-          .map(entry => ({ payload: { type: 'Remote', pattern: entry.payload.pattern }, modality, status: newStatus })),
-      });
+      for (const entry of patterns) setPatternStatus(entry.pattern, newStatus);
+      return;
     }
+
+    const request = permissionsService.toAuthorizationRequest(meta.id);
+    if (!request) return;
+
+    setStatus.run({ productId, request, status: newStatus });
   };
 
+  // 'ask' is how the core is told to prompt again, which is what resetting means.
   const handleResetToDefault = () => {
     if (isAliasPermission) {
-      setAliasStatus('ask', aliasPermissions);
+      setEveryAccountAccessStatus('ask');
       return;
     }
-    if (!meta) return;
-    resetPermission.run({ productId, permissionId: meta.id });
+
+    handleStatusChange('ask');
   };
 
   return (
@@ -165,54 +144,45 @@ export const AppPermissionEntityPage = ({ productId, permissionId, backLabel, on
               </div>
             </div>
 
-            {!isAliasPermission && meta
-              ? modalities.map(modality => {
-                  const modalityMeta = getModalityMeta(modality);
-                  const description = t(modalityMeta.descriptionKey, {
-                    permission: permissionLabel.toLowerCase(),
-                    productName,
-                  });
+            {!isAliasPermission && meta && meta.id === 'ExternalRequest' ? (
+              <PermissionNavigationEntry
+                label={permissionLabel}
+                description={t('feature.productSettings.appPermission.description', {
+                  permission: permissionLabel.toLowerCase(),
+                  productName,
+                })}
+                noDomainsTitle={t('feature.productSettings.appPermission.noDomainsRequested')}
+                icon={meta.icon}
+                disabled={patterns.length === 0}
+                onClick={() => setWebDomainsOpen(true)}
+              />
+            ) : null}
 
-                  if (meta.id === 'ExternalRequest') {
-                    const patternCount = permissionsService.getExternalRequestPermissions(permissions, modality).length;
-                    return (
-                      <ModalityNavigationEntry
-                        key={modality}
-                        label={t(modalityMeta.labelKey)}
-                        description={description}
-                        noDomainsTitle={t('feature.productSettings.appPermission.noDomainsRequested')}
-                        icon={modalityMeta.icon}
-                        disabled={patternCount === 0}
-                        onClick={() => setWebDomainsModality(modality)}
-                      />
-                    );
-                  }
-
-                  return (
-                    <ModalityEntry
-                      key={modality}
-                      label={t(modalityMeta.labelKey)}
-                      description={description}
-                      icon={modalityMeta.icon}
-                      status={permissionsService.getPermissionStatusForModality(permissions, meta.id, modality)}
-                      onStatusChange={status => handleStatusChange(modality, status)}
-                    />
-                  );
-                })
-              : null}
+            {!isAliasPermission && meta && meta.id !== 'ExternalRequest' ? (
+              <PermissionEntry
+                label={permissionLabel}
+                description={t('feature.productSettings.appPermission.description', {
+                  permission: permissionLabel.toLowerCase(),
+                  productName,
+                })}
+                icon={meta.icon}
+                status={catalogueStatus}
+                onStatusChange={handleStatusChange}
+              />
+            ) : null}
 
             {isAliasPermission ? (
-              <ModalityEntry
+              <PermissionEntry
                 label={t('feature.productSettings.aliasPermission.label')}
                 description={t('feature.productSettings.aliasPermission.description')}
                 icon={<Link2 size={20} />}
-                status={permissionsService.rollupPermissionStatus(aliasPermissions.map(entry => entry.status))}
-                onStatusChange={status => setAliasStatus(status, aliasPermissions)}
+                status={accountAccessStatus}
+                onStatusChange={setEveryAccountAccessStatus}
               />
             ) : null}
 
             {isAliasPermission && hasAliasContexts ? (
-              <ModalityNavigationEntry
+              <PermissionNavigationEntry
                 label={t('feature.productSettings.aliasPermission.contextsLabel')}
                 description={t('feature.productSettings.aliasPermission.contextsDescription')}
                 icon={<Link2 size={20} />}
@@ -224,37 +194,30 @@ export const AppPermissionEntityPage = ({ productId, permissionId, backLabel, on
           </div>
         </div>
       </ScrollArea>
-      {webDomainsModality ? (
-        <WebDomainsAccessDialog
-          open
-          productId={productId}
-          productName={productName}
-          modality={webDomainsModality}
-          onOpenChange={open => {
-            if (!open) setWebDomainsModality(null);
-          }}
-        />
-      ) : null}
+      <WebDomainsAccessDialog
+        open={webDomainsOpen}
+        productId={productId}
+        productName={productName}
+        onOpenChange={setWebDomainsOpen}
+      />
       <AliasContextsAccessDialog
         open={aliasContextsDialogOpen}
         productName={productName}
-        aliasPermissions={aliasPermissions}
+        accountAccess={accountAccess}
         onOpenChange={setAliasContextsDialogOpen}
-        onStatusChange={(aliasPermission, newStatus) => {
-          setAliasStatus(newStatus, [aliasPermission]);
-        }}
+        onStatusChange={setAccountAccessStatus}
       />
     </div>
   );
 };
 
-type ModalityEntryLayoutProps = {
+type PermissionEntryLayoutProps = {
   label: string;
   description: string;
   icon: ReactNode;
 };
 
-const ModalityEntryLayout = ({ label, description, icon }: ModalityEntryLayoutProps) => (
+const PermissionEntryLayout = ({ label, description, icon }: PermissionEntryLayoutProps) => (
   <div className="flex min-w-0 flex-1 items-center gap-3">
     <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-bg-illustration-light text-fg-primary">
       {icon}
@@ -266,43 +229,43 @@ const ModalityEntryLayout = ({ label, description, icon }: ModalityEntryLayoutPr
   </div>
 );
 
-const ModalityEntry = ({
+const PermissionEntry = ({
   label,
   description,
   icon,
   status,
   onStatusChange,
-}: ModalityEntryLayoutProps & {
+}: PermissionEntryLayoutProps & {
   status: PermissionStatus;
   onStatusChange: (status: PermissionStatus) => void;
 }) => (
-  <div className="flex items-center gap-4 rounded-xl p-3" data-testid={TEST_IDS.permissionModalityRow}>
-    <ModalityEntryLayout label={label} description={description} icon={icon} />
+  <div className="flex items-center gap-4 rounded-xl p-3" data-testid={TEST_IDS.permissionRow}>
+    <PermissionEntryLayout label={label} description={description} icon={icon} />
     <PermissionStatusDropdown value={status} onChange={onStatusChange} />
   </div>
 );
 
-const ModalityNavigationEntry = ({
+const PermissionNavigationEntry = ({
   label,
   description,
   icon,
   disabled,
   noDomainsTitle,
   onClick,
-}: ModalityEntryLayoutProps & {
+}: PermissionEntryLayoutProps & {
   disabled: boolean;
   noDomainsTitle: string;
   onClick: VoidFunction;
 }) => (
   <button
     type="button"
-    data-testid={TEST_IDS.permissionModalityRow}
+    data-testid={TEST_IDS.permissionRow}
     className="flex w-full items-center gap-4 rounded-xl p-3 text-start transition-colors enabled:hover:bg-bg-selection-container-hover disabled:cursor-not-allowed disabled:opacity-50"
     disabled={disabled}
     title={disabled ? noDomainsTitle : undefined}
     onClick={onClick}
   >
-    <ModalityEntryLayout label={label} description={description} icon={icon} />
+    <PermissionEntryLayout label={label} description={description} icon={icon} />
     <ChevronRight size={16} className="shrink-0 text-fg-tertiary" />
   </button>
 );

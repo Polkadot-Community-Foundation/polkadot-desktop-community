@@ -45,8 +45,8 @@ export const CoinageTransferMessageBubble = ({ message, content, isMe, onContext
   // tracks Android's `DigitalDollarChainAssetProvider` so the same amount renders
   // identically on both ends. It's synchronous `VITE_ENVIRONMENTS` config (not
   // Remote Config), so it's available on the first render — no blank-amount flicker.
-  const precision = environmentUseCase.getActiveDigitalDollarAsset().precision;
-  const formattedAmount = amountToString(content.amount, precision);
+  const asset = environmentUseCase.getActiveDigitalDollarAsset();
+  const formattedAmount = amountToString(content.amount, asset.precision);
   const headerLabel = isMe ? t('feature.chat.transfer.youSent') : t('feature.chat.transfer.received');
 
   // Incoming Coinage bubbles render without the status row — recipient sees a
@@ -95,7 +95,7 @@ export const CoinageTransferMessageBubble = ({ message, content, isMe, onContext
               isMe ? 'text-fg-secondary-inverted' : 'text-fg-secondary',
             )}
           >
-            {t('feature.chat.transfer.coinage.currencyLabel')}
+            {asset.symbol}
           </p>
         </div>
       </div>

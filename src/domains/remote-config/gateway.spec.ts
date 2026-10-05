@@ -38,16 +38,17 @@ describe('remoteConfigGateway.tryGetJson', () => {
     expect(remoteConfigGateway.tryGetJson('chains_v2', schema)).toBeNull();
   });
 
-  it('returns null when the value is not valid JSON', () => {
+  // A param that is set but broken is a deployed config bug, not an absence.
+  it('throws when the value is not valid JSON', () => {
     getValueMock.mockReturnValue(asString('not-json'));
 
-    expect(remoteConfigGateway.tryGetJson('chains_v2', schema)).toBeNull();
+    expect(() => remoteConfigGateway.tryGetJson('chains_v2', schema)).toThrow(/not valid JSON/);
   });
 
-  it('returns null when the parsed value fails schema validation', () => {
+  it('throws when the parsed value fails schema validation', () => {
     getValueMock.mockReturnValue(asString('[{"id":"not-a-number"}]'));
 
-    expect(remoteConfigGateway.tryGetJson('chains_v2', schema)).toBeNull();
+    expect(() => remoteConfigGateway.tryGetJson('chains_v2', schema)).toThrow(/failed validation/);
   });
 
   it('returns the validated value when the parameter is valid', () => {
@@ -73,10 +74,10 @@ describe('remoteConfigGateway.tryGetString', () => {
     expect(remoteConfigGateway.tryGetString('ipfs_gateway_url', urlSchema)).toBeNull();
   });
 
-  it('returns null when the raw value fails validation', () => {
+  it('throws when the raw value fails validation', () => {
     getValueMock.mockReturnValue(asString('not-a-url'));
 
-    expect(remoteConfigGateway.tryGetString('ipfs_gateway_url', urlSchema)).toBeNull();
+    expect(() => remoteConfigGateway.tryGetString('ipfs_gateway_url', urlSchema)).toThrow(/failed validation/);
   });
 
   it('returns the raw value when it passes validation (it is NOT JSON-parsed)', () => {
