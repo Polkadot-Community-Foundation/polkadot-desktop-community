@@ -9,12 +9,10 @@ function fakeInstance(productId: string): ProductWorkerInstance {
   return {
     productId,
     contenthash: 'cid',
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    container: {} as ProductWorkerInstance['container'],
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    events: {} as ProductWorkerInstance['events'],
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- the registry only stores and returns these; nothing here calls into them
     sandbox: {} as ProductWorkerInstance['sandbox'],
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- as above
+    coreProvider: {} as ProductWorkerInstance['coreProvider'],
     disposed: false,
     dispose: () => {},
   };

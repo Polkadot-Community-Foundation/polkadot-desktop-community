@@ -13,6 +13,7 @@ import { useTranslation } from '@/shared/translation';
 import { type ChatSession, useP2PRequests, useProductSessions } from '@/domains/chat';
 import { browserTabs } from '@/aggregates/browser-tabs';
 import { useP2PSessions } from '@/aggregates/p2p-chat';
+import { useTruapiUserId } from '@/aggregates/truapi-runtime';
 import { type ChatListEntry, useSortedChatList } from '../hooks/useSortedChatList';
 import { chatService } from '../service';
 import { CHAT } from '../tabs';
@@ -33,7 +34,8 @@ type QuickChatProps = PropsWithChildren<{
 
 export const QuickChat = memo(({ open, onOpenChange, children }: QuickChatProps) => {
   const navigate = useNavigate();
-  const { data: productSessions } = useProductSessions();
+  const userId = useTruapiUserId();
+  const { data: productSessions } = useProductSessions(userId);
   const { data: p2pSessions } = useP2PSessions();
   const { data: pendingRequests, outgoing: outgoingRequests } = useP2PRequests();
   const [selectedSession, setSelectedSession] = useState<ChatSession | null>(null);

@@ -16,6 +16,7 @@ import { NewTabContent } from './ui/NewTabContent';
 import { NewTabHover } from './ui/NewTabHover';
 import { ProductTabContent } from './ui/ProductTabContent';
 import { ProductTabHover } from './ui/ProductTabHover';
+import { SandboxWindowOpenBinding } from './ui/SandboxWindowOpenBinding';
 import { Tabs } from './ui/Tabs';
 
 export const browserFeature = createFeature({
@@ -54,5 +55,6 @@ browserFeature.inject(persistentSlot, () => (
     <BrowserTabBinding />
     <BrowserTabsNavigationBinding />
     <AppModalityOpenBinding />
+    <SandboxWindowOpenBinding />
   </>
 ));

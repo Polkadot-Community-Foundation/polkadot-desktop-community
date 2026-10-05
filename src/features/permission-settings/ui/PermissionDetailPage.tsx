@@ -1,16 +1,11 @@
 import { ScrollArea } from '@novasamatech/tr-ui';
 import { useNavigate } from '@tanstack/react-router';
 import { ChevronLeft, ChevronRight, Grid2X2, Shield } from 'lucide-react';
-import { cloneElement } from 'react';
+import { cloneElement, useMemo } from 'react';
 
 import { useTranslation } from '@/shared/translation';
-import {
-  type AppPermissionEntry,
-  type PermissionModality,
-  useAggregatedPermission,
-  useDisplayedProduct,
-} from '@/domains/product';
-import { getModalityMeta, getPermissionMeta } from '@/widgets/Permission';
+import { type AppPermissionEntry, useDisplayedProduct, useWatchAggregatedPermissions } from '@/domains/product';
+import { getPermissionMeta } from '@/widgets/Permission';
 import { ProductIcon } from '@/widgets/ProductIcon';
 
 type Props = {
@@ -24,7 +19,13 @@ export const PermissionDetailPage = ({ permissionId, backLabel, onBack }: Props)
   const meta = getPermissionMeta(permissionId);
   const navigate = useNavigate();
 
-  const { data: current } = useAggregatedPermission(permissionId);
+  const { data: aggregated } = useWatchAggregatedPermissions();
+  // A single-entry lookup over the same rollup; there is no per-permission read,
+  // because the rollup's cost is one batched core call per product either way.
+  const current = useMemo(
+    () => (permissionId ? (aggregated.find(entry => entry.id === permissionId) ?? null) : null),
+    [aggregated, permissionId],
+  );
 
   if (!meta) {
     return null;
@@ -103,17 +104,10 @@ const RulesCard = ({ ruleKeys }: { ruleKeys: string[] }) => {
   );
 };
 
-const AppIdentity = ({ productId, allowedModalities }: { productId: string; allowedModalities: PermissionModality[] }) => {
-  const { t } = useTranslation();
+const AppIdentity = ({ productId }: { productId: string }) => {
   const { data: product } = useDisplayedProduct(productId);
   const productName = product?.displayName ?? productId;
   const baseName = product?.baseName ?? productId;
-  const allowedLabel =
-    allowedModalities.length > 0
-      ? t('feature.permissionSettings.detail.allowedFor', {
-          modalities: allowedModalities.map(modality => t(getModalityMeta(modality).labelKey)).join(', '),
-        })
-      : null;
 
   return (
     <>
@@ -131,7 +125,8 @@ const AppIdentity = ({ productId, allowedModalities }: { productId: string; allo
       <div className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-sm leading-5 font-medium text-fg-primary">{productName}</span>
         <span className="truncate text-xs leading-4 text-fg-tertiary">
-          {allowedLabel ? t('feature.permissionSettings.detail.appSubtitle', { baseName, allowed: allowedLabel }) : baseName}
+          {/* A decision no longer carries a surface, so the base name is the whole subtitle. */}
+          {baseName}
         </span>
       </div>
     </>
@@ -144,7 +139,7 @@ const AppPermissionRow = ({ app, onNavigate }: { app: AppPermissionEntry; onNavi
     onClick={onNavigate}
   >
     <div className="flex min-w-0 flex-1 items-center gap-3">
-      <AppIdentity productId={app.productId} allowedModalities={app.allowedModalities} />
+      <AppIdentity productId={app.productId} />
     </div>
     <ChevronRight size={16} className="shrink-0 text-fg-tertiary" />
   </button>

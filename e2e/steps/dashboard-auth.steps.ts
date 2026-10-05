@@ -2,7 +2,8 @@ import { type Page } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 
 import { TEST_IDS } from '@/shared/test-ids';
-import { authenticatedTest, expect } from '../fixtures/authenticated';
+import { AUTH_TLD, authenticatedTest, expect } from '../fixtures/authenticated';
+import { productName } from '../helpers/dotns';
 import { setWindowSize } from '../helpers/electron';
 import { seedDashboardPages, seedDashboardWidget, seedProducts } from '../helpers/seed-products';
 import { DEFAULT_TIMEOUT } from '../helpers/timeouts';
@@ -153,7 +154,7 @@ Given('the user starts with only a CoinFlip widget on the dashboard', async ({ a
   await dashboard.removeAllWidgets();
 
   const browser = new BrowserPage(authenticatedApp.window, authenticatedApp.app);
-  await browser.openProductInNewTab('coinflipgame03.dot');
+  await browser.openProductInNewTab(productName('coinflipgame03', AUTH_TLD));
 
   const modal = new ProductWidgetModalPage(authenticatedApp.window);
   await modal.open();

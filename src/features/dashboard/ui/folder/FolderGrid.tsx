@@ -8,8 +8,8 @@ import { TEST_IDS } from '@/shared/test-ids';
 import { useTranslation } from '@/shared/translation';
 import { cnTw } from '@/shared/utils';
 import { FAVORITES_GRID_COLS } from '@/domains/application';
+import { type FolderItemIconSize } from '../../types';
 
-import { FolderItemCell } from './FolderItemCell';
 import { FolderItemContent } from './FolderItemContent';
 import { SortableFolderItem } from './SortableFolderItem';
 
@@ -19,6 +19,7 @@ type FolderGridProps = {
   folderId: string;
   items: string[];
   maxVisibleItems: number;
+  iconSize: FolderItemIconSize;
   hasViewMore: boolean;
   openMenuId: string | null;
   onMenuOpenChange: (menuId: string, open: boolean) => void;
@@ -31,6 +32,7 @@ type FolderGridProps = {
 type FolderGridItemProps = {
   itemId: string;
   menuId: string;
+  iconSize: FolderItemIconSize;
   isMenuOpen: boolean;
   menuLabel: string;
   removeLabel: string;
@@ -42,6 +44,7 @@ type FolderGridItemProps = {
 const FolderGridItem = ({
   itemId,
   menuId,
+  iconSize,
   isMenuOpen,
   menuLabel,
   removeLabel,
@@ -64,10 +67,10 @@ const FolderGridItem = ({
       <button
         type="button"
         data-testid={TEST_IDS.dashboardFavoriteIcon}
-        className="flex h-full w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl p-2 focus-visible:ring-4 focus-visible:ring-stroke-tertiary/35 focus-visible:ring-offset-0 focus-visible:outline-none"
+        className="flex h-full w-full cursor-pointer flex-col items-center justify-center rounded-xl focus-visible:ring-4 focus-visible:ring-stroke-tertiary/35 focus-visible:ring-offset-0 focus-visible:outline-none"
         onClick={handleOpenWidget}
       >
-        <FolderItemContent itemId={itemId} />
+        <FolderItemContent itemId={itemId} iconSize={iconSize} />
       </button>
 
       <DropdownMenu open={isMenuOpen} onOpenChange={open => onMenuOpenChange(menuId, open)}>
@@ -100,18 +103,20 @@ const FolderGridItem = ({
   );
 };
 
-// Trailing tile shown when favourites overflow the folder's capacity: matches the
-// icon+label cells, but opens the fullscreen Favorites SPA instead of a product.
-// Not draggable/removable — it isn't part of the persisted items.
+// Trailing tile shown when favourites overflow the folder's capacity: shares the
+// item cards' frame, but opens the fullscreen Favorites SPA instead of a product.
+// It carries no app icon, so the arrow sits on the card surface rather than on a
+// nested one. Not draggable/removable — it isn't part of the persisted items.
 const FolderViewMoreTile = ({ label, onClick }: { label: string; onClick: VoidFunction }) => (
   <button
     type="button"
     data-testid={TEST_IDS.dashboardFavoritesViewMore}
     aria-label={label}
-    className="flex h-full w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl p-2 focus-visible:ring-4 focus-visible:ring-stroke-tertiary/35 focus-visible:ring-offset-0 focus-visible:outline-none"
+    className="flex h-full w-full cursor-pointer flex-col items-center justify-center gap-1 overflow-hidden rounded-xl border border-stroke-primary bg-bg-surface-container p-2 focus-visible:ring-4 focus-visible:ring-stroke-tertiary/35 focus-visible:ring-offset-0 focus-visible:outline-none"
     onClick={onClick}
   >
-    <FolderItemCell iconNode={<ArrowUpRight className="size-full" aria-hidden />} name={label} />
+    <ArrowUpRight className="size-7 shrink-0 text-fg-primary" aria-hidden />
+    <span className="max-w-full shrink-0 truncate text-title-tiny text-fg-primary">{label}</span>
   </button>
 );
 
@@ -124,6 +129,7 @@ export const FolderGrid = ({
   folderId,
   items,
   maxVisibleItems,
+  iconSize,
   hasViewMore,
   openMenuId,
   onMenuOpenChange,
@@ -205,6 +211,7 @@ export const FolderGrid = ({
                 <FolderGridItem
                   itemId={itemId}
                   menuId={menuId}
+                  iconSize={iconSize}
                   isMenuOpen={openMenuId === menuId}
                   menuLabel={menuLabel}
                   removeLabel={removeLabel}

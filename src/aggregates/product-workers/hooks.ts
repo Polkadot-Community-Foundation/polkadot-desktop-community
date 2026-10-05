@@ -1,46 +1,30 @@
-import { useSession } from '@novasamatech/host-papp-react-ui';
 import { useEffect, useState } from 'react';
 
-import { useLooseRef, useRead } from '@/shared/hooks';
-import { useProductSessions } from '@/domains/chat';
-import { type Product, type ProductWorkerInstance, useExecutableArchive } from '@/domains/product';
+import { type ProductWorkerInstance } from '@/domains/product';
+import { truapiRuntimeUseCase } from '@/aggregates/truapi-runtime';
 
-import { lifecycleUseCase } from './lifecycleUseCase';
 import { productWorkerRegistry } from './state/registry';
-import { useWorkerFetchResolver } from './workerFetchResolver';
 
-export function useProductWorker(product: Product): ProductWorkerInstance | null {
-  const worker = product.executables.worker ?? null;
-  const workerEntrypoint = worker?.entrypoint ?? null;
-  const { data: content } = useExecutableArchive(worker ? { product, kind: 'worker' } : null);
-  const { session } = useSession();
-  const { data: chatSessions } = useProductSessions();
+/**
+ * Declare that this surface needs `productId`'s worker running, for as long as it is
+ * mounted.
+ *
+ * The core counts references and reports the level back to the host's demand watcher,
+ * which starts and stops the executable. Nothing here waits for or observes the
+ * resulting instance — read it with `useProductWorkerInstance` if you need it.
+ */
+export function useWorkerDemand(productId: string): void {
+  useEffect(() => {
+    // Both await `whenRuntimeReady`, which rejects when the core never boots. Dropping
+    // the promise would raise one unhandled rejection per mounted holder on top of the
+    // boot failure that already surfaced. There is no worker to run in that state, so
+    // reporting it and moving on is the whole remedy.
+    const report = (error: unknown) => console.error('[product-workers] worker demand not registered', { productId, error });
 
-  const productRef = useLooseRef(product);
-  const sessionRef = useLooseRef(session);
-  const chatSessionsRef = useLooseRef(chatSessions);
+    void truapiRuntimeUseCase.acquireWorker(productId).catch(report);
 
-  // Permission-gated `fetch` for the worker, built here (needs React) and passed into the factory.
-  const fetchResolver = useWorkerFetchResolver(worker ? product.baseName : null);
-
-  // The factory derives the entrypoint code from the archive (same resolver that backs imports),
-  // so the hook only forwards the archive and the entrypoint to resolve against.
-  const params =
-    content && workerEntrypoint
-      ? {
-          contenthash: content.contenthash,
-          files: content.archive.files,
-          entrypoint: workerEntrypoint,
-          fetchResolver,
-          getProduct: productRef,
-          getSession: sessionRef,
-          getChatSessions: chatSessionsRef,
-        }
-      : null;
-
-  const { data } = useRead(lifecycleUseCase.createInstance$, { params, key: p => p.contenthash });
-
-  return data ?? null;
+    return () => void truapiRuntimeUseCase.releaseWorker(productId).catch(report);
+  }, [productId]);
 }
 
 export function useProductWorkerInstance(productId: string): ProductWorkerInstance | null {
@@ -49,6 +33,7 @@ export function useProductWorkerInstance(productId: string): ProductWorkerInstan
   useEffect(() => {
     setInstance(productWorkerRegistry.get(productId));
     const sub = productWorkerRegistry.instance$(productId).subscribe(setInstance);
+
     return () => sub.unsubscribe();
   }, [productId]);
 

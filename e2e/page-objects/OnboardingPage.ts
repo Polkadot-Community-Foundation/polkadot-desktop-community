@@ -2,11 +2,7 @@ import { type Page, expect } from '@playwright/test';
 
 import { TEST_IDS } from '@/shared/test-ids';
 import { type E2eEnvironmentId } from '../helpers/environment';
-import { DEFAULT_TIMEOUT } from '../helpers/timeouts';
-
-// The QR centre logo renders at ~24px; the QR matrix is far larger. Any width above this
-// means the matrix (not just the logo) has rendered.
-const QR_LOGO_MAX_WIDTH = 100;
+import { DEFAULT_TIMEOUT, VERY_LONG_TIMEOUT } from '../helpers/timeouts';
 
 export class OnboardingPage {
   constructor(private readonly page: Page) {}
@@ -15,33 +11,44 @@ export class OnboardingPage {
     return this.page.getByTestId(TEST_IDS.onboardingQrContainer);
   }
 
-  get qrSvg() {
-    return this.qrContainer.locator('svg');
+  /**
+   * The rendered QR matrix.
+   *
+   * `QrCode` (src/shared/components/QrCode) encodes with the `qrcode` package and
+   * paints an `<img>` whose src is a data URL. Matching the data URL specifically is
+   * what makes this a QR assertion: the same box also holds a `<Spinner>` (an `<svg>`)
+   * while the pairing handshake is in flight, so a looser selector reports success
+   * exactly when the QR is absent.
+   */
+  get qrImage() {
+    return this.qrContainer.locator('img[src^="data:image"]');
   }
 
   get skipButton() {
     return this.page.getByTestId(TEST_IDS.onboardingSkip);
   }
 
-  get signingBotPanel() {
-    return this.page.getByTestId(TEST_IDS.signingBotPanel);
-  }
-
   /**
-   * The "Completing pairing…" spinner shown while the handshake is mid-flight
-   * (`handshakeState.tag === 'Pending'`). When nightly attestation lags, the
-   * pairing wedges here indefinitely instead of redirecting to `/dashboard`;
-   * the sign-in helper watches this to abort a stuck attempt early.
+   * The "Completing pairing…" spinner shown while the wallet's answer is being
+   * resolved — the core's `AuthState.Authenticating`. When nightly attestation
+   * lags, the pairing wedges here indefinitely instead of redirecting to
+   * `/dashboard`; the sign-in helper watches this to abort a stuck attempt early.
    */
   get completingPairing() {
     return this.page.getByTestId(TEST_IDS.onboardingCompletingPairing);
   }
 
   /**
-   * The pairing-failed panel (`handshakeState.tag === 'Failed'`). Carries a
-   * `data-error-kind` attribute: `noFreeSlots` is the "Limit Reached" case —
-   * the peer reported no free allowance slots (the bot user's daily
+   * The pairing-failed panel — the core's `AuthState.LoginFailed { reason }`.
+   * Carries a `data-error-kind` attribute: `noFreeSlots` is the "Limit Reached"
+   * case — the peer reported no free allowance slots (the bot user's daily
    * device-registration budget is exhausted); everything else is `generic`.
+   *
+   * The kind is still derived by matching the reason STRING (`OnboardingScreen`'s
+   * `errorContent`), because the core surfaces the failure as free text with no
+   * typed variant — see `docs/_plans/truapi-upstream-issues.md`. If that regex
+   * stops matching, this selector silently never resolves and the sign-in helper
+   * burns its full timeout instead of failing fast.
    */
   get pairingError() {
     return this.page.getByTestId(TEST_IDS.onboardingPairingError);
@@ -56,104 +63,58 @@ export class OnboardingPage {
     return this.page.locator(`[data-testid="${TEST_IDS.onboardingPairingError}"][data-error-kind="noFreeSlots"]`);
   }
 
-  get signingBotUrlInput() {
-    return this.page.getByTestId(TEST_IDS.signingBotUrlInput);
-  }
-
-  get signingBotTokenInput() {
-    return this.page.getByTestId(TEST_IDS.signingBotTokenInput);
-  }
-
-  get signingBotConnectButton() {
-    return this.page.getByTestId(TEST_IDS.signingBotConnect);
-  }
-
-  get signingBotStatus() {
-    return this.page.getByTestId(TEST_IDS.signingBotStatus);
-  }
-
-  get signingBotUsernameInput() {
-    return this.page.getByTestId(TEST_IDS.signingBotUsernameInput);
-  }
-
-  get signingBotReachable() {
-    return this.page.getByTestId(TEST_IDS.signingBotReachable);
-  }
-
-  get signingBotUnreachable() {
-    return this.page.getByTestId(TEST_IDS.signingBotUnreachable);
-  }
-
-  /** The actual <button> inside the connect-action wrapper div. */
-  get signingBotConnectInnerButton() {
-    return this.signingBotConnectButton.locator('button');
-  }
-
-  /** Fill the bot URL field (used to drive the health-check indicator). */
-  async fillBotUrl(botUrl: string) {
-    await expect(this.signingBotPanel).toBeVisible({ timeout: DEFAULT_TIMEOUT });
-    await this.signingBotUrlInput.fill(botUrl);
-  }
-
-  async expectBotReachable() {
-    await expect(this.signingBotReachable).toBeVisible({ timeout: DEFAULT_TIMEOUT });
-  }
-
-  async expectBotUnreachable() {
-    await expect(this.signingBotUnreachable).toBeVisible({ timeout: DEFAULT_TIMEOUT });
-  }
-
-  async expectConnectDisabled() {
-    await expect(this.signingBotConnectInnerButton).toBeDisabled({ timeout: DEFAULT_TIMEOUT });
-  }
-
-  async expectConnectEnabled() {
-    await expect(this.signingBotConnectInnerButton).toBeEnabled({ timeout: DEFAULT_TIMEOUT });
-  }
-
+  /**
+   * Budgeted as a handshake, not as a UI wait, because that is what it is.
+   *
+   * Neither the container nor the image is in the DOM until the core reaches
+   * `AuthState.Pairing`: until then `OnboardingScreen`'s `isBootReconnecting` renders
+   * `<LoadingScreen/>` over the whole screen. Reaching `Pairing` means `requestLogin()`
+   * completing against the network, so `DEFAULT_TIMEOUT` was the wrong category of budget
+   * — 30s is what an element takes to render, not what a chain takes to answer.
+   *
+   * A genuinely failed pairing does NOT land here: `LoginFailed` clears
+   * `isBootReconnecting` and paints the error panel inside this container, so the wait
+   * ends. Reaching this timeout therefore means the handshake is still in flight, and the
+   * only question is whether it would ever finish.
+   */
   async waitForQrCode() {
-    await expect(this.qrContainer).toBeVisible({ timeout: DEFAULT_TIMEOUT });
-    // QR may render as <svg> or <canvas> depending on the library config
-    const qrContent = this.qrContainer.locator('svg, canvas');
-    await expect(qrContent.first()).toBeVisible({ timeout: DEFAULT_TIMEOUT });
+    await expect(this.qrContainer).toBeVisible({ timeout: VERY_LONG_TIMEOUT });
+    await expect(this.qrImage).toBeVisible({ timeout: VERY_LONG_TIMEOUT });
+  }
+
+  /**
+   * The `polkadotapp://pair?...` deeplink behind the rendered QR, published by
+   * `OnboardingScreen` under autotest mode. Waits on the attribute rather than the
+   * image: the QR can be painted a frame before the attribute lands.
+   */
+  async pairingDeeplink(): Promise<string> {
+    await expect(this.qrContainer).toHaveAttribute('data-pairing-deeplink', /^polkadotapp:\/\/pair\?/, {
+      timeout: DEFAULT_TIMEOUT,
+    });
+    const value = await this.qrContainer.getAttribute('data-pairing-deeplink');
+    if (!value) throw new Error('[onboarding] pairing deeplink attribute was empty after the wait resolved');
+
+    return value;
   }
 
   async getQrDimensions() {
-    const content = this.qrContainer.locator('svg, canvas');
+    await this.waitForQrCode();
 
-    // The QR box contains more than one element: the QR matrix plus the small centre
-    // logo (~24px), and the logo renders a beat BEFORE the matrix. Measuring the
-    // largest element naively races that gap and can pick up the logo. Poll until the
-    // matrix has actually rendered (largest element clearly bigger than the logo),
-    // then return its dimensions for the caller to assert on.
-    let dimensions = { width: 0, height: 0 };
-    await expect
-      .poll(
-        async () => {
-          dimensions = await content.evaluateAll(elements =>
-            elements
-              .map(element => {
-                const rect = element.getBoundingClientRect();
+    const box = await this.qrImage.boundingBox();
+    if (!box) throw new Error('QR image has no bounding box');
 
-                return { width: rect.width, height: rect.height };
-              })
-              .reduce(
-                (largest, current) => (current.width * current.height > largest.width * largest.height ? current : largest),
-                { width: 0, height: 0 },
-              ),
-          );
-
-          return dimensions.width;
-        },
-        { timeout: DEFAULT_TIMEOUT },
-      )
-      .toBeGreaterThan(QR_LOGO_MAX_WIDTH);
-
-    return dimensions;
+    return { width: box.width, height: box.height };
   }
 
+  /**
+   * The skip button sits in the same block `isBootReconnecting` replaces with
+   * `<LoadingScreen/>`, so it is gated on the pairing handshake exactly like
+   * {@link waitForQrCode} — even though skipping is the act of not caring about pairing.
+   * It therefore gets the handshake budget; the navigation that follows the click does
+   * not, being ordinary routing.
+   */
   async skipOnboarding() {
-    await this.skipButton.locator('button').click({ timeout: DEFAULT_TIMEOUT });
+    await this.skipButton.locator('button').click({ timeout: VERY_LONG_TIMEOUT });
     await this.page.waitForURL(/dashboard/, { timeout: DEFAULT_TIMEOUT });
   }
 
@@ -227,6 +188,14 @@ export class OnboardingPage {
    * Triggers an app reload, so caller must re-wait for QR after calling this.
    */
   async selectEnvironment(environmentId: E2eEnvironmentId) {
+    // The picker is NOT stably mounted before the QR is. `OnboardingScreen`'s
+    // `isBootReconnecting` replaces the whole screen with `<LoadingScreen/>` while the
+    // core is still reaching `Pairing`, and that window opens *after* the people-chain
+    // status settles — so the buttons render during the `reaching` phase, vanish, then
+    // come back with the QR. Clicking in between finds the element, loses it mid-action,
+    // and burns the full timeout on `waiting for getByTestId('network-button-<id>')`.
+    await this.waitForQrCode();
+
     const button = this.page.getByTestId(`${TEST_IDS.networkButton}-${environmentId}`);
     await expect(button).toBeVisible({ timeout: DEFAULT_TIMEOUT });
     await button.click();
@@ -234,33 +203,5 @@ export class OnboardingPage {
     // Network change triggers a full reload — wait for the page to settle
     await this.page.waitForLoadState('domcontentloaded');
     await expect(this.page.locator('body')).toBeVisible({ timeout: DEFAULT_TIMEOUT });
-  }
-
-  /**
-   * Pair via the signing bot panel UI.
-   * Sets the bot URL, waits for health check, and clicks Connect.
-   */
-  async connectViaBot(botUrl: string, username?: string) {
-    // Wait for the signing bot panel to appear
-    await expect(this.signingBotPanel).toBeVisible({ timeout: DEFAULT_TIMEOUT });
-
-    // Fill in the bot URL (fill() clears existing value internally — no separate clear() needed)
-    await this.signingBotUrlInput.fill(botUrl);
-
-    // Wait for the bot health check to pass immediately after URL fill.
-    // Doing this before other interactions avoids the green dot briefly disappearing
-    // if something else triggers a re-render while we wait.
-    await expect(this.signingBotReachable).toBeVisible({ timeout: DEFAULT_TIMEOUT });
-
-    // Fill in the username if provided
-    if (username) {
-      await expect(this.signingBotUsernameInput).toBeVisible({ timeout: DEFAULT_TIMEOUT });
-      await this.signingBotUsernameInput.click();
-      await this.signingBotUsernameInput.fill(username);
-    }
-
-    // Click "Connect to Bot"
-    await expect(this.signingBotConnectButton).toBeVisible({ timeout: DEFAULT_TIMEOUT });
-    await this.signingBotConnectButton.locator('button').click();
   }
 }

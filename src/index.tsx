@@ -8,11 +8,11 @@ import { ErrorBoundary } from 'react-error-boundary';
 import { ElectronSplashScreen, FallbackScreen, WebSplashScreen } from '@/shared/components';
 import { isElectron, isProductionBuild, reloadApp } from '@/shared/env';
 import { resetFeatureStatuses, updateFeatureStatus } from '@/shared/feature-config';
-import { readThemeName, useBrowserTheme } from '@/shared/hooks';
 import { silenceDebugConsole } from '@/shared/logger';
 import { Sentry, initSentry } from '@/shared/sentry';
 import { TranslationProvider, useLocalePreference } from '@/shared/translation';
 import { delay } from '@/shared/utils';
+import { useThemeName, useThemeVariant } from '@/domains/application';
 // Eager import: registers the call window's `__callInit` MessagePort listener
 // before the preload posts the port on did-finish-load (no-op in the main app).
 import { isCallWindowLocation } from '@/features/call/runtime/callInitPort';
@@ -147,9 +147,10 @@ const Root = () => {
 
   const splashScreen = renderSplashScreen ? isElectron() ? <ElectronSplashScreen /> : <WebSplashScreen /> : null;
 
-  const browserTheme = useBrowserTheme();
+  const browserTheme = useThemeVariant();
   const locale = useLocalePreference();
-  const initialTheme = themes[readThemeName()] ?? berlinTheme;
+  const themeName = useThemeName();
+  const initialTheme = themes[themeName] ?? berlinTheme;
   const mode = isCallWindow ? 'dark' : browserTheme;
 
   return (

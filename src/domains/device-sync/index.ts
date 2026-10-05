@@ -21,3 +21,4 @@ export {
   startDeviceSyncIfReady,
   startDeviceSyncOnIdentity,
 } from './wiring';
+export { deviceSyncStatusResource } from './resource';

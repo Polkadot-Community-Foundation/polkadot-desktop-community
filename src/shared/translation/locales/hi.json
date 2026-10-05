@@ -103,17 +103,10 @@
       "navigationBackAria": "पीछे जाएँ",
       "navigationForwardAria": "आगे जाएँ",
       "addressWelcome": "Polkadot में आपका स्वागत है! यहाँ .dot पता दर्ज करें",
-      "addressFavorites": "पसंदीदा",
-      "suggestionSeparator": "—",
       "removeFromDashboard": "प्रोडक्ट को डैशबोर्ड से हटाएँ",
       "addressSuggestions": "सभी ऐप्स",
       "addressNoResults": "कोई ऐप नहीं मिला",
-      "recentlyVisited": "हाल ही में खोले गए",
       "recentlyOpened": "हाल ही में खोला गया",
-      "clearRecent": "साफ़ करें",
-      "recents": {
-        "header": "हाल के"
-      },
       "recentClearedTitle": "हाल ही में खोले गए टैब सफलतापूर्वक साफ़ कर दिए गए",
       "undoLabel": "पूर्ववत करें {seconds}से",
       "ramUsage": "RAM उपयोग: {value}",
@@ -194,7 +187,8 @@
       "zoomIn": "ज़ूम इन",
       "zoomOut": "ज़ूम आउट",
       "zoomReset": "ज़ूम रीसेट करें",
-      "zoomPercent": "{percent}%"
+      "zoomPercent": "{percent}%",
+      "clearRecent": "साफ़ करें"
     },
     "userManager": {
       "connectionStatus": {
@@ -347,8 +341,7 @@
           "sending": "भेजा जा रहा है",
           "sent": "भेजा गया",
           "delivered": "पहुँच गया",
-          "claimed": "प्राप्त किया गया",
-          "currencyLabel": "CASH"
+          "claimed": "प्राप्त किया गया"
         }
       },
       "call": {
@@ -370,7 +363,11 @@
           "openToCall": "कॉल करने के लिए मोबाइल ऐप खोलें",
           "openToReturn": "वापस जाने के लिए मोबाइल ऐप खोलें",
           "openToCallBack": "वापस कॉल करने के लिए मोबाइल ऐप खोलें",
-          "openToCallAgain": "फिर से कॉल करने के लिए मोबाइल ऐप खोलें"
+          "openToCallAgain": "फिर से कॉल करने के लिए मोबाइल ऐप खोलें",
+          "tapToCall": "कॉल करने के लिए टैप करें",
+          "tapToReturn": "वापस जाने के लिए टैप करें",
+          "tapToCallBack": "वापस कॉल करने के लिए टैप करें",
+          "tapToCallAgain": "फिर कॉल करने के लिए टैप करें"
         }
       }
     },
@@ -407,23 +404,6 @@
           "subtitle": "कृपया बाद में फिर कोशिश करें"
         }
       }
-    },
-    "signingBotAutopair": {
-      "title": "Signing Bot",
-      "statusIdle": "कनेक्ट करने के लिए तैयार",
-      "statusConnecting": "बॉट जाँचा जा रहा है...",
-      "statusPairing": "बॉट के ज़रिए जोड़ा जा रहा है...",
-      "statusPaired": "«{user}» के रूप में जोड़ा गया",
-      "statusError": "जोड़ी बनाना विफल",
-      "botUrlLabel": "बॉट URL",
-      "botReachable": "बॉट तक पहुँच है",
-      "botUnreachable": "बॉट तक पहुँच नहीं",
-      "tokenLabel": "Token",
-      "usernameLabel": "उपयोगकर्ता नाम",
-      "connectingButton": "जोड़ा जा रहा है...",
-      "connectButton": "बॉट से कनेक्ट करें",
-      "connected": "कनेक्ट है",
-      "waitingQr": "QR payload का इंतज़ार है..."
     },
     "dashboard": {
       "title": "डैशबोर्ड",
@@ -625,7 +605,7 @@
         "description": "इससे साइट का सारा डेटा मिट जाएगा और {productName} की अनुमतियाँ रीसेट हो जाएँगी। टैब खुला रहेगा; अगली बार खोलने पर सब कुछ नए सिरे से लोड होगा।"
       },
       "webDomains": {
-        "dialogTitle": "{productName} {modality} के लिए वेब डोमेन पहुँच प्रबंधित करें"
+        "dialogTitle": "{productName} के लिए वेब डोमेन पहुँच प्रबंधित करें"
       },
       "appPermission": {
         "title": "{productName} की {permission} पहुँच",
@@ -660,6 +640,7 @@
           "Clipboard": "क्लिपबोर्ड",
           "OpenUrl": "बाहरी URL खोलना",
           "Biometrics": "बायोमेट्रिक्स",
+          "NFC": "NFC",
           "Files": "फ़ाइलें",
           "Remote": "वेब डोमेन",
           "WebRtc": "WebRTC",
@@ -677,6 +658,7 @@
           "Clipboard": "आपके चुने हुए कंटेंट को कॉपी और पेस्ट करने के लिए उपयोग होता है",
           "OpenUrl": "आपके डिफ़ॉल्ट ब्राउज़र में बाहरी लिंक खोलने के लिए उपयोग होता है",
           "Biometrics": "उन सुविधाओं के लिए जिनमें आपकी पहचान सत्यापित करनी होती है",
+          "NFC": "आस-पास के टैग और डिवाइस के साथ संपर्क रहित पढ़ने और लिखने के लिए उपयोग किया जाता है",
           "Files": "फ़ाइलें अपलोड, डाउनलोड और प्रबंधित करने जैसी सुविधाओं के लिए उपयोग होता है",
           "Remote": "निम्न डोमेन पर अनुरोध भेजने के लिए उपयोग होता है",
           "WebRtc": "वॉइस और वीडियो कॉल जैसी रीयल-टाइम संचार सुविधाओं के लिए उपयोग होता है",
@@ -974,6 +956,132 @@
         "hi": "हिन्दी",
         "tr": "तुर्की"
       }
+    },
+    "inputModality": {
+      "title": "खोजें",
+      "placeholder": "खोजें या {tld} पता डालें",
+      "attach": "फ़ाइलें अटैच करें",
+      "removeAttachment": "अटैचमेंट हटाएँ",
+      "loadingAttachment": "अटैचमेंट लोड हो रहा है…",
+      "asked": "इस स्क्रीन के {count} प्रोडक्ट से पूछा गया…",
+      "noContext": "इस स्क्रीन पर इसका जवाब देने वाला कुछ नहीं है।",
+      "noCandidates": "इसे संभालने वाला कुछ नहीं है।",
+      "goTo": "यहाँ जाएँ",
+      "pickerPrompt": "“{fileName}” किस प्रोडक्ट को मिलनी चाहिए?",
+      "pickerEmpty": "इस स्क्रीन का कोई प्रोडक्ट इस फ़ाइल प्रकार को स्वीकार नहीं करता।",
+      "attachmentTooLarge": "भेजने के लिए बहुत बड़ी: {fileName}",
+      "scan": "कोड स्कैन करें",
+      "scanPrompt": "स्कैन किया गया कोड",
+      "scanWillOpen": "इससे {productId} खुलेगा।",
+      "scanWillAsk": "यह इस स्क्रीन के प्रोडक्ट से पूछा जाएगा।",
+      "scanConfirm": "जारी रखें",
+      "scanCancel": "रद्द करें",
+      "scanUnavailable": "इस डिवाइस में कोई कैमरा उपलब्ध नहीं है।",
+      "scanDenied": "कैमरा एक्सेस अस्वीकार कर दिया गया।",
+      "fromThisScreen": "इस स्क्रीन से",
+      "recentlyVisited": "हाल में खोले गए",
+      "clearRecent": "साफ़ करें",
+      "addressFavorites": "पसंदीदा",
+      "suggestionSeparator": "—"
+    },
+    "networkConnection": {
+      "title": "नेटवर्क कनेक्शन",
+      "chainsLoading": "नेटवर्क लोड हो रहे हैं…",
+      "chainsEmpty": "कोई नेटवर्क कॉन्फ़िगर नहीं है।",
+      "noLightClient": "कोई लाइट क्लाइंट उपलब्ध नहीं",
+      "mode": {
+        "lightClient": "लाइट क्लाइंट",
+        "rpc": "विश्वसनीय प्रदाता",
+        "lightClientHint": "प्रदाताओं पर भरोसा किए बिना नेटवर्क डेटा सीधे अपने डिवाइस पर सत्यापित करें",
+        "rpcHint": "विश्वसनीय प्रदाताओं से तेज़ पहुँच, पर निजता कम"
+      },
+      "advanced": {
+        "title": "उन्नत",
+        "description": "कनेक्शन के तरीके कॉन्फ़िगर करें"
+      },
+      "slowLoad": {
+        "title": "लोड होने में सामान्य से ज़्यादा समय लग रहा है",
+        "description": "इंतज़ार छोड़ें और इस सत्र के लिए विश्वसनीय प्रदाताओं से तेज़ी से लोड करें",
+        "action": "तेज़ी से लोड करें"
+      },
+      "loadFailed": {
+        "title": "यह पेज लोड नहीं हो सका",
+        "description": "कनेक्शन में बहुत समय लगा। फिर कोशिश करें या तेज़ कनेक्शन इस्तेमाल करें।",
+        "descriptionReloadOnly": "कनेक्शन में बहुत समय लगा। पेज फिर से लोड करके देखें।",
+        "reload": "पेज फिर लोड करें"
+      },
+      "role": {
+        "identity": "पहचान",
+        "apps": "ऐप्स",
+        "transactions": "लेन-देन"
+      }
+    },
+    "productRuntime": {
+      "permissionDenied": {
+        "systemDeviceSettings": "डिवाइस सेटिंग्स",
+        "Camera": {
+          "title": "कैमरा पहुँच आवश्यक है",
+          "description": "वीडियो कॉल, QR स्कैन और मीडिया कैप्चर जैसी सुविधाओं के लिए उपयोग होता है"
+        },
+        "Microphone": {
+          "title": "माइक्रोफ़ोन पहुँच आवश्यक है",
+          "description": "वॉइस कॉल, मैसेजिंग और ऑडियो रिकॉर्डिंग जैसी सुविधाओं के लिए उपयोग होता है"
+        }
+      },
+      "review": {
+        "deny": "अस्वीकार करें",
+        "signPayload": {
+          "title": "लेन-देन पेलोड साइन करें",
+          "subtitle": "साइन होने से पहले पेलोड जाँचें।"
+        },
+        "signRaw": {
+          "title": "संदेश साइन करें",
+          "subtitle": "साइन होने से पहले संदेश जाँचें।"
+        },
+        "createTransaction": {
+          "title": "लेन-देन बनाएँ",
+          "subtitle": "भेजे जाने से पहले लेन-देन जाँचें।"
+        },
+        "signVrf": {
+          "title": "VRF ट्रांसक्रिप्ट साइन करें",
+          "subtitle": "साइन होने से पहले ट्रांसक्रिप्ट जाँचें।"
+        },
+        "allowance": {
+          "title": "संसाधन आवंटित करें",
+          "subtitle": "यह ऐप जो संसाधन माँग रहा है, उन्हें जाँचें।"
+        },
+        "statementSign": {
+          "title": "कथन साइन करें",
+          "subtitle": "साइन होने से पहले कथन जाँचें।"
+        },
+        "createProof": {
+          "title": "प्रमाण बनाएँ",
+          "subtitle": "यह ऐप जो प्रमाण माँग रहा है, उसे जाँचें।"
+        },
+        "permission": {
+          "IdentityDisclosure": "यह ऐप आपकी पहचान जानना चाहता है।",
+          "PreimageSubmit": "यह ऐप सामग्री सबमिट करना चाहता है।",
+          "AccountAccess": "यह ऐप किसी दूसरे ऐप का खाता इस्तेमाल करना चाहता है।",
+          "AccountAlias": "यह ऐप एक उपनाम बनाना चाहता है।",
+          "title": "अनुमति अनुरोध"
+        },
+        "legacyAccountNotice": "पुराने खाते से साइन किया जा रहा है।",
+        "resource": {
+          "statementStore": "स्टेटमेंट स्टोर स्लॉट",
+          "bulletin": "बुलेटिन स्टोरेज स्लॉट",
+          "smartContract": "खाता {account} के लिए स्मार्ट-कॉन्ट्रैक्ट गैस",
+          "autoSigning": "हर बार पूछे बिना आपकी ओर से साइन करें"
+        },
+        "accountAccess": {
+          "title": "{targetIdentifier} के खाते तक पहुँच की अनुमति दें?",
+          "subtitle": "इस ऐप को किसी दूसरे ऐप के खाते से काम करने देता है",
+          "warning": "अनुमति देने पर यह ऐप दूसरे ऐप का खाता आपकी ओर से इस्तेमाल कर सकेगा"
+        },
+        "productSubtree": {
+          "title": "इस ऐप को अपने खाते तक पहुँचने दें?",
+          "subtitle": "इस ऐप का खाता आपके जुड़े डिवाइस से लाता है"
+        }
+      }
     }
   },
   "widget": {
@@ -1131,10 +1239,6 @@
         "Clipboard": {
           "title": "क्लिपबोर्ड पहुँच आवश्यक है",
           "description": "आपके चुने हुए कंटेंट को कॉपी और पेस्ट करने के लिए उपयोग होता है"
-        },
-        "Files": {
-          "title": "डिस्क पहुँच आवश्यक है",
-          "description": "फ़ाइलें अपलोड, डाउनलोड और प्रबंधित करने जैसी सुविधाओं के लिए उपयोग होता है"
         },
         "OpenUrl": {
           "title": "बाहरी लिंक पहुँच आवश्यक है",

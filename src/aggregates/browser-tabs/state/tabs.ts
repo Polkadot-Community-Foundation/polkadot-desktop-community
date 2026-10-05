@@ -64,9 +64,16 @@ persistLocalStorage(selectedTabId$, {
 // (inside `combineLatest`) does not recognize the wrapper's `Symbol.observable`
 // interop in the bundled build and throws "invalid object where a stream was
 // expected". `.value$` is the plain Observable every other consumer subscribes to.
-const selectedTab$ = combine([selectedTabId$.value$, tabs$.value$], ([id, tabs]) =>
-  id ? (tabs.find(tab => tab.id === id) ?? null) : null,
-);
+const projectSelectedTab = (id: string | null, tabs: Tab[]): Tab | null =>
+  id ? (tabs.find(tab => tab.id === id) ?? null) : null;
+
+const selectedTab$ = combine([selectedTabId$.value$, tabs$.value$], ([id, tabs]) => projectSelectedTab(id, tabs));
+
+// The synchronous counterpart of `selectedTab$`, for readers that need the selection on their very
+// first render (react-rx's `useObservable` initializer) rather than on the commit that subscribes.
+// Reads the two sources directly rather than `selectedTab$`, because a derived stream carries no
+// current value to read.
+const getSelectedTab = (): Tab | null => projectSelectedTab(selectedTabId$.get(), tabs$.get());
 
 const selectTab = (id: string | null) => {
   selectedTabId$.set(id);
@@ -144,6 +151,7 @@ export const browserTabs = {
   tabs$,
   selectedTabId$,
   selectedTab$,
+  getSelectedTab,
   aliveTabs$,
   sameTabClicked$,
   selectTab,

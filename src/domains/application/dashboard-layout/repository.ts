@@ -6,7 +6,7 @@ import { type DashboardLayoutItemRow, type DashboardLayoutRow, database, streamT
 import { toError } from '@/shared/utils';
 
 import { parseDashboardCardPayload } from './schemas';
-import { type DashboardCard, type DashboardCardPayload, type DashboardLayout } from './types';
+import { type DashboardCard, type DashboardCardPayload, type DashboardLayout, type MainDashboardLayoutSnapshot } from './types';
 
 // Legacy on-disk shapes — pre-card-refactor. Read-only converters below
 // hydrate them into `DashboardCard`s on every read; new writes always use the
@@ -83,11 +83,6 @@ function clampIndex(index: number | undefined, pageCount: number): number {
   if (pageCount <= 0) return 0;
   return Math.min(index, pageCount - 1);
 }
-
-export type MainDashboardLayoutSnapshot = {
-  pages: DashboardCard[][];
-  activePageIndex: number;
-};
 
 function resolveMain(layout: StoredLayout | null | undefined): MainDashboardLayoutSnapshot | null {
   const pages = resolvePages(layout);

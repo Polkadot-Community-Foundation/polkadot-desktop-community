@@ -1,67 +1,88 @@
 // @vitest-environment happy-dom
 
+import { DropdownMenu } from '@novasamatech/tr-ui';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { type ReactNode } from 'react';
+import { type PropsWithChildren } from 'react';
+import { of } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { triggerProductDashboardShortcutMock, favoriteProductIdsMock } = vi.hoisted(() => ({
-  triggerProductDashboardShortcutMock: vi.fn<
-    (productId: string, t: (id: string, values?: Record<string, string | number>) => string) => Promise<void>
-  >(() => Promise.resolve()),
-  favoriteProductIdsMock: vi.fn<() => ReadonlySet<string>>(() => new Set()),
-}));
-
-vi.mock('@/domains/application', () => ({
-  useFavoriteProductIds: () => ({ data: favoriteProductIdsMock() }),
-}));
-
-vi.mock('../triggerProductDashboardShortcut', () => ({
-  triggerProductDashboardShortcut: (productId: string, t: (id: string) => string) =>
-    triggerProductDashboardShortcutMock(productId, t),
-}));
-
-vi.mock('@/features/product-actions-menu', () => ({
-  MenuItem: ({ label, onSelect }: { label: ReactNode; onSelect: () => void }) => <button onClick={onSelect}>{label}</button>,
-}));
-
 import { TranslationProvider } from '@/shared/translation';
-import { type Product } from '@/domains/product';
+import { FAVORITES_FOLDER_ID, foldersUseCase, mainDashboardLayoutResource } from '@/domains/application';
+import { type Product, resolveProductUseCase } from '@/domains/product';
+import { productManagementUseCase } from '@/aggregates/product-management';
+
+const seedFavorites = (items: string[]) => {
+  mainDashboardLayoutResource.instead(() =>
+    of({
+      pages: [[{ i: FAVORITES_FOLDER_ID, x: 0, y: 0, w: 1, h: 1, payload: { kind: 'folder' as const, items } }]],
+      activePageIndex: 0,
+    }),
+  );
+};
 
 import { AddToFavoritesMenuItem } from './AddToFavoritesMenuItem';
 
-// Minimal Product stand-in — the component only reads baseName / displayName.
-const makeProduct = (baseName: string) => ({ baseName, displayName: 'My App' }) as unknown as Product;
+// Minimal Product stand-in — the component reads baseName / displayName; the shortcut
+// it triggers reads `executables` to decide widget vs favourite.
+const makeProduct = (baseName: string) => ({ baseName, displayName: 'My App', executables: {} }) as unknown as Product;
+
+// The shortcut composes three use cases, all plain objects spied in place: no chain
+// resolve, no layout write — the toggle's routing decision is what these cases observe.
+const resolveProduct = vi.spyOn(resolveProductUseCase, 'resolveProduct');
+const isIconInFavorites = vi.spyOn(foldersUseCase, 'isIconInFavorites');
+const removeItemFromFolder = vi.spyOn(foldersUseCase, 'removeItemFromFolder').mockResolvedValue(true);
+const addProductToDashboard = vi.spyOn(productManagementUseCase, 'addProductToDashboard').mockResolvedValue({ ok: true });
+
+// The item is a Radix `DropdownMenu.Item`, which only renders inside an open menu; a
+// real one is mounted around it so the item's own selection handling is what runs.
+const MenuHost = ({ children }: PropsWithChildren) => (
+  <DropdownMenu open>
+    <DropdownMenu.Trigger asChild>
+      <button type="button">menu</button>
+    </DropdownMenu.Trigger>
+    <DropdownMenu.Content>{children}</DropdownMenu.Content>
+  </DropdownMenu>
+);
 
 const renderItem = (baseName: string) =>
   render(
     <TranslationProvider>
-      <AddToFavoritesMenuItem product={makeProduct(baseName)} closeMenu={vi.fn()} />
+      <MenuHost>
+        <AddToFavoritesMenuItem product={makeProduct(baseName)} closeMenu={vi.fn()} />
+      </MenuHost>
     </TranslationProvider>,
   );
 
 describe('AddToFavoritesMenuItem', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    favoriteProductIdsMock.mockReturnValue(new Set());
+    seedFavorites([]);
+    resolveProduct.mockResolvedValue(makeProduct('app.dot'));
+    isIconInFavorites.mockResolvedValue(false);
   });
 
   it('delegates add/remove to the shared dashboard shortcut handler', async () => {
     const user = userEvent.setup();
     renderItem('app.dot');
 
-    await user.click(screen.getByText('Add to Favorites'));
+    await user.click(await screen.findByText('Add to Favorites'));
 
-    await waitFor(() => expect(triggerProductDashboardShortcutMock).toHaveBeenCalledWith('app.dot', expect.any(Function)));
+    await waitFor(() =>
+      expect(addProductToDashboard).toHaveBeenCalledWith(expect.objectContaining({ baseName: 'app.dot' }), { w: 1, h: 1 }),
+    );
+    expect(removeItemFromFolder).not.toHaveBeenCalled();
   });
 
   it('delegates remove to the shared dashboard shortcut handler when already a favorite', async () => {
-    favoriteProductIdsMock.mockReturnValue(new Set(['app.dot']));
+    seedFavorites(['app.dot']);
+    isIconInFavorites.mockResolvedValue(true);
     const user = userEvent.setup();
     renderItem('app.dot');
 
-    await user.click(screen.getByText('Remove from Favorites'));
+    await user.click(await screen.findByText('Remove from Favorites'));
 
-    await waitFor(() => expect(triggerProductDashboardShortcutMock).toHaveBeenCalledWith('app.dot', expect.any(Function)));
+    await waitFor(() => expect(removeItemFromFolder).toHaveBeenCalledWith('app.dot'));
+    expect(addProductToDashboard).not.toHaveBeenCalled();
   });
 });

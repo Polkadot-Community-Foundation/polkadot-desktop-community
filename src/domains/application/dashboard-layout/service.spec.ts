@@ -40,8 +40,8 @@ const userFolder = (folderId: string, items: string[]): DashboardCard => ({
   payload: { kind: 'folder', items },
 });
 
-describe('dashboardLayoutService favorites vs cards', () => {
-  it('stripLegacyTopLevelCardFromPages removes a same-id content card but keeps the favorites folder', () => {
+describe('dashboardLayoutService.stripLegacyTopLevelCardFromPages', () => {
+  it('removes a same-id content card but keeps the favorites folder', () => {
     const pages: DashboardCard[][] = [[favoritesFolder(['my-app']), widget('my-app'), widget('other')]];
 
     const next = dashboardLayoutService.stripLegacyTopLevelCardFromPages(pages, 'my-app');
@@ -50,22 +50,26 @@ describe('dashboardLayoutService favorites vs cards', () => {
     const favoritesCard = next[0]?.[0];
     expect(favoritesCard).toBeDefined();
     expect(dashboardLayoutService.asFolder(favoritesCard!)?.items).toEqual(['my-app']);
-    expect(next[0]!.some(item => item.i === 'my-app' && !dashboardLayoutService.isFolderCard(item))).toBe(false);
-    expect(next[0]!.some(item => item.i === 'other')).toBe(true);
+    const topLevel = next[0]!.filter(item => !dashboardLayoutService.isFolderCard(item));
+    expect(topLevel.map(item => item.i)).toEqual(['other']);
   });
+});
 
-  it('removeCardFromPages removes only the top-level card when it coexists with a favourites entry', () => {
+describe('dashboardLayoutService.removeCardFromPages', () => {
+  it('removes only the top-level card when it coexists with a favourites entry', () => {
     const pages: DashboardCard[][] = [[favoritesFolder(['chat']), nativeCard('chat')]];
 
     const { pages: next, changed } = dashboardLayoutService.removeCardFromPages(pages, 0, 'chat');
 
     expect(changed).toBe(true);
-    expect(next[0]!.some(item => item.i === 'chat')).toBe(false);
+    expect(next[0]!.map(item => item.i)).not.toContain('chat');
     const folder = next[0]?.find(item => item.i === FAVORITES_FOLDER_ID);
     expect(dashboardLayoutService.asFolder(folder!)?.items).toEqual(['chat']);
   });
+});
 
-  it('hasCardOnPages detects a card by id regardless of kind', () => {
+describe('dashboardLayoutService.hasCardOnPages', () => {
+  it('detects a card by id regardless of kind', () => {
     const pages: DashboardCard[][] = [[favoritesFolder(['coinflip'])], [nativeCard('chat')]];
 
     expect(dashboardLayoutService.hasCardOnPages(pages, 'chat')).toBe(true);
@@ -290,16 +294,16 @@ describe('getVariantFromGridSize', () => {
 });
 
 describe('getMaxVisibleFavorites', () => {
-  it('caps small at 6 (2 rows × 3 cols)', () => {
-    expect(dashboardLayoutService.getMaxVisibleFavorites(1, 2)).toBe(6);
+  it('caps small at 3 (1 row × 3 cols)', () => {
+    expect(dashboardLayoutService.getMaxVisibleFavorites(1, 2)).toBe(3);
   });
 
-  it('caps medium at 12 (4 rows × 3 cols)', () => {
-    expect(dashboardLayoutService.getMaxVisibleFavorites(1, 4)).toBe(12);
+  it('caps medium at 9 (3 rows × 3 cols)', () => {
+    expect(dashboardLayoutService.getMaxVisibleFavorites(1, 4)).toBe(9);
   });
 
-  it('caps large at 27 (9 rows × 3 cols)', () => {
-    expect(dashboardLayoutService.getMaxVisibleFavorites(1, 8)).toBe(27);
+  it('caps large at 15 (5 rows × 3 cols)', () => {
+    expect(dashboardLayoutService.getMaxVisibleFavorites(1, 8)).toBe(15);
   });
 });
 

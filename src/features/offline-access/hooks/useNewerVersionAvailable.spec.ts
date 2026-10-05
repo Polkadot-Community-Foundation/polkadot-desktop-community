@@ -1,82 +1,103 @@
 // @vitest-environment happy-dom
 
-import { renderHook } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { renderHook, waitFor } from '@testing-library/react';
+import { of } from 'rxjs';
+import { beforeEach, describe, expect, it } from 'vitest';
+
+import {
+  type ExecutableKind,
+  type LiveExecutable,
+  type PersistedProduct,
+  liveExecutableResource,
+  productsResource,
+} from '@/domains/product';
 
 import { useAvailableUpdates, useNewerVersionAvailable } from './useNewerVersionAvailable';
-
-const { usePersistedProductByIdMock, useLiveExecutableMock } = vi.hoisted(() => ({
-  usePersistedProductByIdMock: vi.fn(),
-  useLiveExecutableMock: vi.fn(),
-}));
-
-vi.mock('@/domains/product', () => ({
-  EXECUTABLE_KINDS: ['app', 'widget', 'worker'],
-  productService: {
-    hasExecutableDrift: (frozen: { contenthash: string }, live: { contenthash: string } | null) =>
-      live != null && live.contenthash !== frozen.contenthash,
-  },
-  usePersistedProductById: () => usePersistedProductByIdMock(),
-  useLiveExecutable: (params: { kind: string } | null) => useLiveExecutableMock(params),
-}));
 
 const hexAa = '0xaa';
 const hexBb = '0xbb';
 
-// Returns the mapped live executable for a kind (null for absent/unpinned).
-function liveByKind(map: Record<string, { contenthash: string; version: number[] } | null>) {
-  return (params: { kind: string } | null) => ({ data: params ? (map[params.kind] ?? null) : null });
+type FrozenKinds = Partial<Record<ExecutableKind, { contenthash: string; appVersion?: number[] }>>;
+
+function seedProduct(pinned: boolean, executables: FrozenKinds) {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- test fixture, not production code
+  const record = {
+    baseName: 'a.dot',
+    displayName: 'A',
+    description: '',
+    icon: { cid: '', format: 'png' },
+    executables,
+    pinned,
+    createdAt: 1000,
+    updatedAt: 1000,
+  } as unknown as PersistedProduct;
+
+  productsResource.instead(() => of([record]));
+}
+
+// The chain-side answer per kind, keyed the way the resource is.
+function seedLive(map: Partial<Record<ExecutableKind, LiveExecutable | null>>) {
+  liveExecutableResource.instead(({ kind }) => map[kind] ?? null);
 }
 
 describe('useAvailableUpdates', () => {
-  it('returns [] when the product is not pinned', () => {
-    usePersistedProductByIdMock.mockReturnValue({ data: { pinned: false, executables: { worker: { contenthash: hexAa } } } });
-    useLiveExecutableMock.mockImplementation(liveByKind({ worker: { contenthash: hexBb, version: [0, 1, 1] } }));
-    const { result } = renderHook(() => useAvailableUpdates('a.dot'));
-    expect(result.current).toEqual([]);
+  beforeEach(() => {
+    seedLive({});
   });
 
-  it('returns [] when every present kind matches chain', () => {
-    usePersistedProductByIdMock.mockReturnValue({
-      data: { pinned: true, executables: { app: { contenthash: hexAa }, worker: { contenthash: hexAa } } },
-    });
-    useLiveExecutableMock.mockImplementation(
-      liveByKind({ app: { contenthash: hexAa, version: [2, 1, 0] }, worker: { contenthash: hexAa, version: [0, 1, 0] } }),
-    );
+  it('returns [] when the product is not pinned', async () => {
+    seedProduct(false, { worker: { contenthash: hexAa } });
+    seedLive({ worker: { contenthash: hexBb, version: [0, 1, 1] } });
+
     const { result } = renderHook(() => useAvailableUpdates('a.dot'));
-    expect(result.current).toEqual([]);
+
+    await waitFor(() => expect(result.current).toEqual([]));
   });
 
-  it('returns the drifted kinds with their frozen and fresh versions', () => {
-    usePersistedProductByIdMock.mockReturnValue({
-      data: {
-        pinned: true,
-        executables: {
-          app: { contenthash: hexAa, appVersion: [2, 1, 0] },
-          widget: { contenthash: hexAa, appVersion: [1, 1, 0] },
-        },
-      },
+  it('returns [] when every present kind matches chain', async () => {
+    seedProduct(true, { app: { contenthash: hexAa }, worker: { contenthash: hexAa } });
+    seedLive({
+      app: { contenthash: hexAa, version: [2, 1, 0] },
+      worker: { contenthash: hexAa, version: [0, 1, 0] },
     });
-    useLiveExecutableMock.mockImplementation(
-      liveByKind({ app: { contenthash: hexBb, version: [2, 1, 1] }, widget: { contenthash: hexAa, version: [1, 1, 0] } }),
-    );
+
     const { result } = renderHook(() => useAvailableUpdates('a.dot'));
-    expect(result.current).toEqual([{ kind: 'app', fromVersion: [2, 1, 0], toVersion: [2, 1, 1] }]);
+
+    await waitFor(() => expect(result.current).toEqual([]));
+  });
+
+  it('returns the drifted kinds with their frozen and fresh versions', async () => {
+    seedProduct(true, {
+      app: { contenthash: hexAa, appVersion: [2, 1, 0] },
+      widget: { contenthash: hexAa, appVersion: [1, 1, 0] },
+    });
+    seedLive({
+      app: { contenthash: hexBb, version: [2, 1, 1] },
+      widget: { contenthash: hexAa, version: [1, 1, 0] },
+    });
+
+    const { result } = renderHook(() => useAvailableUpdates('a.dot'));
+
+    await waitFor(() => expect(result.current).toEqual([{ kind: 'app', fromVersion: [2, 1, 0], toVersion: [2, 1, 1] }]));
   });
 });
 
 describe('useNewerVersionAvailable', () => {
-  it('is true when at least one kind drifted', () => {
-    usePersistedProductByIdMock.mockReturnValue({ data: { pinned: true, executables: { worker: { contenthash: hexAa } } } });
-    useLiveExecutableMock.mockImplementation(liveByKind({ worker: { contenthash: hexBb, version: [0, 1, 1] } }));
+  it('is true when at least one kind drifted', async () => {
+    seedProduct(true, { worker: { contenthash: hexAa } });
+    seedLive({ worker: { contenthash: hexBb, version: [0, 1, 1] } });
+
     const { result } = renderHook(() => useNewerVersionAvailable('a.dot'));
-    expect(result.current).toBe(true);
+
+    await waitFor(() => expect(result.current).toBe(true));
   });
 
-  it('is false when nothing drifted', () => {
-    usePersistedProductByIdMock.mockReturnValue({ data: { pinned: true, executables: { worker: { contenthash: hexAa } } } });
-    useLiveExecutableMock.mockImplementation(liveByKind({ worker: { contenthash: hexAa, version: [0, 1, 0] } }));
+  it('is false when nothing drifted', async () => {
+    seedProduct(true, { worker: { contenthash: hexAa } });
+    seedLive({ worker: { contenthash: hexAa, version: [0, 1, 0] } });
+
     const { result } = renderHook(() => useNewerVersionAvailable('a.dot'));
-    expect(result.current).toBe(false);
+
+    await waitFor(() => expect(result.current).toBe(false));
   });
 });

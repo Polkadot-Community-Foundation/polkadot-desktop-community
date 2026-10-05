@@ -17,6 +17,7 @@ export const ipfsRawResource = createQueryResource<{ cid: string; gatewayUrl: st
   key: ({ cid, asCar }) => (asCar ? `car:${cid}` : cid),
 })
   .request<Uint8Array | null>(({ cid, gatewayUrl, asCar }) => ipfsGateway.fetchRaw(gatewayUrl, cid, { asCar }))
+  .mock(() => null)
   .timeout(60_000)
   .cache<Record<string, Uint8Array>>({
     staleAfter: Number.POSITIVE_INFINITY,

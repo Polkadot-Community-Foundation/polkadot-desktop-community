@@ -1,22 +1,5 @@
 import { errAsync, okAsync } from 'neverthrow';
-import { of } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-vi.mock('./dotns', () => ({
-  dotNsUseCase: { getActiveTld: vi.fn().mockResolvedValue('.dot') },
-}));
-
-vi.mock('../product/repository', () => ({
-  productDb: { getByBaseName: vi.fn() },
-}));
-
-vi.mock('../product/manifest/resource', () => ({
-  liveExecutableResource: { read$: vi.fn() },
-}));
-
-vi.mock('../product/declined-updates/repository', () => ({
-  declinedUpdatesRepository: { isDeclined: vi.fn() },
-}));
 
 import { declinedUpdatesRepository } from '../product/declined-updates/repository';
 import { liveExecutableResource } from '../product/manifest/resource';
@@ -43,16 +26,22 @@ function makeLive(overrides: Partial<LiveExecutable> = {}): LiveExecutable {
   return { contenthash: '0xnew', version: [1, 0, 1], ...overrides };
 }
 
+// The three "returns null" cases below never stub the live read: the builder mock
+// already answers `null`, which is exactly the "no update" shape they need.
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.spyOn(productDb, 'getByBaseName');
+  vi.spyOn(declinedUpdatesRepository, 'isDeclined');
   vi.mocked(declinedUpdatesRepository.isDeclined).mockResolvedValue(false);
 });
 
 describe('checkModalityUpdate', () => {
   it('returns null when the product is not pinned', async () => {
+    const readLive = vi.fn(() => makeLive());
+    liveExecutableResource.instead(readLive);
     vi.mocked(productDb.getByBaseName).mockReturnValue(okAsync(makeRecord({ pinned: false })));
     expect(await updatesUseCase.checkModalityUpdate({ baseName: 'app.dot', kind: 'app' })).toBeNull();
-    expect(liveExecutableResource.read$).not.toHaveBeenCalled();
+    expect(readLive).not.toHaveBeenCalled();
   });
 
   it('returns null when the kind is absent on the frozen product', async () => {
@@ -67,20 +56,20 @@ describe('checkModalityUpdate', () => {
 
   it('returns null when the live resolution matches the frozen contenthash (no drift)', async () => {
     vi.mocked(productDb.getByBaseName).mockReturnValue(okAsync(makeRecord()));
-    vi.mocked(liveExecutableResource.read$).mockReturnValue(of(makeLive({ contenthash: '0xold' })));
+    liveExecutableResource.instead(() => makeLive({ contenthash: '0xold' }));
     expect(await updatesUseCase.checkModalityUpdate({ baseName: 'app.dot', kind: 'app' })).toBeNull();
   });
 
   it('returns null when drifted but the version is already declined', async () => {
     vi.mocked(productDb.getByBaseName).mockReturnValue(okAsync(makeRecord()));
-    vi.mocked(liveExecutableResource.read$).mockReturnValue(of(makeLive()));
+    liveExecutableResource.instead(() => makeLive());
     vi.mocked(declinedUpdatesRepository.isDeclined).mockResolvedValue(true);
     expect(await updatesUseCase.checkModalityUpdate({ baseName: 'app.dot', kind: 'app' })).toBeNull();
   });
 
   it('returns the fresh {contenthash, version} when pinned, drifted, and undeclined', async () => {
     vi.mocked(productDb.getByBaseName).mockReturnValue(okAsync(makeRecord()));
-    vi.mocked(liveExecutableResource.read$).mockReturnValue(of(makeLive()));
+    liveExecutableResource.instead(() => makeLive());
     const result = await updatesUseCase.checkModalityUpdate({ baseName: 'app.dot', kind: 'app' });
     expect(result).toEqual({ contenthash: '0xnew', version: [1, 0, 1] });
     expect(declinedUpdatesRepository.isDeclined).toHaveBeenCalledWith('app.dot', 'app', '0xnew');
@@ -88,7 +77,7 @@ describe('checkModalityUpdate', () => {
 
   it('normalizes a raw open identifier to the canonical base name before lookup', async () => {
     vi.mocked(productDb.getByBaseName).mockReturnValue(okAsync(makeRecord()));
-    vi.mocked(liveExecutableResource.read$).mockReturnValue(of(makeLive()));
+    liveExecutableResource.instead(() => makeLive());
     const result = await updatesUseCase.checkModalityUpdate({ baseName: 'App', kind: 'app' });
     expect(result).toEqual({ contenthash: '0xnew', version: [1, 0, 1] });
     expect(productDb.getByBaseName).toHaveBeenCalledWith('app.dot');

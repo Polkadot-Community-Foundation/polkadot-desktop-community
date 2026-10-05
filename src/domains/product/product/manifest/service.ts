@@ -1,6 +1,8 @@
+import { type ProductExecutionKind } from '@parity/truapi-host';
 import * as v from 'valibot';
 
 import { type HexString } from '@/shared/types';
+import { type ArchiveContent } from '@/domains/network';
 import { dotNsService } from '../../dotns/service';
 import { type Product } from '../types';
 
@@ -43,6 +45,34 @@ function parseExecutableManifest(rawText: string | null, expectedKind: Executabl
 function isRenderableIconFormat(format: string): format is RenderableIconFormat {
   const normalized = format.toLowerCase();
   return RENDERABLE_ICON_FORMATS.some(known => known === normalized);
+}
+
+// Archive paths may be stored with or without a leading slash; try both so a path
+// resolved under one convention still matches a file stored under the other.
+// Shared by the worker's module loader and the renderer's archive-backed images.
+function lookupArchiveFile(files: ArchiveContent, id: string): Uint8Array | undefined {
+  return files[id] ?? files[id.replace(/^\//, '')] ?? files[`/${id}`];
+}
+
+// The renderer's `Image` node carries no format — only bytes — so the host reads the
+// magic number rather than trusting a declaration. The allowlist is deliberately the
+// same pair `RENDERABLE_ICON_FORMATS` names and `ipfsService.toDataUrl` accepts; SVG
+// is excluded because it is a script-bearing document, and the render tree's whole
+// premise is that a product names layouts and tokens but never markup.
+const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+const JPEG_MAGIC = [0xff, 0xd8, 0xff];
+
+function startsWith(bytes: Uint8Array, magic: number[]): boolean {
+  if (bytes.length < magic.length) return false;
+
+  return magic.every((byte, i) => bytes[i] === byte);
+}
+
+function sniffImageFormat(bytes: Uint8Array): RenderableIconFormat | null {
+  if (startsWith(bytes, PNG_MAGIC)) return 'png';
+  if (startsWith(bytes, JPEG_MAGIC)) return 'jpeg';
+
+  return null;
 }
 
 function assembleProduct(params: {
@@ -108,13 +138,29 @@ function formatVersion(version: SemVer): string {
   return version.join('.');
 }
 
+// The core names the executable kinds a manifest declares in its own casing
+// (`ProductContext.executionKind`); host state keyed for the core uses the core's name.
+function executionKindOf(kind: ExecutableKind): ProductExecutionKind {
+  switch (kind) {
+    case 'app':
+      return 'App';
+    case 'widget':
+      return 'Widget';
+    case 'worker':
+      return 'Worker';
+  }
+}
+
 export const manifestService = {
   parseRootManifest,
   parseExecutableManifest,
   isRenderableIconFormat,
+  lookupArchiveFile,
+  sniffImageFormat,
   legacyApp,
   executableFromManifest,
   executablesFromManifests,
   assembleProduct,
   formatVersion,
+  executionKindOf,
 };

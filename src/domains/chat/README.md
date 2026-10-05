@@ -20,6 +20,12 @@ The unit of consumption is a **`ChatSession`**: a uniform observable interface t
 
 - **P2PRoom** — An end-to-end-encrypted session between two peers, identified by `sessionId` and the peer's SS58 account, carrying the peer's username and (optionally) push-notification routing.
 - **P2PChatRequest** — The handshake that creates a room: direction (incoming/outgoing), status, optional welcome message, and a `channelTopic` derived from an ephemeral ECDH exchange.
+- **Proof of compute** — a puzzle the identity backend's username-search route may demand from an
+  unauthenticated caller: mine a counter whose work digest has enough leading zero bits, and present
+  it in a `Proof-Of-Compute` header. **Opportunistic, never required by this host** — deployments
+  ship it disabled, and when no puzzle is on offer (or mining exceeds its budget) search runs
+  anonymously exactly as before. Say "proof of compute", not "proof of work": the backend's route,
+  header and configuration all use the former.
 - **Batch** — the unacked set for a V2 session: every message the peer hasn't ACKed yet, all carried on the latest statement of the channel, so one response acknowledges the whole set. The SDK's multi-device session owns it and reads it back out of the statement store on init — the store is the source of truth, this domain persists nothing for it.
 
 ### Product-specific
@@ -29,7 +35,7 @@ The unit of consumption is a **`ChatSession`**: a uniform observable interface t
 ### Reactions and rendering
 
 - **ReactionAggregate** — `{ emoji, count, reactedByMe, reactors[] }` summarizing a message's reactions.
-- **Custom renderer** — The plugin system that lets a product define how its custom message types are drawn, using the host UI primitive tree (Box / Column / Row / Text / Button / TextField / …) shared with `@novasamatech/host-api`.
+- **Renderer tree** — The plugin system that lets a product define how its custom message types are drawn, using the host UI primitive tree (Box / Column / Row / Text / Button / TextField / Image / …) the TrUAPI core defines (`RendererNode` in `@parity/truapi`). The tree comes from the product that owns the room, over its worker's core connection (`render`, addressed by a `RenderContext::ChatMessage`); a tapped control goes back on the renderer's own action stream (`publishRendererAction`), naming that same context — **not** as an `ActionTriggered` chat action, which is reserved for buttons the _host_ draws for an `Actions` message. A render that fails reports through `onError`, and the host drops the partial tree rather than leaving it on screen as the product's finished output.
 
 ## Scope
 
@@ -56,7 +62,12 @@ This domain does **not** own:
 
 ## References
 
+- [Identity backend OpenAPI](https://identity.dotspark.app/docs/openapi.json) — username search,
+  and the proof-of-compute puzzle route. Note its prose describes the work preimage in a way that
+  reads as string concatenation; the authoritative definition is
+  `crates/username-indexer/src/poc/solution.rs` in `paritytech/device-uniqueness-backend-community`, which is
+  what `peerSearchService.leadingZeroBits` is ported from and pinned against.
 - [`@novasamatech/statement-store`](https://www.npmjs.com/package/@novasamatech/statement-store) — Session, encryption, Sr25519/X25519 primitives, and topic-hash (`khash`) derivation.
 - [`@novasamatech/host-chat`](https://www.npmjs.com/package/@novasamatech/host-chat) — Wire-level message codec used to encode `MessageContent`.
 - [`@novasamatech/handoff-service`](https://www.npmjs.com/package/@novasamatech/handoff-service) — HOP file relay (upload / download by `identifier` + `claimTicket`).
-- [`@novasamatech/host-api`](https://www.npmjs.com/package/@novasamatech/host-api) — UI-primitive tree (`CustomRendererNode`, modifiers, color tokens) shared with the custom-renderer plugin protocol.
+- [`@parity/truapi`](https://www.npmjs.com/package/@parity/truapi) — UI-primitive tree (`RendererNode`, modifiers, color tokens) shared with the renderer plugin protocol.

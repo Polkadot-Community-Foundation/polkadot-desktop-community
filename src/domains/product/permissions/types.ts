@@ -1,69 +1,31 @@
-import {
-  type CodecType,
-  type DevicePermission as DevicePermissionCodec,
-  type RemotePermission as RemotePermissionCodec,
-} from '@novasamatech/host-api';
+import { type HostDevicePermissionRequest } from '@parity/truapi';
+import { type PermissionAuthorizationRequest, type PermissionAuthorizationStatus } from '@parity/truapi-host';
 
 import { type ExecutableKind } from '../product/manifest/constants';
 
-import { type PermissionModality } from './constants';
+import { type PermissionId } from './constants';
 
-export type DevicePermissionType = CodecType<typeof DevicePermissionCodec>;
-export type RemotePermissionType = CodecType<typeof RemotePermissionCodec>;
+/**
+ * The device permissions the core can ask for. Aliased rather than restated: the
+ * core owns the set, and a host that drifted from it would store decisions the
+ * core never asks about.
+ */
+export type DevicePermissionType = HostDevicePermissionRequest;
+
+/**
+ * What the OS currently says about a device capability, as the main process reports
+ * it. `'not-applicable'` covers every platform and permission the OS does not gate.
+ */
+export type OsDevicePermissionStatus = 'granted' | 'denied' | 'not-determined' | 'not-applicable';
 
 export type PermissionStatus = 'ask' | 'granted' | 'denied';
 
-export type DevicePermissionId = 'Microphone' | 'Camera' | 'Bluetooth' | 'Location';
-
-export type Permission<Payload> = {
-  payload: Payload;
-  modality: PermissionModality;
-  status: PermissionStatus;
-};
-
-export type DevicePermission = Permission<{ name: DevicePermissionType }>;
-
-export type RemotePermission = Permission<
-  | {
-      type: 'Remote';
-      pattern: string;
-    }
-  | {
-      type: 'ChainSubmit';
-    }
-  | {
-      type: 'PreimageSubmit';
-    }
-  | {
-      type: 'StatementSubmit';
-    }
-  | {
-      type: 'WebRtc';
-    }
-  | {
-      type: 'UserIdentity';
-    }
->;
-
-export type StoredRemotePermissionType = Exclude<RemotePermission['payload']['type'], 'Remote'>;
-
-export type RemotePermissionRequest = { tag: 'Remote'; value: string[] } | { tag: StoredRemotePermissionType };
-
-export type ProductPermissions = {
-  productId: string;
-  devicePermissions: DevicePermission[];
-  remotePermissions: RemotePermission[];
-};
-
 // One product's standing on a single permission, used by the cross-product
-// aggregation. `patterns` is populated only for ExternalRequest.
+// aggregation.
 export type AppPermissionEntry = {
   productId: string;
   // Roll-up across modalities: 'granted' if any granted, else 'denied' if any denied, else 'ask'.
   status: PermissionStatus;
-  // Modalities with granted status (for ExternalRequest: ≥1 granted pattern).
-  allowedModalities: PermissionModality[];
-  patterns?: { pattern: string; modality: PermissionModality; status: PermissionStatus }[];
 };
 
 // A permission rolled up across every product that has touched it.
@@ -78,3 +40,25 @@ export type RemotePermissionIpcRequest = {
   executable: ExecutableKind;
   request: { tag: 'Remote'; url: string } | { tag: 'ChainSubmit' };
 };
+
+/**
+ * The core's permission API, injected at bootstrap.
+ *
+ * The runtime handle lives in an aggregate and a domain may not import one, so this
+ * arrives through `bootstrapProduct` rather than being reached for. It is deliberately
+ * narrower than the runtime: three calls, no lifecycle.
+ */
+export type PermissionsAdapter = {
+  getStatus(productId: string, request: PermissionAuthorizationRequest): Promise<PermissionAuthorizationStatus>;
+  getStatuses(productId: string, requests: PermissionAuthorizationRequest[]): Promise<PermissionAuthorizationStatus[]>;
+  setStatus(productId: string, request: PermissionAuthorizationRequest, status: PermissionAuthorizationStatus): Promise<void>;
+};
+
+/** One catalogue row of a product's settings page. */
+export type ProductPermissionEntry = { permissionId: PermissionId; status: PermissionStatus };
+
+/** One granted (or denied) remote domain, as the web-domains dialog renders it. */
+export type GrantedPattern = { pattern: string; status: PermissionStatus };
+
+/** One product whose account context this product may access. */
+export type GrantedAccountAccess = { targetProductId: string; status: PermissionStatus };

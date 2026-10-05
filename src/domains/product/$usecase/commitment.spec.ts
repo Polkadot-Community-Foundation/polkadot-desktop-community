@@ -1,54 +1,25 @@
 import { err, ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../product/repository', () => ({
-  productDb: {
-    getByBaseName: vi.fn(),
-    update: vi.fn(),
-    updateExecutable: vi.fn(),
-    upsert: vi.fn(),
-  },
-}));
-
-vi.mock('../dotns/service', () => ({
-  dotNsService: {
-    baseNameOf: vi.fn((id: string, tld: string) => (id.endsWith(tld) ? id : `${id}${tld}`)),
-  },
-}));
-
-vi.mock('./dotns', () => ({
-  dotNsUseCase: { getActiveTld: vi.fn().mockResolvedValue('.dot') },
-}));
-
-vi.mock('./resolve', () => ({
-  resolveProductUseCase: {
-    fetchProductFromChain: vi.fn(),
-    resolveFreshExecutable: vi.fn(),
-  },
-}));
-
-vi.mock('../product/resource', () => ({
-  invalidateChainResolve: vi.fn(),
-}));
-
-vi.mock('./offlineCache', () => ({
-  offlineCacheUseCase: {
-    prefetchArchives: vi.fn(),
-    evictArchives: vi.fn(),
-    reconcilePinnedArchives: vi.fn(),
-  },
-}));
-
 import { type WidgetExecutable } from '../product/manifest/types';
 import { productDb } from '../product/repository';
-import { invalidateChainResolve } from '../product/resource';
+import { chainResolveResource } from '../product/resource';
 
 import { commitmentUseCase } from './commitment';
 import { offlineCacheUseCase } from './offlineCache';
 import { resolveProductUseCase } from './resolve';
 
-const fetchProductFromChain = resolveProductUseCase.fetchProductFromChain;
-const resolveFreshExecutable = resolveProductUseCase.resolveFreshExecutable;
+// Every collaborator is a plain object, spied in place with no implementation: the
+// repository so nothing reaches Dexie, the sibling use cases so a chain read or an
+// archive prefetch never runs. Each case states the value it needs.
+vi.spyOn(productDb, 'getByBaseName');
+vi.spyOn(productDb, 'update');
+vi.spyOn(productDb, 'updateExecutable');
+vi.spyOn(productDb, 'upsert');
+vi.spyOn(offlineCacheUseCase, 'prefetchArchives').mockResolvedValue();
+vi.spyOn(offlineCacheUseCase, 'evictArchives').mockResolvedValue();
+const fetchProductFromChain = vi.spyOn(resolveProductUseCase, 'fetchProductFromChain');
+const resolveFreshExecutable = vi.spyOn(resolveProductUseCase, 'resolveFreshExecutable');
 
 function makeProduct(overrides: Partial<{ displayName: string }> = {}) {
   return {
@@ -70,6 +41,10 @@ function makeRecord(overrides: Partial<{ pinned: boolean }> = {}) {
     ...overrides,
   };
 }
+
+// The chain-resolve cache is a resource, so the eviction is observed on the resource
+// itself rather than through a stand-in for the module that owns it.
+const invalidateChainResolve = vi.spyOn(chainResolveResource, 'invalidate');
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -108,7 +83,11 @@ describe('commitProductByIdentifier', () => {
 
     expect(fetchProductFromChain).toHaveBeenCalledWith('app.dot');
     expect(productDb.upsert).toHaveBeenCalledWith(fresh, { pinned: false });
-    expect(invalidateChainResolve).toHaveBeenCalledWith(expect.objectContaining({ id: expect.any(String) }), 'app.dot', '.dot');
+    expect(invalidateChainResolve).toHaveBeenCalledWith({
+      environment: expect.objectContaining({ id: expect.any(String) }),
+      identifier: 'app.dot',
+      tld: '.dot',
+    });
     expect(result).toBe(saved);
   });
 
@@ -217,7 +196,11 @@ describe('pinProduct', () => {
 
     await commitmentUseCase.pinProduct('app.dot');
 
-    expect(invalidateChainResolve).toHaveBeenCalledWith(expect.objectContaining({ id: expect.any(String) }), 'app.dot', '.dot');
+    expect(invalidateChainResolve).toHaveBeenCalledWith({
+      environment: expect.objectContaining({ id: expect.any(String) }),
+      identifier: 'app.dot',
+      tld: '.dot',
+    });
   });
 
   it('returns null when chain returns nothing', async () => {

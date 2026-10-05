@@ -103,17 +103,10 @@
       "navigationBackAria": "戻る",
       "navigationForwardAria": "進む",
       "addressWelcome": "Polkadot へようこそ！ここに .dot アドレスを入力してください",
-      "addressFavorites": "お気に入り",
-      "suggestionSeparator": "—",
       "removeFromDashboard": "ダッシュボードからプロダクトを削除",
       "addressSuggestions": "すべてのアプリ",
       "addressNoResults": "アプリが見つかりません",
-      "recentlyVisited": "最近開いた項目",
       "recentlyOpened": "最近開いた項目",
-      "clearRecent": "クリア",
-      "recents": {
-        "header": "最近"
-      },
       "recentClearedTitle": "最近開いたタブを消去しました",
       "undoLabel": "元に戻す {seconds}秒",
       "ramUsage": "RAM 使用量: {value}",
@@ -194,7 +187,8 @@
       "zoomIn": "拡大",
       "zoomOut": "縮小",
       "zoomReset": "ズームをリセット",
-      "zoomPercent": "{percent}%"
+      "zoomPercent": "{percent}%",
+      "clearRecent": "クリア"
     },
     "userManager": {
       "connectionStatus": {
@@ -347,8 +341,7 @@
           "sending": "送信しています",
           "sent": "送信済み",
           "delivered": "配信済み",
-          "claimed": "受け取り済み",
-          "currencyLabel": "CASH"
+          "claimed": "受け取り済み"
         }
       },
       "call": {
@@ -370,7 +363,11 @@
           "openToCall": "モバイルアプリを開いて発信",
           "openToReturn": "モバイルアプリを開いて戻る",
           "openToCallBack": "モバイルアプリを開いてかけ直す",
-          "openToCallAgain": "モバイルアプリを開いてもう一度発信"
+          "openToCallAgain": "モバイルアプリを開いてもう一度発信",
+          "tapToCall": "タップして発信",
+          "tapToReturn": "タップして戻る",
+          "tapToCallBack": "タップしてかけ直す",
+          "tapToCallAgain": "タップしてもう一度発信"
         }
       }
     },
@@ -407,23 +404,6 @@
           "subtitle": "しばらくしてからもう一度お試しください"
         }
       }
-    },
-    "signingBotAutopair": {
-      "title": "署名ボット",
-      "statusIdle": "接続の準備ができました",
-      "statusConnecting": "ボットを確認中...",
-      "statusPairing": "ボット経由でペアリング中...",
-      "statusPaired": "「{user}」としてペアリング済み",
-      "statusError": "ペアリングに失敗しました",
-      "botUrlLabel": "ボットの URL",
-      "botReachable": "ボットに接続できます",
-      "botUnreachable": "ボットに接続できません",
-      "tokenLabel": "トークン",
-      "usernameLabel": "ユーザー名",
-      "connectingButton": "ペアリング中...",
-      "connectButton": "ボットに接続",
-      "connected": "接続済み",
-      "waitingQr": "QR データを待機中..."
     },
     "dashboard": {
       "title": "ダッシュボード",
@@ -625,7 +605,7 @@
         "description": "{productName} のサイトデータがすべて消去され、権限がリセットされます。タブは開いたままで、次回開いたときにすべて新しく読み込まれます。"
       },
       "webDomains": {
-        "dialogTitle": "{productName} {modality} のウェブドメインへのアクセスを管理"
+        "dialogTitle": "{productName} のウェブドメインへのアクセスを管理"
       },
       "appPermission": {
         "title": "{productName} の{permission}アクセス",
@@ -660,6 +640,7 @@
           "Clipboard": "クリップボード",
           "OpenUrl": "外部 URL を開く",
           "Biometrics": "生体認証",
+          "NFC": "NFC",
           "Files": "ファイル",
           "Remote": "ウェブドメイン",
           "WebRtc": "WebRTC",
@@ -677,6 +658,7 @@
           "Clipboard": "共有するコンテンツのコピーと貼り付けに使用されます",
           "OpenUrl": "既定のブラウザで外部リンクを開くために使用されます",
           "Biometrics": "本人確認が必要な機能に使用されます",
+          "NFC": "近くのタグやデバイスとの非接触の読み取りと書き込みに使用されます",
           "Files": "ファイルのアップロード、ダウンロード、管理などの機能に使用されます",
           "Remote": "以下のドメインへのリクエストに使用されます",
           "WebRtc": "音声通話やビデオ通話などのリアルタイム通信機能に使用されます",
@@ -974,6 +956,132 @@
         "hi": "ヒンディー語",
         "tr": "トルコ語"
       }
+    },
+    "inputModality": {
+      "title": "検索",
+      "placeholder": "検索または {tld} アドレスを入力",
+      "attach": "ファイルを添付",
+      "removeAttachment": "添付を削除",
+      "loadingAttachment": "添付を読み込み中…",
+      "asked": "この画面の {count} 個のプロダクトに問い合わせました…",
+      "noContext": "この画面には答えられるものがありません。",
+      "noCandidates": "これを処理できるものがありません。",
+      "goTo": "移動",
+      "pickerPrompt": "「{fileName}」をどのプロダクトで受け取りますか？",
+      "pickerEmpty": "この画面にこのファイル形式を受け取れるプロダクトはありません。",
+      "attachmentTooLarge": "大きすぎて送れません: {fileName}",
+      "scan": "コードをスキャン",
+      "scanPrompt": "スキャンしたコード",
+      "scanWillOpen": "{productId} を開きます。",
+      "scanWillAsk": "この画面のプロダクトに問い合わせます。",
+      "scanConfirm": "続ける",
+      "scanCancel": "キャンセル",
+      "scanUnavailable": "このデバイスで使えるカメラがありません。",
+      "scanDenied": "カメラへのアクセスが拒否されました。",
+      "fromThisScreen": "この画面から",
+      "recentlyVisited": "最近開いた項目",
+      "clearRecent": "消去",
+      "addressFavorites": "お気に入り",
+      "suggestionSeparator": "—"
+    },
+    "networkConnection": {
+      "title": "ネットワーク接続",
+      "chainsLoading": "ネットワークを読み込み中…",
+      "chainsEmpty": "設定されたネットワークはありません。",
+      "noLightClient": "ライトクライアントは利用できません",
+      "mode": {
+        "lightClient": "ライトクライアント",
+        "rpc": "信頼できるプロバイダー",
+        "lightClientHint": "プロバイダーを信頼せず、デバイス上で直接ネットワークデータを検証します",
+        "rpcHint": "信頼できるプロバイダー経由で高速にアクセスできますが、プライバシーは低下します"
+      },
+      "advanced": {
+        "title": "詳細設定",
+        "description": "接続方法を設定"
+      },
+      "slowLoad": {
+        "title": "読み込みに通常より時間がかかっています",
+        "description": "このセッションでは信頼できるプロバイダーを使い、待たずに高速で読み込みます",
+        "action": "高速で読み込む"
+      },
+      "loadFailed": {
+        "title": "このページを読み込めませんでした",
+        "description": "接続に時間がかかりすぎました。再試行するか、より高速な接続をお使いください。",
+        "descriptionReloadOnly": "接続に時間がかかりすぎました。ページを再読み込みしてください。",
+        "reload": "ページを再読み込み"
+      },
+      "role": {
+        "identity": "ID",
+        "apps": "アプリ",
+        "transactions": "取引"
+      }
+    },
+    "productRuntime": {
+      "permissionDenied": {
+        "systemDeviceSettings": "デバイスの設定",
+        "Camera": {
+          "title": "カメラへのアクセスが必要です",
+          "description": "ビデオ通話、QR コードの読み取り、メディアの撮影などの機能に使用されます"
+        },
+        "Microphone": {
+          "title": "マイクへのアクセスが必要です",
+          "description": "音声通話、メッセージ、音声録音などの機能に使用されます"
+        }
+      },
+      "review": {
+        "deny": "拒否",
+        "signPayload": {
+          "title": "トランザクションのペイロードに署名",
+          "subtitle": "署名する前にペイロードを確認してください。"
+        },
+        "signRaw": {
+          "title": "メッセージに署名",
+          "subtitle": "署名する前にメッセージを確認してください。"
+        },
+        "createTransaction": {
+          "title": "トランザクションを作成",
+          "subtitle": "送信する前にトランザクションを確認してください。"
+        },
+        "signVrf": {
+          "title": "VRF トランスクリプトに署名",
+          "subtitle": "署名する前にトランスクリプトを確認してください。"
+        },
+        "allowance": {
+          "title": "リソースを割り当て",
+          "subtitle": "このアプリが要求しているリソースを確認してください。"
+        },
+        "statementSign": {
+          "title": "ステートメントに署名",
+          "subtitle": "署名する前にステートメントを確認してください。"
+        },
+        "createProof": {
+          "title": "証明を作成",
+          "subtitle": "このアプリが要求している証明を確認してください。"
+        },
+        "permission": {
+          "IdentityDisclosure": "このアプリはあなたの ID を知ろうとしています。",
+          "PreimageSubmit": "このアプリはコンテンツの送信を求めています。",
+          "AccountAccess": "このアプリは別のアプリのアカウントの使用を求めています。",
+          "AccountAlias": "このアプリはエイリアスの導出を求めています。",
+          "title": "権限リクエスト"
+        },
+        "legacyAccountNotice": "レガシーアカウントで署名しています。",
+        "resource": {
+          "statementStore": "ステートメントストアのスロット",
+          "bulletin": "Bulletin ストレージのスロット",
+          "smartContract": "アカウント {account} のスマートコントラクトガス",
+          "autoSigning": "毎回確認せずにあなたの代わりに署名する"
+        },
+        "accountAccess": {
+          "title": "{targetIdentifier} のアカウントへのアクセスを許可しますか？",
+          "subtitle": "このアプリが別のアプリのアカウントで動作できるようになります",
+          "warning": "許可すると、このアプリはもう一方のアプリのアカウントをあなたの代わりに使えます"
+        },
+        "productSubtree": {
+          "title": "このアプリが自身のアカウントにアクセスすることを許可しますか？",
+          "subtitle": "ペアリング済みのデバイスからこのアプリのアカウントを取得します"
+        }
+      }
     }
   },
   "widget": {
@@ -1131,10 +1239,6 @@
         "Clipboard": {
           "title": "クリップボードへのアクセスが必要です",
           "description": "共有するコンテンツのコピーと貼り付けに使用されます"
-        },
-        "Files": {
-          "title": "ディスクへのアクセスが必要です",
-          "description": "ファイルのアップロード、ダウンロード、管理などの機能に使用されます"
         },
         "OpenUrl": {
           "title": "外部リンクへのアクセスが必要です",

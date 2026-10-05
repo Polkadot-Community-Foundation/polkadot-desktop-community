@@ -1,9 +1,9 @@
 import { themes } from '@novasamatech/tr-ui';
 import { Check } from 'lucide-react';
 
-import { type ThemeName, THEME_NAMES, saveThemeName, useThemeName } from '@/shared/hooks';
 import { useTranslation } from '@/shared/translation';
 import { cnTw } from '@/shared/utils';
+import { type ThemeName, THEME_NAMES, useSetThemeName, useThemeName } from '@/domains/application';
 
 // Each theme's signature swatch = its light `bg-action-primary` (a primitive var,
 // global across themes) so every card renders its own colour regardless of the active theme.
@@ -12,6 +12,7 @@ const swatchColor = (name: ThemeName): string => themes[name]?.light?.['--bg-act
 export const ThemePicker = () => {
   const { t } = useTranslation();
   const active = useThemeName();
+  const { run: setName } = useSetThemeName();
 
   return (
     <div role="radiogroup" className="flex gap-4">
@@ -25,7 +26,7 @@ export const ThemePicker = () => {
             aria-checked={selected}
             aria-label={t(`feature.themeToggle.${name}`)}
             className="group flex min-w-0 flex-1 flex-col items-center gap-2 rounded-2xl focus-visible:outline-none"
-            onClick={() => saveThemeName(name)}
+            onClick={() => setName(name)}
           >
             <span
               className={cnTw(

@@ -82,3 +82,10 @@ export type DashboardLayout = {
   activePageIndex: number;
   updatedAt: number;
 };
+
+// The main dashboard layout as a reader sees it: the pages plus which one is
+// active. The shape `mainDashboardLayoutResource` serves.
+export type MainDashboardLayoutSnapshot = {
+  pages: DashboardCard[][];
+  activePageIndex: number;
+};

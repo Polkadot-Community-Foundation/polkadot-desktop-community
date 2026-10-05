@@ -2,7 +2,34 @@ import { type Page } from '@playwright/test';
 
 import { TEST_IDS } from '@/shared/test-ids';
 
-const APPROVE_TESTIDS = [TEST_IDS.permissionDialogAllowAlways, TEST_IDS.aliasPermissionAllow];
+/**
+ * Approve buttons a `@manual-permissions` test takes over: the dialogs those tests
+ * are *about*. Since TrUAPI 0.18 the core's device/remote prompt and the host's own
+ * remote-URL grant are one surface, so one id answers both.
+ *
+ * Allow Always, not Allow Once: `permission-settings.feature` is deliberately not
+ * `@manual-permissions` and asserts that an auto-approved app appears in Settings →
+ * Privacy, a list built from persisted core-storage permission slots. A one-shot
+ * grant writes no slot.
+ */
+const GATED_APPROVE_TESTIDS = [TEST_IDS.permissionDialogAllowAlways, TEST_IDS.aliasPermissionAllow];
+
+/**
+ * Approve buttons that are answered even under `@manual-permissions`.
+ *
+ * Before it can serve a signing, alias or permission request the core may first ask the
+ * paired device for the product's own account subtree ("Allow this app to access its
+ * account?"). That prompt is a preamble to the request a scenario actually drives, not the
+ * subject of any scenario, and leaving it up puts a modal overlay in front of every one of
+ * them. Opting out of the auto-approver means "let me drive the dialog under test", not
+ * "let me answer the core's preamble in every scenario".
+ *
+ * `keyListingPermissionAllow` is the same shape: the signing and alias flows look up which
+ * ring-VRF keys are registered before they get to the request under test, and that lookup
+ * raises its own review. `accountAccessAllow` (one product borrowing another's account)
+ * rides along too — no scenario asserts on either, and both block the same way.
+ */
+const ALWAYS_APPROVE_TESTIDS = [TEST_IDS.productSubtreeAllow, TEST_IDS.keyListingPermissionAllow, TEST_IDS.accountAccessAllow];
 
 /**
  * localStorage key whose value gates the auto-approver at runtime. Value `'0'`
@@ -27,7 +54,9 @@ const AUTO_APPROVE_FLAG_KEY = '__e2e_dialog_auto_approve';
  * non-interactive work like cycling through tabs.
  *
  * Whether a click actually fires is gated by the `AUTO_APPROVE_FLAG_KEY`
- * localStorage value, read live on every candidate node (default: enabled).
+ * localStorage value, read live on every candidate node (default: enabled) —
+ * but only for `GATED_APPROVE_TESTIDS`; `ALWAYS_APPROVE_TESTIDS` are answered
+ * whatever the gate says.
  * On a fresh-per-test app the observer is only installed when the test isn't
  * `@manual-permissions`, so the gate stays at its default. On the shared
  * worker-scoped authenticated page the observer is installed once and the
@@ -35,20 +64,30 @@ const AUTO_APPROVE_FLAG_KEY = '__e2e_dialog_auto_approve';
  * for normal tests, disabling for `@manual-permissions` — so state never
  * bleeds across tests on the shared page.
  *
- * "Always Allow" is preferred over "Allow Once" so the same product+permission
- * doesn't re-prompt within a test.
- *
- * The inner `<button>` is targeted (not the wrapper div the test-id sits on)
- * because the wrapper takes its width from the surrounding flex layout, so on
- * Windows its center can land in padding and a click misses the button.
+ * Some of these ids sit on the `<button>` itself and others on a wrapper div, so
+ * the lookup accepts either. Where it is a wrapper, the inner `<button>` is
+ * targeted rather than the wrapper, because the wrapper takes its width from the
+ * surrounding flex layout and on Windows its center can land in padding, so a
+ * click would miss the button.
  */
 export async function registerProductDialogHandlers(page: Page) {
-  const installAutoApprover = ({ testIds, flagKey }: { testIds: readonly string[]; flagKey: string }) => {
+  const installAutoApprover = ({
+    gatedTestIds,
+    alwaysTestIds,
+    flagKey,
+  }: {
+    gatedTestIds: readonly string[];
+    alwaysTestIds: readonly string[];
+    flagKey: string;
+  }) => {
     const flag = '__e2eAutoApproveInstalled';
     if (Reflect.get(window, flag)) return;
     Reflect.set(window, flag, true);
 
-    const selector = testIds.map(id => `[data-testid="${id}"]`).join(',');
+    const toSelector = (ids: readonly string[]) => ids.map(id => `[data-testid="${id}"]`).join(',');
+    const gatedSelector = toSelector(gatedTestIds);
+    const alwaysSelector = toSelector(alwaysTestIds);
+    const selector = `${gatedSelector},${alwaysSelector}`;
 
     const enabled = () => {
       try {
@@ -59,7 +98,7 @@ export async function registerProductDialogHandlers(page: Page) {
     };
 
     const click = (node: Element) => {
-      if (!enabled()) return;
+      if (node.matches(gatedSelector) && !enabled()) return;
       const button = node.matches('button') ? node : node.querySelector('button');
       if (button instanceof HTMLButtonElement) button.click();
     };
@@ -85,7 +124,11 @@ export async function registerProductDialogHandlers(page: Page) {
     else document.addEventListener('DOMContentLoaded', start, { once: true });
   };
 
-  const arg = { testIds: APPROVE_TESTIDS, flagKey: AUTO_APPROVE_FLAG_KEY };
+  const arg = {
+    gatedTestIds: GATED_APPROVE_TESTIDS,
+    alwaysTestIds: ALWAYS_APPROVE_TESTIDS,
+    flagKey: AUTO_APPROVE_FLAG_KEY,
+  };
   await page.addInitScript(installAutoApprover, arg);
   await page.evaluate(installAutoApprover, arg).catch(() => {});
 }

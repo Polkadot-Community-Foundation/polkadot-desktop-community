@@ -6,7 +6,7 @@ Feature: Skip onboarding
     And the user skips onboarding
 
   # The "log in" half is covered by reaching the login entry point (the
-  # onboarding QR screen); actually pairing needs the signing bot (auth project).
+  # onboarding QR screen); actually pairing needs a signer (auth project).
   @allure.id:14687
   Scenario: TC-1.3.2 After skipping, the user can still open Settings and log in
     When the user opens settings from the user menu

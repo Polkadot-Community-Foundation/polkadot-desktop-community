@@ -2,7 +2,7 @@
 
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { createFeature } from '@/shared/feature';
 import { TEST_IDS } from '@/shared/test-ids';
@@ -11,11 +11,6 @@ import { productActionsMenuItemsSlot } from '../di';
 
 import { MenuItem } from './MenuItem';
 import { ProductActionsMenu } from './ProductActionsMenu';
-
-const navigateMock = vi.fn();
-vi.mock('@tanstack/react-router', () => ({
-  useNavigate: () => navigateMock,
-}));
 
 const testFeature = createFeature({ name: 'test/menu-injector' });
 

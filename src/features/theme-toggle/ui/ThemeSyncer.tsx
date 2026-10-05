@@ -1,11 +1,11 @@
 import { useTheme } from '@novasamatech/tr-ui';
 import { useEffect } from 'react';
 
-import { useBrowserTheme } from '@/shared/hooks';
+import { useThemeVariant } from '@/domains/application';
 
 export const ThemeSyncer = () => {
   const { setMode } = useTheme();
-  const theme = useBrowserTheme();
+  const theme = useThemeVariant();
 
   useEffect(() => {
     setMode(theme);

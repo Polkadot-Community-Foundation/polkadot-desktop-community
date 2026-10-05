@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { act, renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { useProductRefreshing } from './hooks';
 import { onProductRefreshRequestedSideEffect } from './refresh';
@@ -11,11 +11,6 @@ const requestRefresh = (identifier: string) => void onProductRefreshRequestedSid
 
 describe('useProductRefreshing', () => {
   const productId = 'test-product';
-
-  beforeEach(() => {
-    productLoading.set(productId, false);
-    productLoading.set('other-product', false);
-  });
 
   it('is not refreshing by default', () => {
     const { result } = renderHook(() => useProductRefreshing(productId));

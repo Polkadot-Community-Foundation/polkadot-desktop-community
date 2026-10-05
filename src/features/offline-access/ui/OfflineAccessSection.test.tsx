@@ -1,64 +1,78 @@
 // @vitest-environment happy-dom
 
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { of } from 'rxjs';
+import { describe, expect, it } from 'vitest';
+
+import { TranslationProvider } from '@/shared/translation';
+import {
+  type ExecutableKind,
+  type LiveExecutable,
+  type PersistedProduct,
+  type SemVer,
+  liveExecutableResource,
+  productsResource,
+} from '@/domains/product';
+import { offlineAccessDialogTarget } from '../state/dialogState';
 
 import { OfflineAccessSection } from './OfflineAccessSection';
 
-const { useDisplayedProductMock, useIsPinnedMock, useAvailableUpdatesMock, openDialogMock } = vi.hoisted(() => ({
-  useDisplayedProductMock: vi.fn(),
-  useIsPinnedMock: vi.fn(),
-  useAvailableUpdatesMock: vi.fn(),
-  openDialogMock: vi.fn(),
-}));
+const FROZEN_HASH = '0xaa';
+const FRESH_HASH = '0xbb';
 
-vi.mock('@/domains/product', () => ({
-  useDisplayedProduct: () => useDisplayedProductMock(),
-  useIsPinned: () => useIsPinnedMock(),
-  manifestService: { formatVersion: (v: number[]) => v.join('.') },
-}));
+type Drift = { kind: ExecutableKind; fromVersion: SemVer; toVersion: SemVer };
 
-vi.mock('../hooks/useNewerVersionAvailable', () => ({
-  useAvailableUpdates: () => useAvailableUpdatesMock(),
-}));
+// A differing contenthash is what makes a kind drift.
+const setup = (drifts: Drift[]) => {
+  const executables = Object.fromEntries(
+    drifts.map(({ kind, fromVersion }) => [kind, { contenthash: FROZEN_HASH, appVersion: fromVersion }]),
+  );
 
-vi.mock('../state/dialogState', () => ({
-  openOfflineAccessDialog: (arg: unknown) => openDialogMock(arg),
-}));
+  const record = {
+    baseName: 'a.dot',
+    displayName: 'Hack3m',
+    description: '',
+    icon: { cid: '', format: 'png' },
+    executables,
+    pinned: true,
+    createdAt: 1000,
+    updatedAt: 1000,
+  } as unknown as PersistedProduct;
 
-vi.mock('@/shared/translation', () => ({
-  useTranslation: () => ({
-    t: (key: string, values?: Record<string, unknown>) => (values ? `${key}:${JSON.stringify(values)}` : key),
-  }),
-}));
+  const live: Partial<Record<ExecutableKind, LiveExecutable>> = Object.fromEntries(
+    drifts.map(({ kind, toVersion }) => [kind, { contenthash: FRESH_HASH, version: toVersion }]),
+  );
 
-const setup = (updates: { kind: string; fromVersion: number[]; toVersion: number[] }[]) => {
-  useDisplayedProductMock.mockReturnValue({ data: { displayName: 'Hack3m', baseName: 'a.dot' } });
-  useIsPinnedMock.mockReturnValue(true);
-  useAvailableUpdatesMock.mockReturnValue(updates);
-  return render(<OfflineAccessSection productId="a.dot" />);
+  productsResource.instead(() => of([record]));
+  liveExecutableResource.instead(({ kind }) => live[kind] ?? null);
+
+  return render(
+    <TranslationProvider>
+      <OfflineAccessSection productId="a.dot" />
+    </TranslationProvider>,
+  );
 };
 
 describe('OfflineAccessSection update rows', () => {
-  it('renders one row per drifted modality with the from→to version line', () => {
+  it('renders one row per drifted modality with the from→to version line', async () => {
     setup([
       { kind: 'app', fromVersion: [2, 1, 0], toVersion: [2, 1, 1] },
       { kind: 'widget', fromVersion: [1, 1, 0], toVersion: [1, 1, 1] },
     ]);
-    expect(screen.getAllByTestId('offline-access-update-button')).toHaveLength(2);
-    expect(
-      screen.getByText('feature.offlineAccess.section.updateReady:{"fromVersion":"2.1.0","toVersion":"2.1.1"}'),
-    ).toBeTruthy();
+    expect(await screen.findAllByTestId('offline-access-update-button')).toHaveLength(2);
+    expect(screen.getByText('Update from version 2.1.0 to 2.1.1 is ready to install')).toBeTruthy();
   });
 
-  it('omits the version line when a version is all-zero (legacy)', () => {
+  it('omits the version line when a version is all-zero (legacy)', async () => {
     setup([{ kind: 'worker', fromVersion: [0, 0, 0], toVersion: [0, 0, 0] }]);
-    expect(screen.queryByText(/updateReady/)).toBeNull();
+    await screen.findByTestId('offline-access-update-button');
+    expect(screen.queryByText(/Update from version/)).toBeNull();
   });
 
-  it('opens the per-modality confirmation dialog on Update click (no inline re-pin)', () => {
+  it('opens the per-modality confirmation dialog on Update click (no inline re-pin)', async () => {
     setup([{ kind: 'app', fromVersion: [2, 1, 0], toVersion: [2, 1, 1] }]);
-    fireEvent.click(screen.getByTestId('offline-access-update-button'));
-    expect(openDialogMock).toHaveBeenCalledWith({ kind: 'updateExecutable', productId: 'a.dot', executableKind: 'app' });
+    fireEvent.click(await screen.findByTestId('offline-access-update-button'));
+    // The dialog is feature state, so the assertion reads the real target.
+    expect(offlineAccessDialogTarget.get()).toEqual({ kind: 'updateExecutable', productId: 'a.dot', executableKind: 'app' });
   });
 });

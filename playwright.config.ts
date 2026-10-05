@@ -77,7 +77,6 @@ const bddAuthenticatedDir = defineBddConfig({
 });
 
 // Chat tests — all chat features grouped as one project, under e2e/features/chat/
-//  - chat-p2p.feature        single Electron, contact search against bot peer (uses authenticatedTest)
 //  - chat-p2p-pair.feature   two Electrons (Alice + Bob) full P2P flow (uses chatPairTest)
 //  - coinflip-chat.feature   CoinFlip product widget + dashboard chat integration (uses authenticatedTest)
 const bddChatDir = defineBddConfig({
@@ -85,7 +84,6 @@ const bddChatDir = defineBddConfig({
   features: ['./e2e/features/chat/*.feature'],
   steps: [
     './e2e/steps/authenticated.steps.ts',
-    './e2e/steps/chat-p2p.steps.ts',
     './e2e/steps/chat-p2p-pair.steps.ts',
     './e2e/steps/chat-contact-search.steps.ts',
     './e2e/steps/coinflip-chat.steps.ts',
@@ -115,29 +113,22 @@ const bddProductSdkDir = defineBddConfig({
  *
  * Projects:
  *   smoke — no auth
- *   auth, authenticated, product-sdk — sign in with permanent deterministic
- *     identities (see e2e/helpers/bot-user.ts permanentBotUsername); no setup
- *     project dependency.
- *   chat — depends on `setup-chat` (per-run singleton + pair pool);
- *     `teardown-bot-users` runs after it completes.
+ *   auth, authenticated, product-sdk, chat — sign in against a local
+ *     `truapi-host` signer, one `--base-path` slot per (project, worker); all four
+ *     depend on `setup-signers`, which provisions any slot the cache lacks.
  *   security — independent.
  *
  * Runs `fullyParallel` (`workers` env-overridable). The `authenticated` project
  * reuses one signed-in Electron per worker (soft-reset between tests via
- * `reset-state.ts`); `auth`/`smoke` stay fresh-per-test. `authenticated`/`product-sdk`
- * claim permanent deterministic identities by `parallelIndex` (no pool, no
- * cross-worker collision); only `chat` draws from the per-run bot-user pool.
- * chat-pair scenarios share Alice/Bob Electrons across tests in a worker via
- * chatPair.ts.
+ * `reset-state.ts`); `auth`/`smoke` stay fresh-per-test. Slots are addressed by
+ * `parallelIndex`, so parallel workers never compete for one identity's daily
+ * allowance budget. chat-pair scenarios take their own `chatpair-w<slot><a|b>`
+ * slots and share Alice/Bob Electrons across tests in a worker via chatPair.ts.
  *
  * @see https://playwright.dev/docs/test-configuration
  */
 export default defineConfig({
   testDir: './e2e/tests',
-
-  // Wipe stale bot-user pool file at the start of every invocation so per-project
-  // setups merge into a clean slate (see e2e/setup/global-init.ts).
-  globalSetup: './e2e/setup/global-init.ts',
 
   // Maximum time one test can run
   timeout: 60_000,
@@ -154,14 +145,17 @@ export default defineConfig({
   //   pre-attested pool; product-sdk/chat build on the same worker-reuse (worker
   //   0 takes the role singleton, worker >0 attest a fresh identity; chat's pair
   //   tests also draw distinct pairs from the chat-pair pool).
-  // - link-navigation/browser are no-auth, fresh-Electron-per-test with isolated
-  //   per-worker userDataDirs — safe to parallelize (CI runs them on linux only).
-  // Only smoke/auth/security pin `--workers=1`: security because concurrent
-  // Electron teardown hangs on the macOS runner, auth to avoid concurrent
-  // signing-bot pairing, smoke as a quick serial gate. Override with
-  // `E2E_WORKERS` or the `--workers` CLI flag.
+  // - link-navigation is no-auth, fresh-Electron-per-test with isolated per-worker
+  //   userDataDirs — safe to parallelize (CI runs it on linux only).
+  // smoke/auth/security pin `--workers=1`: security because concurrent Electron
+  // teardown hangs on the macOS runner, auth to avoid concurrent pairing against
+  // one signer slot, smoke as a quick serial gate. `browser` pins `--workers=2`:
+  // unlike the signer-backed projects it is CPU-bound rather than chain-bound —
+  // every test drives a real product webview — so it gains nothing from the extra
+  // workers and at 4 it loses, with webviews failing `dom-ready` and the onboarding
+  // chrome taking over 30s to paint. Override with `E2E_WORKERS` or `--workers`.
   fullyParallel: true,
-  workers: process.env['E2E_WORKERS'] ? Number(process.env['E2E_WORKERS']) : process.env['CI'] ? 2 : '50%',
+  workers: process.env['E2E_WORKERS'] ? Number(process.env['E2E_WORKERS']) : process.env['CI'] ? 4 : '50%',
 
   // Fail the build on CI if you accidentally left test.only in the source code
   forbidOnly: !!process.env['CI'],
@@ -209,30 +203,28 @@ export default defineConfig({
   },
 
   projects: [
-    // 0. Chat's bot-user setup. auth/authenticated/product-sdk sign in with
-    //    permanent deterministic identities (see e2e/helpers/bot-user.ts) and
-    //    need no per-run setup project; chat still provisions a per-run
-    //    singleton + pair pool, so it keeps its own setup + the shared teardown.
+    // 0. Signer warm-up. Creates and attests any `truapi-host` identity the invoked
+    //    projects need that the cached base-path tree does not already hold; a no-op
+    //    on a warm tree. Its timeout must exceed the per-slot readiness budget times
+    //    the number of waves — killing a provisioning host permanently consumes a
+    //    username suffix, so this project must never be the thing that times out.
     {
-      name: 'setup-chat',
-      testMatch: '**/chat.setup.ts',
+      name: 'setup-signers',
+      testMatch: '**/signers.setup.ts',
       testDir: './e2e/setup',
-      // Chat provisions 1 singleton + N pairs (default 6 → 13 users) in parallel;
-      // attestation finality polling can take ~60–90s total.
-      timeout: 240_000,
-      teardown: 'teardown-bot-users',
-    },
-    {
-      name: 'teardown-bot-users',
-      testMatch: '**/bot-users.teardown.ts',
-      testDir: './e2e/setup',
-      timeout: 60_000,
+      timeout: 3_600_000,
     },
 
     // 1. Smoke tests — no auth, fresh Electron per test
     {
       name: 'smoke',
       testDir: bddSmokeDir,
+      // The onboarding chrome (QR, network picker, skip button) is gated on the core
+      // reaching `AuthState.Pairing`, which is a chain round-trip — the page objects budget
+      // those waits with VERY_LONG_TIMEOUT (90s). The global 60s test timeout would fire
+      // first and report "Test timeout exceeded" instead of the locator that was pending,
+      // so these no-auth projects need room for that wait even though they never sign in.
+      timeout: 150_000,
       use: {
         ...devices['Desktop Chrome'],
       },
@@ -243,6 +235,7 @@ export default defineConfig({
       name: 'auth',
       testDir: bddAuthDir,
       timeout: 180_000,
+      dependencies: ['setup-signers'],
       use: {
         ...devices['Desktop Chrome'],
         // @ts-expect-error -- custom fixture option from e2e/fixtures/base.ts
@@ -260,6 +253,7 @@ export default defineConfig({
       name: 'authenticated',
       testDir: bddAuthenticatedDir,
       timeout: 300_000,
+      dependencies: ['setup-signers'],
       use: {
         ...devices['Desktop Chrome'],
         // @ts-expect-error -- custom fixture option from e2e/fixtures/base.ts
@@ -272,6 +266,7 @@ export default defineConfig({
       name: 'product-sdk',
       testDir: bddProductSdkDir,
       timeout: 180_000,
+      dependencies: ['setup-signers'],
       use: {
         ...devices['Desktop Chrome'],
         // @ts-expect-error -- custom fixture option from e2e/fixtures/base.ts
@@ -283,10 +278,10 @@ export default defineConfig({
     {
       name: 'chat',
       testDir: bddChatDir,
-      // chat-p2p-pair does two sign-ins + chat handshake round-trips.
-      // chat-p2p is much quicker but shares the timeout.
+      // chat-p2p-pair does two sign-ins + chat handshake round-trips. The
+      // single-client chat features are much quicker but share the timeout.
       timeout: 600_000,
-      dependencies: ['setup-chat'],
+      dependencies: ['setup-signers'],
       use: {
         ...devices['Desktop Chrome'],
         // @ts-expect-error -- custom fixture option from e2e/fixtures/base.ts
@@ -308,6 +303,12 @@ export default defineConfig({
     {
       name: 'link-navigation',
       testDir: bddLinkNavDir,
+      // The onboarding chrome (QR, network picker, skip button) is gated on the core
+      // reaching `AuthState.Pairing`, which is a chain round-trip — the page objects budget
+      // those waits with VERY_LONG_TIMEOUT (90s). The global 60s test timeout would fire
+      // first and report "Test timeout exceeded" instead of the locator that was pending,
+      // so these no-auth projects need room for that wait even though they never sign in.
+      timeout: 150_000,
       use: {
         ...devices['Desktop Chrome'],
       },
@@ -317,6 +318,12 @@ export default defineConfig({
     {
       name: 'browser',
       testDir: bddBrowserDir,
+      // The onboarding chrome (QR, network picker, skip button) is gated on the core
+      // reaching `AuthState.Pairing`, which is a chain round-trip — the page objects budget
+      // those waits with VERY_LONG_TIMEOUT (90s). The global 60s test timeout would fire
+      // first and report "Test timeout exceeded" instead of the locator that was pending,
+      // so these no-auth projects need room for that wait even though they never sign in.
+      timeout: 150_000,
       use: {
         ...devices['Desktop Chrome'],
       },

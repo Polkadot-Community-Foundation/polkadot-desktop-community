@@ -1,18 +1,21 @@
 import { Binary } from 'polkadot-api';
 import { encodeFunctionResult } from 'viem';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type Environment } from '@/domains/application';
+import { chainRegistry } from '@/domains/network';
 
 import { dotNsGateway } from './gateway';
 
 const reviveApiCall = vi.fn();
 
-vi.mock('@/domains/network', () => ({
-  chainRegistry: {
-    requestApi: (_chain: unknown, callback: (client: unknown) => unknown) =>
-      callback({ api: { apis: { ReviveApi: { call: reviveApiCall } } } }),
-  },
-}));
+// The gateway reaches the chain through one runtime API; the registry is spied in place
+// so that call is answered here and no connection is opened.
+vi.spyOn(chainRegistry, 'requestApi').mockImplementation(
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- the gateway reaches for one runtime API
+  ((_chain: unknown, callback: (client: unknown) => unknown) =>
+    callback({ api: { apis: { ReviveApi: { call: reviveApiCall } } } })) as unknown as typeof chainRegistry.requestApi,
+);
 
 const REGISTRY = '0xf34054fd76BbF85f216cf9908226D5f0A72E50CA';
 const PROTOCOL_REGISTRY = '0xD19e3D0C97CF501125a04A97405e3e6592fa846E';
@@ -53,25 +56,25 @@ describe('readTld', () => {
     reviveApiCall.mockReset();
   });
 
-  test('reads the TLD through the protocol registry', async () => {
+  it('reads the TLD through the protocol registry', async () => {
     reviveApiCall.mockResolvedValueOnce(protocolRegistryResult()).mockResolvedValueOnce(tldResult('.paseo'));
 
     await expect(dotNsGateway.readTld(environment)).resolves.toBe('.paseo');
   });
 
-  test('returns null when the registry call reverts', async () => {
+  it('returns null when the registry call reverts', async () => {
     reviveApiCall.mockResolvedValueOnce({ result: { success: false, value: {} } });
 
     await expect(dotNsGateway.readTld(environment)).resolves.toBeNull();
   });
 
-  test('returns null when the protocol registry answers with empty data', async () => {
+  it('returns null when the protocol registry answers with empty data', async () => {
     reviveApiCall.mockResolvedValueOnce(protocolRegistryResult()).mockResolvedValueOnce(returning('0x'));
 
     await expect(dotNsGateway.readTld(environment)).resolves.toBeNull();
   });
 
-  test('rejects a TLD that is not a single leading-dot label', async () => {
+  it('rejects a TLD that is not a single leading-dot label', async () => {
     reviveApiCall.mockResolvedValueOnce(protocolRegistryResult()).mockResolvedValueOnce(tldResult('paseo'));
 
     await expect(dotNsGateway.readTld(environment)).resolves.toBeNull();

@@ -1,15 +1,12 @@
 import { type Observable, catchError, combineLatest, debounceTime, from, map, of, startWith } from 'rxjs';
 
-import { allAliasPermissionsResource } from '../alias-permissions/resource';
-import { type AliasPermission } from '../alias-permissions/types';
 import { DEFAULT_DOTNS_TLD } from '../dotns/constants';
 import { dotNsService } from '../dotns/service';
-import { allProductPermissionsResource } from '../permissions/resource';
-import { type ProductPermissions } from '../permissions/types';
 import { productsResource } from '../product/resource';
 import { type Product } from '../product/types';
 
 import { dotNsUseCase } from './dotns';
+import { permissionsUseCase } from './permissions';
 
 // Use-case-local composition type (multi-module: product + permissions + alias-permissions).
 // A discriminated union per interacted product: committed entries carry the
@@ -17,26 +14,18 @@ import { dotNsUseCase } from './dotns';
 // (display resolution is the consumer's concern — see `useDisplayedProduct`).
 export type InteractedProduct = { kind: 'committed'; product: Product } | { kind: 'permissionOnly'; productId: string };
 
-// Reset flows can leave a persisted row with no standing decision
-// (`{ productId, devicePermissions: [], remotePermissions: [] }`) — such a row
-// is not an interaction.
-function holdsDecision(row: ProductPermissions): boolean {
-  return row.devicePermissions.length > 0 || row.remotePermissions.length > 0;
-}
-
-// Ids of interacted products that are NOT committed — permission rows holding a
-// decision, plus alias requesters — deduped and sorted for a deterministic order.
+// Ids of interacted products that are NOT committed — every product the core holds
+// a permission slot for — deduped and sorted for a deterministic order.
 //
-// Permission/alias rows store the raw webview identifier, while a committed
-// `baseName` is always `baseNameOf()`-normalized — so membership is compared on
-// the normalized form, but the *stored raw id* is emitted: detail-page lookups
-// (`useProductPermissions(id)`) key on the raw row id.
-function collectPermissionOnlyIds(
-  products: Product[],
-  permissions: ProductPermissions[],
-  aliasPermissions: AliasPermission[],
-  tld: string,
-): string[] {
+// A slot is keyed by whatever product id the core was handed, which is the raw
+// webview identifier, while a committed `baseName` is always `baseNameOf()`-
+// normalized. Membership is compared on the normalized form, but the *raw id* is
+// emitted: detail-page lookups key on it.
+//
+// The "row with no standing decision" case that used to need filtering is gone with
+// the local store: the core clears a slot when a decision is reset, so a slot's
+// existence IS a decision.
+function collectPermissionOnlyIds(products: Product[], permissionProductIds: string[], tld: string): string[] {
   const committed = new Set(products.map(product => dotNsService.baseNameOf(product.baseName, tld)));
   const idByBaseName = new Map<string, string>();
 
@@ -46,11 +35,8 @@ function collectPermissionOnlyIds(
     if (!idByBaseName.has(baseName)) idByBaseName.set(baseName, rawId);
   }
 
-  for (const row of permissions) {
-    if (holdsDecision(row)) add(row.productId);
-  }
-  for (const alias of aliasPermissions) {
-    add(alias.requesterProductId);
+  for (const productId of permissionProductIds) {
+    add(productId);
   }
 
   return [...idByBaseName.values()].sort((a, b) => a.localeCompare(b));
@@ -73,8 +59,7 @@ function supplementary<T>(stream$: Observable<T[]>): Observable<T[]> {
 function watchInteractedProducts(): Observable<InteractedProduct[]> {
   return combineLatest([
     productsResource.read$({}),
-    supplementary(allProductPermissionsResource.read$({})),
-    supplementary(allAliasPermissionsResource.read$({})),
+    supplementary(permissionsUseCase.watchProductsWithPermissions()),
     // Same contract as `supplementary` above, for a promise source: seeded so the
     // list is not held back by a chain round trip, and caught so a failed read
     // cannot error the combined stream. The seed is only ever visible for the
@@ -87,11 +72,11 @@ function watchInteractedProducts(): Observable<InteractedProduct[]> {
     // Coalesce the synchronous seed/value burst (combineLatest glitch frames)
     // into one emission carrying every source's settled value.
     debounceTime(0),
-    map(([products, permissions, aliasPermissions, tld]) => {
+    map(([products, permissionProductIds, tld]) => {
       // Committed entries first, then the sorted permission-only ids — a stable
       // order so consumers can render the union as-is without re-sorting.
       const committed = products.map((product): InteractedProduct => ({ kind: 'committed', product }));
-      const permissionOnly = collectPermissionOnlyIds(products, permissions, aliasPermissions, tld).map(
+      const permissionOnly = collectPermissionOnlyIds(products, permissionProductIds, tld).map(
         (productId): InteractedProduct => ({ kind: 'permissionOnly', productId }),
       );
 

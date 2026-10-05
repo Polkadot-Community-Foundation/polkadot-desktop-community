@@ -4,13 +4,13 @@ import { FormattedMessage } from 'react-intl';
 
 import { ListItem, SettingsList } from '@/shared/components';
 import { useTranslation } from '@/shared/translation';
-import { type PermissionId, useAggregatedPermissions } from '@/domains/product';
+import { type PermissionId, useWatchAggregatedPermissions } from '@/domains/product';
 import { PERMISSION_CATEGORIES, PERMISSION_METADATA } from '@/widgets/Permission';
 
 export const PermissionListPage = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { data: aggregated } = useAggregatedPermissions();
+  const { data: aggregated } = useWatchAggregatedPermissions();
 
   const handleClick = (id: PermissionId) => {
     navigate({ to: '/settings/privacy/permissions/$permissionId', params: { permissionId: id } });

@@ -107,21 +107,46 @@ Rule of thumb: committed surface → persisted; any "show a product by id" view 
   normalized `origin` (`polkadot://{domain}`), and a `files: ArchiveContent` map from path to `Uint8Array`. The shape
   `polkadot://`-aware code expects to serve from.
 
+### Core storage
+
+Host-private persistence for slots the **TrUAPI core** owns — the opaque auth-session blob, the pairing device identity,
+per-product permission authorizations, and allowance keys. The core addresses each slot with a SCALE-encoded key; the host
+hex-encodes it for the string-keyed table and never interprets either key or value.
+
+- **Slot** — one core-owned entry, named by the core's `CoreStorageKey`. The host's word for it is a _slot_, not a "setting" or a
+  "record": it is opaque storage the core rents from us.
+- **`coreStorageUseCase`** — `$usecase/coreStorage.ts`. The public surface: `readSlot` / `writeSlot` / `clearSlot`. Host-side
+  callback code reaches core storage through this and nothing else.
+- **`coreStorageRepository`** — `core-storage/repository.ts`. The `coreStorage` Dexie table behind the use case. Module-internal;
+  deliberately **not** on the domain barrel.
+
+> **Why a use case over a bare repository.** There is no cache or identity here to justify a `resource.ts` — the core addresses
+> slots on demand — but `local-rules/enforce-import-restrictions` forbids putting a `repository.ts` on the domain barrel, and it
+> is right to: a repository on the public surface is reachable by symbol from any layer. A use case owning the read/write is the
+> resolution. `productStorageUseCase` (`$usecase/productStorage.ts`) exists for the same reason and covers a product's own
+> key/value entries; `productLocalStorageRepository` stays module-internal behind it.
+
 ### Sandbox
 
-- **Sandbox** — An isolated execution environment for product code, supplied by `@novasamatech/host-worker-sandbox`.
-- **ProductWorkerInstance** — The live unit a renderer holds when a product is running: `sandbox`, `container` (host-container
-  handle), an outside-in `events` emitter, a `disposed` flag, and a synchronous, idempotent `dispose()`. Created per
-  `(productId, contenthash)` — a new archive means a new instance, never a reused one.
-- **Binding** — `(instance, deps) => VoidFunction`. A registration of one host-container handler (chat create-room, post-message,
-  action subscribe, etc.) with its host-side cleanup. `defaultWorkerBindings` is the bundle wired into every worker.
-- **`createProductWorker(...)`** — The factory that builds a `ProductWorkerInstance`: instantiates the sandbox, runs the bindings,
-  kicks off `sandbox.run(code)` fire-and-forget. Disposal is synchronous and ordered (events emitter cleared → binding cleanups →
-  container.dispose → sandbox.dispose).
+- **Sandbox** — An isolated QuickJS execution environment for product code (`@/shared/sandbox`, ported from the retired
+  `@novasamatech/host-worker-sandbox`). It injects `__HOST_API_PORT__` / `__HOST_WEBVIEW_MARK__` into the VM, which is exactly
+  what the core's guest SDK looks for, so a product built against TrUAPI connects with no extra wiring.
+- **ProductWorkerInstance** — The live unit a renderer holds when a product is running: `sandbox`, a `disposed` flag, and a
+  synchronous, idempotent `dispose()`. Created per `(productId, contenthash)` — a new archive means a new instance, never a
+  reused one.
+- **Core provider** — The worker's end of the TrUAPI wire, obtained from `truapiRuntimeUseCase.createProvider` under
+  `executionKind: 'Worker'` and joined to the sandbox's own provider by `pipeProviders`. The host forwards bytes and decodes
+  nothing. A worker opens under `Worker` and no other kind: the core gates its `Chat` trait on that kind by exact equality, so a
+  worker opened as `App` would be denied the chat it exists to serve.
+- **`createProductWorker(...)`** — The factory that builds a `ProductWorkerInstance`: instantiates the sandbox, pipes it to the
+  supplied core provider, and kicks off `sandbox.run(code)` fire-and-forget. Disposal is synchronous and ordered (unpipe → core
+  provider disposed → sandbox disposed).
 
-The runtime registry of currently-active instances — and the React hooks that own a worker's lifecycle (`useProductWorker`,
-`useProductWorkerInstance`) — live in the `aggregates/product-workers` aggregate. Per `project-structure.md`, runtime state
-belongs in an aggregate, not in this domain.
+The runtime registry of currently-active instances — and the React hooks that _declare demand_ for a worker
+(`useWorkerDemand`) or read one back (`useProductWorkerInstance`) — live in the
+`aggregates/product-workers` aggregate. The hooks no longer own a worker's lifetime: the TrUAPI core counts references and
+reports which workers should run, and the aggregate's demand watcher starts and stops them. Per `project-structure.md`,
+runtime state belongs in an aggregate, not in this domain.
 
 ### Offline pin
 
@@ -169,42 +194,57 @@ belongs in an aggregate, not in this domain.
 
 ### Permissions
 
-- **Modality** — a user-facing access surface a permission can be granted through: `app` (full-screen
-  SPA), `widget` (dashboard widget); future: pocket, chats. Permission statuses are stored and enforced
-  per (product, permission, modality). Not to be confused with **executable kind**: `worker` is an
-  executable kind but not a modality — worker-originated permission requests are enforced against `app`.
-- **Permission** — A `{ payload, status }` record where `payload` describes what is being asked for (a device type or a remote-URL
-  pattern) and `status` is `ask`, `granted`, or `denied`.
+The TrUAPI core owns every persisted permission decision. The host stores them only in
+the sense that it is the core's storage backend: the core writes each decision through
+the host's `coreStorage` callbacks, and the host keeps the key's own fields indexed so
+it can ask which slots exist. Every _status_ is read back from the core.
+
+- **Permission** — A decision the core holds for a `(product, request)` pair. `status` is
+  `ask`, `granted`, or `denied` in this domain's words; the core spells the same three
+  `NotDetermined`, `Authorized`, `Denied`, and the translation stops at
+  `$usecase/permissions.ts`.
+- **Execution kind** — which executable is asking: the core's `ProductExecutionKind`
+  (`App`, `Widget`, `Worker`), the same kinds a manifest declares as `app` / `widget` /
+  `worker` (`manifestService.executionKindOf` converts). It does not scope a stored
+  decision — the core keys a persisted decision per `(product, permission)` only. It keys
+  the in-session transient device grants and deduplicates concurrent remote-URL prompts.
 - **DevicePermissionType** — `Microphone`, `Camera`, `Bluetooth`, or `Location`.
-- **Remote permission** — A grant on an HTTP(S) origin + path prefix, with `*` matching one DNS label of a subdomain. Stored as a
-  pattern, matched at use.
-- **RemotePermissionIpcRequest** — The incoming request shape for "the product wants to access this URL / submit to this chain",
-  deduplicated per `(productId, origin, modality)` so concurrent requests share one prompt.
-- **Alias permission** — A persisted decision for cross-app identity alias requests, keyed by
-  `(requesterProductId, requestedContextId)`. Stored statuses are `granted` or `denied`; missing entry means `ask`.
-- **Interacted product** — A product that is committed **or** carries any stored permission decision (a non-empty
-  `productPermissions` row or an alias-permission row as requester), regardless of status. Identity is compared on the normalized
-  base name (`isSameBaseName`) since permission rows store raw webview identifiers. Exposed by `useInteractedProducts` as a
-  discriminated union (`InteractedProduct`): `committed` entries carry the resolved `Product`; `permissionOnly` entries carry just
-  the stored raw id, resolved for display via `useDisplayedProduct`.
+- **OsDevicePermissionStatus** — What the OS itself currently says about a device capability, as the main process
+  reports it: `granted`, `denied`, `not-determined`, or `not-applicable` (every platform and permission the OS does not gate).
+  Distinct from a **Permission** `status`, which is the core's stored decision; the core consults this to revalidate a stored grant.
+- **Remote permission** — A grant on a **host**, matched by the core's RFC-0002 candidate
+  walk: the exact host, then one wildcard label (`*.parent`), then `*`. The host does no
+  matching of its own. Grants are host-wide: the origin + path-prefix granularity the
+  host used to store is gone, and recovering it needs a core change (see
+  `docs/_plans/truapi-upstream-issues.md`).
+- **RemotePermissionIpcRequest** — The incoming request shape for "the product wants to
+  access this URL / submit to this chain", deduplicated per `(productId, origin, executionKind)`
+  so concurrent requests share one prompt.
+- **Account access** — Permission for one product to reach another product's account
+  context, keyed by `targetProductId`. This is the core's name for what the host used to
+  call an _alias permission_; that term has left the vocabulary.
+- **Interacted product** — A product that is committed **or** holds at least one
+  permission slot in the core, regardless of status. A slot exists exactly when a
+  decision does, so there is no "empty row" case. Identity is compared on the normalized
+  base name (`isSameBaseName`) since a slot is keyed by the raw webview identifier the
+  core was handed. Exposed by `useInteractedProducts` as a discriminated union
+  (`InteractedProduct`): `committed` entries carry the resolved `Product`;
+  `permissionOnly` entries carry just the raw id, resolved for display via
+  `useDisplayedProduct`.
 
 ### Per-product capabilities
 
 - **Product account** — An sr25519 public key on the path `//product//{productId}/{index}` (RFC-0022). Products act on-chain
   through this derived key, never the user's root.
-  - `//product` and `//{productId}` are **hard** junctions, so the host cannot derive them: it fetches the product-root
-    ("subtree") public key from the paired device (`UserSession.getProductSubtree`, cached per session+product) and
-    soft-derives only the trailing `/{index}`.
-  - `{index}` on the wire is a **selector**, `Index(u32) | Raw([u8; 32])`. The chain code of the soft junction is the
-    expanded 32-byte value — `u32 LE ++ INDEX_MAGIC`, where `INDEX_MAGIC = blake2b256("product-account-index")[..28]` —
-    not the path segment. `Raw` passes through unchanged; the magic keeps the two spaces from colliding. Expansion is the
-    SDK's `derivationIndexBytes`.
-  - Consequence: the path is **not reproducible in `polkadot-js` or `subkey`**, which can only express string/number path
-    segments. `productAccountService.formatDerivationPath` renders it for display; treat that string as a label, not an
-    input.
-  - Naming: the fetched key is the **subtree key** (RFC-0022 calls it the product-root public key / `ApProductSubtreeResponse.product_public_key`) —
-    not "product root key", which reads like the user's root. The wire value is a **derivation index selector**; its expanded
-    form is the **derivation index**. Avoid "derivation path" for anything but the display string above.
+  - **The TrUAPI core derives it; this domain no longer does.** The host used to fetch the product-root ("subtree") public
+    key from the paired device and soft-derive the trailing `/{index}` itself — `account/` held that code and is gone. The
+    core now hands the host a finished `ProductAccountId`, and the host's only job is to show it in a review prompt.
+  - Naming survives the move and stays the vocabulary here, because reviews and product-facing copy still use it: the
+    product-root key is the **subtree key** (RFC-0022 calls it `ApProductSubtreeResponse.product_public_key`) — not "product
+    root key", which reads like the user's root. The wire value is a **derivation index selector**; its expanded form is the
+    **derivation index**. Avoid "derivation path" except for a display string.
+  - Consequence worth keeping in mind when reading a review: the path is **not reproducible in `polkadot-js` or `subkey`**,
+    which can only express string/number path segments.
 - **Product storage** — Per-product, IndexedDB-backed key/value store of `Uint8Array` values, scoped by `productId`.
 - **Allowance** — an on-chain grant letting a product's slot account store data (Bulletin `TransactionStorage.Authorizations`) or
   statements (People `Resources.StatementStoreAllowances`, one slot per daily period). The slot account key is issued by mobile
@@ -215,10 +255,11 @@ belongs in an aggregate, not in this domain.
 
 - **`bootstrapProduct(config)`** — `bootstrap.ts`. The domain's host-environment entry point: registers the product-permission IPC
   request handlers (`onDevicePermissionRequest` / `onRemotePermissionRequest`) on the host bridge, composing per-module bootstraps
-  (`bootstrapPermissions`). Called once from the app's `bootstrap.ts`, never at import time. Whether an unmatched remote-URL
+  (`bootstrapPermissions`). Also injects the core's permission adapter (`permissionsAdapter`)
+  and backfills the core-storage key index. Called once from the app's `bootstrap.ts`, never at import time. Whether an unmatched remote-URL
   request prompts the user is injected via config (`promptForUnmatchedRemoteAccess`), so the domain stays unaware of test
-  environments. The IPC carries the requesting **executable** (`app`/`widget`); `bootstrap.ts` maps it to a permission
-  **modality** via `permissionsService.modalityForKind` before resolving the decision.
+  environments. The IPC carries the requesting **executable** (`app`/`widget`); `bootstrap.ts` names it in the core's
+  **execution kind** via `manifestService.executionKindOf` before resolving the decision.
 
 ## Lifecycle & actions
 
@@ -368,15 +409,17 @@ This domain owns:
 - **Per-product cryptographic identity** — product accounts on the RFC-0022 path `//product//{productId}/{index}`, with the
   hard part fetched from the paired device and only the soft leaf derived here.
 - **Per-product persistent storage**.
-- **Alias-permission persistence** — decisions for cross-app alias access used by product-container account integrations.
+- **Alias-permission persistence** — decisions for cross-app alias access, raised now as a core review rather than by the retired product container.
 
-**Why one domain, not several.** Some of these areas have self-contained vocabulary — the sandbox runtime (`worker/`), HDKD key
-derivation (`account/`), permission brokering (`permissions/`) — and could in principle stand as their own domains. They are kept
+**Why one domain, not several.** Some of these areas have self-contained vocabulary — the sandbox runtime (`worker/`),
+core-owned storage slots (`core-storage/`), permission brokering (`permissions/`) — and could in principle stand as their own
+domains. They are kept
 here deliberately: every one is **scoped to a single product** — keyed by `productId` and meaningful only in the context of a
 resolved product — so they share this domain's core vocabulary rather than standing alone. The dependency graph stays clean (no
 module here reaches into another's internals, and the resolution path imports none of them), so the breadth is cohesion, not
 entanglement. Split one out only when it grows a vocabulary that outlives "a product" (e.g. key derivation reused beyond products,
-or a worker runtime that hosts non-product code).
+or a worker runtime that hosts non-product code). HDKD key derivation used to be such an area (`account/`); it moved into
+the TrUAPI core wholesale rather than becoming a domain.
 
 ## Boundaries
 
@@ -398,8 +441,6 @@ This domain does **not** own:
 - **Environment / network configuration.** The active environment and its dotNS chain genesis come from `@/domains/application`;
   `browse/` only reads them. The browse protocol itself (network selection, genesis recognition, on-chain query surface) lives in
   `@parity/browse-sdk`.
-- The allowance slot-account key is read through `UserSession.readAllowance` from `@novasamatech/host-papp` — the SDK owns the
-  cached-key store; this domain never touches its persistence directly.
 
 ## References
 
@@ -419,7 +460,5 @@ This domain does **not** own:
 - [Substrate hierarchical key derivation (HDKD)](https://wiki.polkadot.network/docs/learn-account-advanced#derivation-paths) —
   The underlying primitive (`HDKD.publicSoft` from `@scure/sr25519`). Note the wiki's path notation cannot express a product
   account: its segments are strings/numbers, while the soft junction here takes a raw 32-byte chain code.
-- [`@novasamatech/host-worker-sandbox`](https://www.npmjs.com/package/@novasamatech/host-worker-sandbox) — Sandbox primitive used
-  here.
 - [`@parity/browse-sdk`](https://www.npmjs.com/package/@parity/browse-sdk) — `AppListing`, network selection (`selectNetwork`,
   `isKnownGenesis`), and the catalog SDK (`createBrowseSdk`, `listAppsByModality`) used by `browse/`.

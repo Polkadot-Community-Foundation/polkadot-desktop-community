@@ -1,8 +1,8 @@
-import { useSession } from '@novasamatech/host-papp-react-ui';
 import { AccountId } from '@polkadot-api/substrate-bindings';
 import { useMemo } from 'react';
 
 import { useRead } from '@/shared/hooks';
+import { useDeviceIdentity } from '@/domains/device';
 
 import { p2pRequestsResource, p2pRoomsResource } from './resource';
 import { p2pService } from './service';
@@ -15,14 +15,18 @@ import { type P2PRoom } from './types';
  * runtime manager.
  */
 
+// P2P rooms are keyed by SS58 of this device's statement account, which the host
+// now mints itself (`@/domains/device`). It is a device-scoped id, not a user one:
+// two installs of the same account hold separate room sets, which is what the
+// multi-device protocol syncs between.
 const useCurrentUserId = (): string | null => {
-  const { session } = useSession();
+  const identity = useDeviceIdentity();
 
   return useMemo(() => {
-    if (!session) return null;
+    if (!identity) return null;
 
-    return AccountId().dec(session.localAccount.accountId);
-  }, [session]);
+    return AccountId().dec(identity.statementAccountPublicKey);
+  }, [identity]);
 };
 
 /**

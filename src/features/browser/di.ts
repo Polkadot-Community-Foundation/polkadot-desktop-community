@@ -54,3 +54,9 @@ export const tabContentSlot = createSlot<{ tab: TabRef; setDeeplink: (deeplink: 
 
 // Hover-card body (title + extra rows). The strip appends the generic RAM-usage row.
 export const tabHoverSlot = createSlot<{ tab: TabRef }>({ name: 'tabHover' });
+
+// The screen a tab shows while its product surface loads. A provider that knows
+// why a load is slow returns its own; falling through leaves the plain one.
+export const resolveProductLoaderTransformer = createTransformer<{ identifier: string }, ReactNode>({
+  name: 'resolveProductLoader',
+});

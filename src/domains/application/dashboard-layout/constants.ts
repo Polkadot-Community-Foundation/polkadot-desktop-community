@@ -23,17 +23,19 @@ export const WIDGET_VARIANT_GRID_SIZE: Record<WidgetSizeIconVariant, { w: number
 // widget lists which sizes it supports. `0` opts into horizontal (only valid
 // together with `width === 2`); the rest map to the vertical variants.
 // The favourites folder grid is always 3 columns. Visible-icon caps per size
-// variant come straight from the no-scroll mockup (rows × 3): small 2 rows,
-// medium 4 rows, large 9 rows. Extra favourites stay saved but are not rendered
-// until the widget is resized larger. `horizontal` is impossible for a folder
-// (maxW=1) but carries a value to keep the Record total.
+// variant come straight from the no-scroll mockup (rows × 3): small 1 row,
+// medium 3 rows, large 5 rows. A favourite card is 92-123px tall (icon tile plus
+// its own label row), so a taller cap would divide the widget body into rows the
+// card cannot fit and the last row would clip. Extra favourites stay saved but are
+// not rendered until the widget is resized larger. `horizontal` is impossible for
+// a folder (maxW=1) but carries a value to keep the Record total.
 export const FAVORITES_GRID_COLS = 3;
 
 export const MAX_VISIBLE_FAVORITES_BY_VARIANT: Record<WidgetSizeIconVariant, number> = {
-  small: 6,
-  medium: 12,
-  large: 27,
-  horizontal: 12,
+  small: 3,
+  medium: 9,
+  large: 15,
+  horizontal: 9,
 };
 
 export const HEIGHT_HINT_TO_VARIANT: Record<number, WidgetSizeIconVariant> = {

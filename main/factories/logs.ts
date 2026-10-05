@@ -7,7 +7,7 @@ import { default as log } from 'electron-log/main';
 
 import { ENVIRONMENT } from '../shared/constants/environment';
 
-const MAX_LOG_FILES_TO_KEEP = 10;
+const MAX_LOG_ARCHIVES_TO_KEEP = 10;
 const MAIN_LOG_FILE = 'polkadot-desktop.log';
 type RendererLogLevel = 'debug' | 'info' | 'warn' | 'error';
 const isRendererLogLevel = (value: unknown): value is RendererLogLevel =>
@@ -130,22 +130,29 @@ function serializeRendererLogValue(value: unknown): string {
   }
 }
 
-function rotateLogs(oldLogFile: LogFile) {
-  const file = oldLogFile.toString();
-  const info = parse(file);
-  const files = readdirSync(info.dir);
+export function rotateLogs(oldLogFile: LogFile) {
+  const { dir, name, ext } = parse(oldLogFile.path);
 
-  if (files.length > MAX_LOG_FILES_TO_KEEP) {
-    const filesToDelete = files.sort().slice(0, files.length - MAX_LOG_FILES_TO_KEEP);
-    for (const fileToDelete of filesToDelete) {
-      rmSync(join(info.dir, fileToDelete));
-    }
-  }
   try {
-    const date = new Date().toISOString();
-    const newFileName = join(info.dir, info.name + '.' + date + info.ext);
-    renameSync(file, newFileName);
+    // Windows rejects `:` in file names, which the ISO timestamp contains.
+    const timestamp = new Date().toISOString().replaceAll(':', '-');
+    renameSync(oldLogFile.path, join(dir, `${name}.${timestamp}${ext}`));
+    pruneLogArchives(dir, name, ext);
   } catch (error) {
-    console.warn('Could not rotate log', error);
+    // `console` is electron-log here: warning through it re-enters the file transport while the file is still over
+    // `maxSize` and recurses into another failed rotation. Report to the console transport only, and clear the file
+    // so it cannot grow unbounded.
+    log.transports.console({ data: ['Could not rotate log', error], date: new Date(), level: 'warn' });
+    oldLogFile.clear();
+  }
+}
+
+function pruneLogArchives(dir: string, name: string, ext: string) {
+  const archives = readdirSync(dir)
+    .filter(file => file.startsWith(`${name}.`) && file.endsWith(ext) && file !== `${name}${ext}`)
+    .sort();
+
+  for (const archive of archives.slice(0, -MAX_LOG_ARCHIVES_TO_KEEP)) {
+    rmSync(join(dir, archive));
   }
 }

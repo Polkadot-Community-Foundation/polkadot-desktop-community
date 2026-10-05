@@ -102,6 +102,18 @@ export default tseslint.config(
       'import-x/no-named-as-default': 'error',
       // Fitness function: zero import cycles (see docs/abstract/review-framework.md, dims 6 & 9).
       'import-x/no-cycle': ['error', { maxDepth: 10, ignoreExternal: true }],
+      'import-x/no-restricted-paths': [
+        'error',
+        {
+          zones: [
+            {
+              target: ['./src/shared', './src/domains', './src/aggregates', './src/widgets'],
+              from: './src/router.ts',
+              message: 'The router is the composition root and imports every feature; only features and routes may reach it.',
+            },
+          ],
+        },
+      ],
       'import-x/consistent-type-specifier-style': ['error', 'prefer-inline'],
       'import-x/order': [
         'error',

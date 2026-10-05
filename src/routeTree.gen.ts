@@ -23,6 +23,7 @@ import { Route as AppSettingsAppearanceRouteImport } from './routes/_app.setting
 import { Route as AppSettingsChatsRouteImport } from './routes/_app.settings.chats'
 import { Route as AppSettingsDevelopmentRouteImport } from './routes/_app.settings.development'
 import { Route as AppSettingsLanguageRouteImport } from './routes/_app.settings.language'
+import { Route as AppSettingsNetworkRouteImport } from './routes/_app.settings.network'
 import { Route as AppProductIdChar123RouteChar125RouteImport } from './routes/_app.product.$id.{-$route}'
 import { Route as AppSettingsDevelopmentCustomChainsRouteImport } from './routes/_app.settings.development.custom-chains'
 import { Route as AppSettingsDevelopmentNetworkRouteImport } from './routes/_app.settings.development.network'
@@ -104,6 +105,11 @@ const AppSettingsDevelopmentRoute = AppSettingsDevelopmentRouteImport.update({
 const AppSettingsLanguageRoute = AppSettingsLanguageRouteImport.update({
   id: '/language',
   path: '/language',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
+const AppSettingsNetworkRoute = AppSettingsNetworkRouteImport.update({
+  id: '/network',
+  path: '/network',
   getParentRoute: () => AppSettingsRoute,
 } as any)
 const AppProductIdChar123RouteChar125Route =
@@ -192,6 +198,7 @@ export interface FileRoutesByFullPath {
   '/settings/chats': typeof AppSettingsChatsRoute
   '/settings/development': typeof AppSettingsDevelopmentRouteWithChildren
   '/settings/language': typeof AppSettingsLanguageRoute
+  '/settings/network': typeof AppSettingsNetworkRoute
   '/settings/': typeof AppSettingsIndexRoute
   '/product/$id/{-$route}': typeof AppProductIdChar123RouteChar125Route
   '/settings/development/custom-chains': typeof AppSettingsDevelopmentCustomChainsRoute
@@ -218,6 +225,7 @@ export interface FileRoutesByTo {
   '/settings/chats': typeof AppSettingsChatsRoute
   '/settings/development': typeof AppSettingsDevelopmentRouteWithChildren
   '/settings/language': typeof AppSettingsLanguageRoute
+  '/settings/network': typeof AppSettingsNetworkRoute
   '/settings': typeof AppSettingsIndexRoute
   '/product/$id/{-$route}': typeof AppProductIdChar123RouteChar125Route
   '/settings/development/custom-chains': typeof AppSettingsDevelopmentCustomChainsRoute
@@ -245,6 +253,7 @@ export interface FileRoutesById {
   '/_app/settings/chats': typeof AppSettingsChatsRoute
   '/_app/settings/development': typeof AppSettingsDevelopmentRouteWithChildren
   '/_app/settings/language': typeof AppSettingsLanguageRoute
+  '/_app/settings/network': typeof AppSettingsNetworkRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
   '/_app/product/$id/{-$route}': typeof AppProductIdChar123RouteChar125Route
   '/_app/settings/development/custom-chains': typeof AppSettingsDevelopmentCustomChainsRoute
@@ -274,6 +283,7 @@ export interface FileRouteTypes {
     | '/settings/chats'
     | '/settings/development'
     | '/settings/language'
+    | '/settings/network'
     | '/settings/'
     | '/product/$id/{-$route}'
     | '/settings/development/custom-chains'
@@ -300,6 +310,7 @@ export interface FileRouteTypes {
     | '/settings/chats'
     | '/settings/development'
     | '/settings/language'
+    | '/settings/network'
     | '/settings'
     | '/product/$id/{-$route}'
     | '/settings/development/custom-chains'
@@ -326,6 +337,7 @@ export interface FileRouteTypes {
     | '/_app/settings/chats'
     | '/_app/settings/development'
     | '/_app/settings/language'
+    | '/_app/settings/network'
     | '/_app/settings/'
     | '/_app/product/$id/{-$route}'
     | '/_app/settings/development/custom-chains'
@@ -444,6 +456,13 @@ declare module '@tanstack/react-router' {
       path: '/language'
       fullPath: '/settings/language'
       preLoaderRoute: typeof AppSettingsLanguageRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
+    '/_app/settings/network': {
+      id: '/_app/settings/network'
+      path: '/network'
+      fullPath: '/settings/network'
+      preLoaderRoute: typeof AppSettingsNetworkRouteImport
       parentRoute: typeof AppSettingsRoute
     }
     '/_app/product/$id/{-$route}': {
@@ -594,6 +613,7 @@ interface AppSettingsRouteChildren {
   AppSettingsChatsRoute: typeof AppSettingsChatsRoute
   AppSettingsDevelopmentRoute: typeof AppSettingsDevelopmentRouteWithChildren
   AppSettingsLanguageRoute: typeof AppSettingsLanguageRoute
+  AppSettingsNetworkRoute: typeof AppSettingsNetworkRoute
   AppSettingsIndexRoute: typeof AppSettingsIndexRoute
   AppSettingsPrivacyAppsProductIdRoute: typeof AppSettingsPrivacyAppsProductIdRouteWithChildren
   AppSettingsPrivacyPermissionsPermissionIdRoute: typeof AppSettingsPrivacyPermissionsPermissionIdRouteWithChildren
@@ -606,6 +626,7 @@ const AppSettingsRouteChildren: AppSettingsRouteChildren = {
   AppSettingsChatsRoute: AppSettingsChatsRoute,
   AppSettingsDevelopmentRoute: AppSettingsDevelopmentRouteWithChildren,
   AppSettingsLanguageRoute: AppSettingsLanguageRoute,
+  AppSettingsNetworkRoute: AppSettingsNetworkRoute,
   AppSettingsIndexRoute: AppSettingsIndexRoute,
   AppSettingsPrivacyAppsProductIdRoute:
     AppSettingsPrivacyAppsProductIdRouteWithChildren,

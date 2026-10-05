@@ -141,10 +141,14 @@ function parseUrlWithFallbackProtocol(url: string): URL | null {
 }
 
 function getDotUrlFromParsed(parsed: URL, tld: Nullable<string>): DotNsUrl | null {
-  if (!tld || !isDotDomain(parsed.hostname, tld)) return null;
+  // `URL` lowercases the host only for special schemes (`https:`), not `polkadot:`.
+  // dotNS names are case-insensitive, and the core normalizes every product id to
+  // lowercase — an identifier born in another case would key host state apart.
+  const host = parsed.hostname.toLowerCase();
+  if (!tld || !isDotDomain(host, tld)) return null;
 
   return {
-    identifier: stripLiSuffix(parsed.hostname, tld),
+    identifier: stripLiSuffix(host, tld),
     pathname: parsed.pathname.replace(/^\//, '') + parsed.search + parsed.hash,
   };
 }

@@ -1,6 +1,7 @@
 import { AppIcon } from '@novasamatech/tr-ui';
 import { type ReactNode } from 'react';
 
+import { AppIconPlaceholder } from '@/shared/components';
 import { TEST_IDS } from '@/shared/test-ids';
 
 type Props = {
@@ -25,7 +26,9 @@ export const FavoriteCard = ({ title, iconUrl, onOpen, action }: Props) => {
         className="flex flex-1 cursor-pointer items-center justify-center bg-bg-surface-nested py-6 focus-visible:outline-none"
         onClick={onOpen}
       >
-        <AppIcon size="64" src={iconUrl} alt={title} />
+        <AppIcon size="64" src={iconUrl} alt={title}>
+          <AppIconPlaceholder size="64" />
+        </AppIcon>
       </button>
 
       {action ? (
@@ -34,8 +37,8 @@ export const FavoriteCard = ({ title, iconUrl, onOpen, action }: Props) => {
         </span>
       ) : null}
 
-      <div className="w-full px-1 py-3">
-        <span className="block truncate text-center text-sm leading-5 font-semibold text-fg-primary">{title}</span>
+      <div className="flex w-full items-center justify-center overflow-hidden p-2">
+        <span className="max-w-full truncate text-title-tiny text-fg-primary">{title}</span>
       </div>
     </div>
   );

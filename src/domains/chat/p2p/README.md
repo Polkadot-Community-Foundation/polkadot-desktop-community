@@ -14,8 +14,10 @@ of rooms/messages/requests into Dexie.
   per-device envelope crypto is the SDK's too.
 - `notifications/` — **outbound push** notifications to a peer's mobile device: the HTTP send
   path (`gateway`), pure push-id/token helpers (`service`), and the React binding (`hooks`).
-- `peer/` — on-chain peer/identity resolution (`gateway`), the network-id boundary schema
-  (`schemas`), and pure result helpers (`service`, incl. self-exclusion from search).
+- `peer/` — peer lookup: HTTP username search against the identity backend plus on-chain identity
+  resolution (`gateway`), the boundary schemas for the search envelope and the proof-of-compute
+  puzzle (`schemas`), and pure helpers (`service`) — self-exclusion from search results, and the
+  proof-of-compute work function.
 - `file-transfer/` — chat file **upload** to the HOP relay (`gateway`); the endpoints arrive as a
   parameter from `chat/$usecase/fileTransfer.ts`. There is deliberately no download counterpart: the
   HOP claim is one-shot, so claiming on desktop would deny the mobile recipient, and

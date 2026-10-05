@@ -4,14 +4,13 @@ import { type ViteUserConfig, type ViteUserConfigFnPromise, mergeConfig } from '
 import { type TestSpecification, BaseSequencer } from 'vitest/node';
 
 import { folders } from './config/index.js';
-import rendererConfig from './vite.config.renderer';
+import rendererConfig from './vite.config.renderer.js';
 
 // Synthetic catalog for tests — no real environment names. The `alpha` roles
 // match the chain ids in the remote-config mock in `vitest.setup.js`.
 const TEST_ENVIRONMENTS = JSON.stringify({
   default: 'alpha',
   shared: {
-    botNetwork: 'example-net',
     hostChatNetwork: 'example-net',
     iosBundleId: 'com.example.app',
     digitalDollarAsset: { assetId: 1, symbol: 'tUSD', precision: 6, palletName: 'Assets' },
@@ -72,9 +71,9 @@ const config: ViteUserConfigFnPromise = async options => {
         },
         reporter: 'json-summary',
       },
-      pool: 'forks',
+      pool: 'threads',
       maxConcurrency: 8,
-      deps: { optimizer: { web: { enabled: true } } },
+      deps: { optimizer: { client: { enabled: true } } },
       // The environment domain reads `VITE_ENVIRONMENTS` at module init; provide
       // the synthetic test catalog defined above.
       env: { VITE_ENVIRONMENTS: TEST_ENVIRONMENTS },

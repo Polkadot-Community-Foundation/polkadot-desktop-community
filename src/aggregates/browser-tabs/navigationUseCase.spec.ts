@@ -1,23 +1,26 @@
 // @vitest-environment happy-dom
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createMemoryHistory, createRootRoute, createRoute, createRouter } from '@tanstack/react-router';
+import { waitFor } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
 
 import { isSystemTabType, navigationUseCase } from './navigationUseCase';
 import { browserTabs } from './state/tabs';
 
-const navigateMock = vi.fn();
+// A real router over an in-memory history: the use case reads its location and asks it
+// to navigate, so the assertion is on where the router ended up, not on a call.
+async function routerAt(pathname: string) {
+  const rootRoute = createRootRoute();
+  const routeTree = rootRoute.addChildren(
+    ['/', '/chat/{-$chatId}', '/dashboard'].map(path => createRoute({ getParentRoute: () => rootRoute, path })),
+  );
+  const router = createRouter({ routeTree, history: createMemoryHistory({ initialEntries: [pathname] }) });
+  await router.load();
 
-vi.mock('@/router', () => ({
-  router: {
-    state: { location: { pathname: '/chat' } },
-    navigate: (...args: unknown[]) => navigateMock(...args),
-  },
-}));
-
-beforeEach(() => {
-  browserTabs.tabs$.set([]);
-  browserTabs.selectedTabId$.set(null);
-  navigateMock.mockClear();
-});
+  // The use case is typed against the registered app router; a three-route memory router
+  // has the same `state.location` and `navigate` shape, which is all the use case reads.
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- see above
+  return router as unknown as Parameters<typeof navigationUseCase.syncRouteToSelectedTab>[0];
+}
 
 describe('isSystemTabType', () => {
   it('returns true for chat, settings, and dashboard', () => {
@@ -34,44 +37,40 @@ describe('isSystemTabType', () => {
 
 describe('syncRouteToSelectedTab', () => {
   it('navigates to dashboard when dashboard tab is selected off-route', async () => {
-    const { router } = await import('@/router');
-    router.state.location.pathname = '/chat';
+    const router = await routerAt('/chat');
     browserTabs.addTab({ id: 'dashboard', type: 'dashboard', deeplink: '' }, { persistable: true });
     browserTabs.selectTab('dashboard');
 
-    navigationUseCase.syncRouteToSelectedTab();
+    navigationUseCase.syncRouteToSelectedTab(router);
 
-    expect(navigateMock).toHaveBeenCalledWith({ to: '/dashboard' });
+    await waitFor(() => expect(router.state.location.pathname).toBe('/dashboard'));
   });
 
   it('skips navigation when already on the tab route', async () => {
-    const { router } = await import('@/router');
-    router.state.location.pathname = '/chat';
+    const router = await routerAt('/chat');
     browserTabs.addTab({ id: 'chat', type: 'chat', deeplink: '' }, { persistable: true });
     browserTabs.selectTab('chat');
 
-    navigationUseCase.syncRouteToSelectedTab();
+    navigationUseCase.syncRouteToSelectedTab(router);
 
-    expect(navigateMock).not.toHaveBeenCalled();
+    expect(router.state.location.pathname).toBe('/chat');
   });
 });
 
 describe('navigateHomeWhenNoTabs', () => {
   it('navigates to dashboard when tabs are empty on a feature route', async () => {
-    const { router } = await import('@/router');
-    router.state.location.pathname = '/chat';
+    const router = await routerAt('/chat');
 
-    navigationUseCase.navigateHomeWhenNoTabs();
+    navigationUseCase.navigateHomeWhenNoTabs(router);
 
-    expect(navigateMock).toHaveBeenCalledWith({ to: '/dashboard' });
+    await waitFor(() => expect(router.state.location.pathname).toBe('/dashboard'));
   });
 
   it('skips navigation when already on dashboard', async () => {
-    const { router } = await import('@/router');
-    router.state.location.pathname = '/dashboard';
+    const router = await routerAt('/dashboard');
 
-    navigationUseCase.navigateHomeWhenNoTabs();
+    navigationUseCase.navigateHomeWhenNoTabs(router);
 
-    expect(navigateMock).not.toHaveBeenCalled();
+    expect(router.state.location.pathname).toBe('/dashboard');
   });
 });

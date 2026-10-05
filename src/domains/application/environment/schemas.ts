@@ -1,5 +1,7 @@
 import * as v from 'valibot';
 
+import { remoteUrlSchema } from '@/domains/remote-config';
+
 // --- `dot_ns_config` (Remote Config) ---
 // dotNS contract addresses, stored as 20-byte hex WITHOUT a `0x` prefix (the
 // assembly prepends `0x`).
@@ -7,6 +9,20 @@ export const dotNsConfigSchema = v.object({
   resolverContractAddress: v.pipe(v.string(), v.regex(/^(0x)?[0-9a-fA-F]{40}$/)),
   registryContractAddress: v.pipe(v.string(), v.regex(/^(0x)?[0-9a-fA-F]{40}$/)),
 });
+
+// --- last-known-good scalars (localStorage) ---
+// The Remote Config scalars of the last successful assembly, re-validated on the
+// way back out so a blob written by an older shape is rejected rather than
+// trusted. `persistedAt` is reported in the degraded-boot log so the staleness is
+// legible.
+export const persistedEnvironmentScalarsSchema = v.object({
+  dotNs: dotNsConfigSchema,
+  ipfsGatewayUrl: remoteUrlSchema,
+  backendUrl: remoteUrlSchema,
+  persistedAt: v.number(),
+});
+
+export type PersistedEnvironmentScalars = v.InferOutput<typeof persistedEnvironmentScalarsSchema>;
 
 // --- `VITE_ENVIRONMENTS` (build-time env var) ---
 // Channel catalog (values Remote Config doesn't serve), as JSON so no environment
@@ -27,8 +43,6 @@ export type DigitalDollarAsset = v.InferOutput<typeof digitalDollarAssetSchema>;
 
 // Fields a channel may inherit from the catalog's `shared` block.
 const channelDefaultsSchema = v.object({
-  // Network identifier the signing bot accepts in its `network` HTTP parameter.
-  botNetwork: nonEmptyString,
   // Network identifier the host-chat SDK's `createAccountService` accepts.
   hostChatNetwork: nonEmptyString,
   iosBundleId: nonEmptyString,

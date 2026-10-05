@@ -8,6 +8,7 @@ import { Slot } from '@/shared/di';
 import { TEST_IDS } from '@/shared/test-ids';
 import { useTranslation } from '@/shared/translation';
 import { type ChatMessage, type ChatSession, type MessageContent, fileTransferUseCase, useCurrentUserPeer } from '@/domains/chat';
+import { useTruapiSession, useTruapiUserId } from '@/aggregates/truapi-runtime';
 import { chatRoomBannerSlot, chatRoomHeaderActionsSlot } from '../../di';
 import { chatService } from '../../service';
 import { deriveLatestEdits, getMessagePreview, getPlainText } from '../helpers/message';
@@ -31,7 +32,11 @@ export const Room = ({ session, initialSearch, onDeleted }: ChatConversationView
 
   const rawSessionName = useObservable(session.name, '');
   const sessionName = chatService.formatPeerName(rawSessionName, session.roomId);
-  const { data: currentUserPeer } = useCurrentUserPeer();
+  const userSession = useTruapiSession();
+  const { data: currentUserPeer } = useCurrentUserPeer(
+    useTruapiUserId(),
+    userSession?.fullUsername ?? userSession?.liteUsername ?? '',
+  );
   const blockedStream = useMemo(() => session.isBlocked ?? of(false), [session.isBlocked]);
   const isBlocked = useObservable(blockedStream, false);
   const canBlock = typeof session.setBlocked === 'function';

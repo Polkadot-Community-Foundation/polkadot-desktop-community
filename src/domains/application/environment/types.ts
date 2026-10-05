@@ -34,8 +34,6 @@ export type Environment = {
   iosBundleId: string;
   ipfsGatewayUrl: string;
 
-  // Network identifier the signing bot accepts (`network` HTTP parameter).
-  botNetwork: string;
   // Network identifier the host-chat SDK's `createAccountService` accepts.
   hostChatNetwork: string;
 

@@ -1,48 +1,38 @@
 // @vitest-environment happy-dom
 
 import { fireEvent, render, screen } from '@testing-library/react';
+import { of } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TEST_IDS } from '@/shared/test-ids';
-
-const { usePinProductMock, usePinExecutableMock, useDisplayedProductMock, pinProductRun, pinExecutableRun } = vi.hoisted(() => ({
-  usePinProductMock: vi.fn(),
-  usePinExecutableMock: vi.fn(),
-  useDisplayedProductMock: vi.fn(),
-  pinProductRun: vi.fn().mockReturnValue({ subscribe: vi.fn() }),
-  pinExecutableRun: vi.fn().mockReturnValue({ subscribe: vi.fn() }),
-}));
-
-vi.mock('@/domains/product', () => ({
-  usePinProduct: () => usePinProductMock(),
-  usePinExecutable: () => usePinExecutableMock(),
-  useDisplayedProduct: () => useDisplayedProductMock(),
-}));
-
-vi.mock('@/widgets/ProductDialogHeader', () => ({ ProductDialogHeader: () => <div /> }));
-
-vi.mock('@/shared/translation', () => ({ useTranslation: () => ({ t: (k: string) => k }) }));
-
-vi.mock('@novasamatech/tr-ui', () => ({
-  Button: ({ children, onClick, ...rest }: { children: React.ReactNode; onClick?: () => void; [k: string]: unknown }) => (
-    <button onClick={onClick} {...rest}>
-      {children}
-    </button>
-  ),
-  Dialog: Object.assign(({ children }: { children: React.ReactNode }) => <div>{children}</div>, {
-    Content: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-    Footer: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  }),
-  toastError: vi.fn(),
-  toastSuccess: vi.fn(),
-}));
+import { TranslationProvider } from '@/shared/translation';
+import { type PersistedProduct, commitmentUseCase, productsResource } from '@/domains/product';
 
 import { UpdateVersionDialog } from './UpdateVersionDialog';
 
+// The re-pin writes are use-case methods on a plain object, spied in place: the two
+// hooks are `useAction` wrappers over them, so the real hooks run and the spies see the call.
+const pinProductRun = vi.spyOn(commitmentUseCase, 'pinProduct').mockResolvedValue(null);
+const pinExecutableRun = vi.spyOn(commitmentUseCase, 'pinExecutable').mockResolvedValue(null);
+
 const setup = () => {
-  usePinProductMock.mockReturnValue({ run: pinProductRun, pending: false });
-  usePinExecutableMock.mockReturnValue({ run: pinExecutableRun, pending: false });
-  useDisplayedProductMock.mockReturnValue({ data: { baseName: 'a.dot', displayName: 'A' } });
+  seedProduct();
+};
+
+const seedProduct = () => {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- test fixture, not production code
+  const record = {
+    baseName: 'a.dot',
+    displayName: 'A',
+    description: '',
+    icon: { cid: '', format: 'png' },
+    executables: {},
+    pinned: false,
+    createdAt: 1000,
+    updatedAt: 1000,
+  } as unknown as PersistedProduct;
+
+  productsResource.instead(() => of([record]));
 };
 
 describe('UpdateVersionDialog', () => {
@@ -51,19 +41,27 @@ describe('UpdateVersionDialog', () => {
     pinExecutableRun.mockClear();
   });
 
-  it('re-pins the WHOLE product on confirm when no executableKind is given', () => {
+  it('re-pins the WHOLE product on confirm when no executableKind is given', async () => {
     setup();
-    render(<UpdateVersionDialog productId="a.dot" onClose={() => {}} />);
-    fireEvent.click(screen.getByTestId(TEST_IDS.offlineAccessUpdateConfirm));
+    render(
+      <TranslationProvider>
+        <UpdateVersionDialog productId="a.dot" onClose={() => {}} />
+      </TranslationProvider>,
+    );
+    fireEvent.click(await screen.findByTestId(TEST_IDS.offlineAccessUpdateConfirm));
 
     expect(pinProductRun).toHaveBeenCalledWith('a.dot');
     expect(pinExecutableRun).not.toHaveBeenCalled();
   });
 
-  it('re-pins ONLY the given modality on confirm when executableKind is present', () => {
+  it('re-pins ONLY the given modality on confirm when executableKind is present', async () => {
     setup();
-    render(<UpdateVersionDialog productId="a.dot" executableKind="widget" onClose={() => {}} />);
-    fireEvent.click(screen.getByTestId(TEST_IDS.offlineAccessUpdateConfirm));
+    render(
+      <TranslationProvider>
+        <UpdateVersionDialog productId="a.dot" executableKind="widget" onClose={() => {}} />
+      </TranslationProvider>,
+    );
+    fireEvent.click(await screen.findByTestId(TEST_IDS.offlineAccessUpdateConfirm));
 
     expect(pinExecutableRun).toHaveBeenCalledWith({ identifier: 'a.dot', kind: 'widget' });
     expect(pinProductRun).not.toHaveBeenCalled();

@@ -2,48 +2,48 @@
 
 import { render, screen } from '@testing-library/react';
 import { type PropsWithChildren } from 'react';
+import { of } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 
 import { TranslationProvider } from '@/shared/translation';
 import type * as productDomain from '@/domains/product';
+import { type PersistedProduct, permissionsUseCase, productsResource } from '@/domains/product';
 
 import { PermissionDetailPage } from './PermissionDetailPage';
 
-const mocks = vi.hoisted(() => ({
-  aggregated: null as productDomain.AggregatedPermission | null,
-}));
+function seedTicketsProduct() {
+  const row = {
+    baseName: 'tickets.dot',
+    displayName: 'Ticket App',
+    description: '',
+    icon: { cid: '', format: 'png' },
+    executables: {},
+    pinned: false,
+    createdAt: 1000,
+    updatedAt: 1000,
+  } as unknown as PersistedProduct;
 
-vi.mock('@/domains/product', async () => {
-  const actual = await vi.importActual<typeof productDomain>('@/domains/product');
-  return {
-    ...actual,
-    useAggregatedPermission: () => ({ data: mocks.aggregated, pending: false }),
-    useDisplayedProduct: () => ({
-      data: { baseName: 'tickets.dot', displayName: 'Ticket App', description: '', icon: null, executables: {} },
-      pending: false,
-      error: null,
-    }),
-  };
-});
+  productsResource.instead(() => of([row]));
+}
 
-vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }));
+const mocks = { aggregated: [] as productDomain.AggregatedPermission[] };
+
+// The aggregated-permission read is core-backed, not resource-backed, so the use-case
+// method behind the hook is spied in place; the hook itself stays real.
+vi.spyOn(permissionsUseCase, 'watchAggregatedPermissions').mockImplementation(() => of(mocks.aggregated));
 
 const Providers = ({ children }: PropsWithChildren) => <TranslationProvider>{children}</TranslationProvider>;
 
 describe('PermissionDetailPage', () => {
-  it('shows the allowed-modalities subtitle and no inline pattern dropdowns for ExternalRequest', () => {
-    mocks.aggregated = {
-      id: 'ExternalRequest',
-      grantedCount: 1,
-      apps: [
-        {
-          productId: 'tickets.dot',
-          status: 'granted',
-          allowedModalities: ['app', 'widget'],
-          patterns: [{ pattern: 'https://a.com', modality: 'app', status: 'granted' }],
-        },
-      ],
-    };
+  it('lists each product holding the permission, without inline pattern dropdowns', async () => {
+    seedTicketsProduct();
+    mocks.aggregated = [
+      {
+        id: 'ExternalRequest',
+        grantedCount: 1,
+        apps: [{ productId: 'tickets.dot', status: 'granted' }],
+      },
+    ];
 
     render(
       <Providers>
@@ -51,16 +51,21 @@ describe('PermissionDetailPage', () => {
       </Providers>,
     );
 
-    expect(screen.getByText(/Allowed for App, Widgets/)).toBeTruthy();
+    expect(await screen.findByText('tickets.dot')).toBeTruthy();
     expect(screen.queryByText('https://a.com')).toBeNull();
   });
 
-  it('omits the allowed-for suffix when nothing is granted', () => {
-    mocks.aggregated = {
-      id: 'Microphone',
-      grantedCount: 0,
-      apps: [{ productId: 'tickets.dot', status: 'denied', allowedModalities: [] }],
-    };
+  // A stored decision no longer carries a surface, so there is no per-surface suffix
+  // left to render.
+  it('shows the base name alone as the product subtitle', async () => {
+    seedTicketsProduct();
+    mocks.aggregated = [
+      {
+        id: 'Microphone',
+        grantedCount: 0,
+        apps: [{ productId: 'tickets.dot', status: 'denied' }],
+      },
+    ];
 
     render(
       <Providers>
@@ -68,7 +73,7 @@ describe('PermissionDetailPage', () => {
       </Providers>,
     );
 
-    expect(screen.getByText('tickets.dot')).toBeTruthy();
+    expect(await screen.findByText('tickets.dot')).toBeTruthy();
     expect(screen.queryByText(/Allowed for/)).toBeNull();
   });
 });

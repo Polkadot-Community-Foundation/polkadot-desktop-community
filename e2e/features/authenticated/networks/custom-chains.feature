@@ -8,10 +8,10 @@ Feature: Custom chains
 
   Note: the happy-path cases (add a reachable chain, reject a duplicate, remove a
   chain — TC-9.2.1 / 9.2.3 / 9.2.5) require a successful `ws://` discovery against
-  a live node. The renderer CSP (`connect-src`) permits only `wss:` and
-  `http://localhost:*`, blocking plain `ws://` localhost nodes, so a deterministic
-  local fake node is not reachable from the renderer. They are left manual (`-` in
-  docs/regression-testplan-900-cases.md).
+  a live node, and are still left manual (`-` in
+  docs/regression-testplan-900-cases.md). The renderer CSP no longer blocks them —
+  `connect-src` permits plain `ws:` for the smoldot light client — so a deterministic
+  local fake node is now reachable and these could be automated.
 
   Background:
     Given the user is authenticated

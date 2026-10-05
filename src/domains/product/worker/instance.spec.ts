@@ -1,98 +1,103 @@
-import { type Container } from '@novasamatech/host-container';
-import { type Sandbox } from '@novasamatech/host-worker-sandbox';
+import { type TrUApiProductProvider } from '@parity/truapi-host';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createProductWorker } from './instance';
-import { type Binding, type WorkerDeps } from './types';
+import { type Sandbox } from '@/shared/sandbox';
 
-function makeFakeSandbox(
-  overrides: Partial<{
-    disposeImpl: () => void;
-    containerDisposeImpl: () => void;
-  }> = {},
-) {
-  const containerDispose = vi.fn(overrides.containerDisposeImpl ?? (() => {}));
+import { createProductWorker } from './instance';
+
+function makeFakeProvider() {
+  const listeners: ((message: Uint8Array) => void)[] = [];
+  const postMessage = vi.fn();
+  const dispose = vi.fn();
+
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  const container = { dispose: containerDispose } as unknown as Container;
+  const provider = {
+    postMessage,
+    subscribe: vi.fn((listener: (message: Uint8Array) => void) => {
+      listeners.push(listener);
+
+      return () => {
+        listeners.splice(listeners.indexOf(listener), 1);
+      };
+    }),
+    dispose,
+  } as unknown as TrUApiProductProvider;
+
+  const emit = (message: Uint8Array) => {
+    for (const listener of [...listeners]) listener(message);
+  };
+
+  return { provider, postMessage, dispose, emit };
+}
+
+function makeFakeSandbox(overrides: Partial<{ disposeImpl: () => void }> = {}) {
+  const wire = makeFakeProvider();
   const sandboxDispose = vi.fn(overrides.disposeImpl ?? (() => {}));
-  let runResolveFn: (() => void) | null = null;
   let runRejectFn: ((e: unknown) => void) | null = null;
   const run = vi.fn(
     () =>
-      new Promise<void>((res, rej) => {
-        runResolveFn = res;
+      new Promise<void>((_res, rej) => {
         runRejectFn = rej;
       }),
   );
 
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  const sandbox = { container, dispose: sandboxDispose, run } as unknown as Sandbox;
+  const sandbox = { provider: wire.provider, dispose: sandboxDispose, run } as unknown as Sandbox;
 
-  return {
-    sandbox,
-    sandboxDispose,
-    containerDispose,
-    run,
-    resolveRun: () => runResolveFn?.(),
-    rejectRun: (e: unknown) => runRejectFn?.(e),
-  };
+  return { sandbox, wire, sandboxDispose, run, rejectRun: (e: unknown) => runRejectFn?.(e) };
 }
 
-// eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-const noopDeps = {} as WorkerDeps;
-
 const enc = (src: string) => new TextEncoder().encode(src);
-// Worker code now lives in the archive; the factory resolves the entrypoint from it.
+// Worker code lives in the archive; the factory resolves the entrypoint from it.
 const archive = (src = '') => ({ files: { 'index.js': enc(src) }, entrypoint: 'index.js' });
 
 describe('createProductWorker', () => {
   it('builds an instance with the expected identifying fields', async () => {
     const fake = makeFakeSandbox();
+    const core = makeFakeProvider();
+
     const inst = await createProductWorker({
       productId: 'a.dot',
       contenthash: 'cid-1',
       ...archive(),
-      deps: noopDeps,
-      bindings: [],
+      coreProvider: core.provider,
       createSandbox: vi.fn(async () => fake.sandbox),
     });
 
     expect(inst.productId).toBe('a.dot');
     expect(inst.contenthash).toBe('cid-1');
     expect(inst.sandbox).toBe(fake.sandbox);
-    expect(inst.container).toBe(fake.sandbox.container);
     expect(inst.disposed).toBe(false);
   });
 
-  it('calls each binding once, passing the instance and deps', async () => {
+  it('forwards frames both ways between the sandbox and the core', async () => {
     const fake = makeFakeSandbox();
-    const a = vi.fn(() => () => {});
-    const b = vi.fn(() => () => {});
+    const core = makeFakeProvider();
 
-    const inst = await createProductWorker({
+    await createProductWorker({
       productId: 'a.dot',
       contenthash: 'cid-1',
       ...archive(),
-      deps: noopDeps,
-      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-      bindings: [a as Binding, b as Binding],
+      coreProvider: core.provider,
       createSandbox: vi.fn(async () => fake.sandbox),
     });
 
-    expect(a).toHaveBeenCalledTimes(1);
-    expect(a).toHaveBeenCalledWith(inst, noopDeps);
-    expect(b).toHaveBeenCalledTimes(1);
-    expect(b).toHaveBeenCalledWith(inst, noopDeps);
+    fake.wire.emit(enc('to-core'));
+    expect(core.postMessage).toHaveBeenCalledWith(enc('to-core'));
+
+    core.emit(enc('to-product'));
+    expect(fake.wire.postMessage).toHaveBeenCalledWith(enc('to-product'));
   });
 
   it('starts run() but does not await it', async () => {
     const fake = makeFakeSandbox();
+    const core = makeFakeProvider();
+
     const inst = await createProductWorker({
       productId: 'a.dot',
       contenthash: 'cid-1',
       ...archive('CODE'),
-      deps: noopDeps,
-      bindings: [],
+      coreProvider: core.provider,
       createSandbox: vi.fn(async () => fake.sandbox),
     });
 
@@ -101,47 +106,40 @@ describe('createProductWorker', () => {
     expect(inst.disposed).toBe(false);
   });
 
-  it('dispose() runs in order: emitter cleared → bindings → container → sandbox', async () => {
+  it('dispose() stops forwarding before tearing either end down', async () => {
     const fake = makeFakeSandbox();
+    const core = makeFakeProvider();
     const order: string[] = [];
-
-    const binding: Binding = inst => {
-      return () => {
-        order.push(`binding-cleanup events.events=${JSON.stringify(inst.events.events)}`);
-      };
-    };
-    fake.containerDispose.mockImplementation(() => {
-      order.push('container.dispose');
-    });
-    fake.sandboxDispose.mockImplementation(() => {
-      order.push('sandbox.dispose');
-    });
+    core.dispose.mockImplementation(() => order.push('core.dispose'));
+    fake.sandboxDispose.mockImplementation(() => order.push('sandbox.dispose'));
 
     const inst = await createProductWorker({
       productId: 'a.dot',
       contenthash: 'cid-1',
       ...archive(),
-      deps: noopDeps,
-      bindings: [binding],
+      coreProvider: core.provider,
       createSandbox: vi.fn(async () => fake.sandbox),
     });
-    inst.events.on('sendChatAction', () => {});
 
     inst.dispose();
 
-    expect(order).toEqual(['binding-cleanup events.events={}', 'container.dispose', 'sandbox.dispose']);
+    expect(order).toEqual(['core.dispose', 'sandbox.dispose']);
     expect(inst.disposed).toBe(true);
+
+    // A frame arriving after dispose must not reach the other end.
+    fake.wire.emit(enc('late'));
+    expect(core.postMessage).not.toHaveBeenCalled();
   });
 
   it('dispose() is idempotent', async () => {
     const fake = makeFakeSandbox();
-    const cleanup = vi.fn();
+    const core = makeFakeProvider();
+
     const inst = await createProductWorker({
       productId: 'a.dot',
       contenthash: 'cid-1',
       ...archive(),
-      deps: noopDeps,
-      bindings: [() => cleanup],
+      coreProvider: core.provider,
       createSandbox: vi.fn(async () => fake.sandbox),
     });
 
@@ -149,8 +147,7 @@ describe('createProductWorker', () => {
     inst.dispose();
     inst.dispose();
 
-    expect(cleanup).toHaveBeenCalledTimes(1);
-    expect(fake.containerDispose).toHaveBeenCalledTimes(1);
+    expect(core.dispose).toHaveBeenCalledTimes(1);
     expect(fake.sandboxDispose).toHaveBeenCalledTimes(1);
   });
 
@@ -160,12 +157,13 @@ describe('createProductWorker', () => {
         throw new Error('quickjs abort');
       },
     });
+    const core = makeFakeProvider();
+
     const inst = await createProductWorker({
       productId: 'a.dot',
       contenthash: 'cid-1',
       ...archive(),
-      deps: noopDeps,
-      bindings: [],
+      coreProvider: core.provider,
       createSandbox: vi.fn(async () => fake.sandbox),
     });
 
@@ -175,12 +173,13 @@ describe('createProductWorker', () => {
 
   it('a late run() rejection after dispose does not throw out of the factory', async () => {
     const fake = makeFakeSandbox();
+    const core = makeFakeProvider();
+
     const inst = await createProductWorker({
       productId: 'a.dot',
       contenthash: 'cid-1',
       ...archive(),
-      deps: noopDeps,
-      bindings: [],
+      coreProvider: core.provider,
       createSandbox: vi.fn(async () => fake.sandbox),
     });
 

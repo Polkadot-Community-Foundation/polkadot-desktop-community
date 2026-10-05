@@ -28,7 +28,7 @@ mutation — passes through here.
 ### Statement Store
 
 - **Statement Store** — A pallet on the People chain that stores small authenticated, expiring payloads. The application
-  domain treats it as a generic transport: features (`chat`, `signing-bot-autopair`) submit and read statements without
+  domain treats it as a generic transport: features (`chat`) submit and read statements without
   knowing chain topology. Exposed via `statementStoreAdapter` and a `lazyClient` that defers People-chain connection until
   first use.
 - **SubmitErrorInfo** — Normalized error shape surfaced to features after a submission attempt; `useSubmitError` is the
@@ -42,7 +42,50 @@ mutation — passes through here.
   item absent / read failed), which callers must never collapse into `false`. The _renewal flow_ that reacts to a `false` is
   not owned here — it is runtime state, and lives in the `allowance-renewal` aggregate.
 
+### Core auth
+
+Host-side half of the TrUAPI core's sign-in. The core owns the session; this module owns the one wire call that starts a
+pairing.
+
+- **Host auth product** — The pseudo-product the host opens for itself to carry sign-in, because login is product-scoped
+  traffic but the user signs in before any product is open. Its id (`HOST_AUTH_PRODUCT_ID`) must satisfy host-spec C.7, and it
+  scopes the core's account derivation, storage and permissions — so it is not a cosmetic string.
+- **`coreAuthGateway.requestLogin`** — `core-auth/gateway.ts`. Encodes an `Account/request_login` frame, posts it on an
+  already-open provider, and resolves the core's outcome. The pairing deeplink itself arrives separately, as an `AuthState`
+  emission. Reached through `sessionUseCase.requestCoreLogin`, never directly — a gateway may not sit on the domain barrel.
+
+### Theme
+
+The app's own appearance, which the shell, the OS bridge and the TrUAPI theme callback
+all read from one place.
+
+- **Theme preference** — what the user picked: `light`, `dark`, or `system`. Use this
+  word for the choice.
+- **Variant** — what the preference resolves to once the OS is consulted (`light` /
+  `dark`). Everything that paints wants the variant; only the settings control wants
+  the preference, which is why `Theme` carries both.
+- **Theme name** — the named palette (`berlin`, `tokyo`, `lisbon`, `malta`),
+  orthogonal to light/dark.
+- **`themeResource`** — one live read for all three. Re-derived on any change: a write
+  to the settings row (`liveQuery` re-emits, so a writer never announces itself), or
+  the OS switching while the preference is `system`.
+- **`readTheme` / `saveThemePreference` / `saveThemeName`** — `theme/resource.ts`, beside
+  the resource, so every access to the `themeSettings` row goes through one module.
+  `readTheme` serves the one caller that cannot use a hook (the TrUAPI theme callback is
+  a generator the core drives); the writes are what `useSetThemePreference` /
+  `useSetThemeName` bind to.
+
+Persisted in the app database as a single `themeSettings` row, alongside everything
+else the app stores. Reads are async, so the first paint uses the defaults resolved
+against the OS until the row comes back. Values are validated on read: the row is a
+trust boundary, and an unknown palette must not reach the UI kit.
+
 ### Papp provider
+
+> **Retired as the session authority.** The TrUAPI core owns the user session; the `truapi-runtime` aggregate is the single
+> place that reports it. What remains below is live only as the **P2P/device-sync identity source**: `loadDeviceIdentity` and
+> `loadUserIdentity` read key material that only host-papp's V2 pairing persists. Nothing else may read a session from it.
+> Removed in Task 12 of the core cutover, once the core can serve the same identity.
 
 - **PAPP** (Polkadot Application) — A third-party host expecting a stable surface from the shell: host metadata, a lazy
   chain client, the statement-store, and per-product localStorage. `usePappProvider` mounts that surface for the

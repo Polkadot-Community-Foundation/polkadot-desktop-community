@@ -2,7 +2,6 @@ import { type Page } from '@playwright/test';
 
 import { OnboardingPage } from '../page-objects/OnboardingPage';
 
-import { BotUserSession, deleteBotUser, generateBotUsername, isPermanentBotUsername } from './bot-user';
 import { errorMessage } from './errors';
 import { STUCK_PAIRING_TIMEOUT, VERY_LONG_TIMEOUT } from './timeouts';
 
@@ -11,10 +10,10 @@ import { STUCK_PAIRING_TIMEOUT, VERY_LONG_TIMEOUT } from './timeouts';
  * fixtures.
  *
  * Both fixtures pair against the nightly chain (`paseo-next-v2`) whose
- * attestation/finality occasionally lags: the signing bot reports paired before
- * the identity is finalized, so the handshake wedges in `Pending` ("Completing
- * pairing…") and never redirects to `/dashboard`. A full relaunch (or storage
- * reset) after a short settle gives the chain time to catch up.
+ * attestation/finality occasionally lags: the chain reports the identity before it is
+ * usable, so the core wedges in `AuthState.Authenticating` ("Completing pairing…") and
+ * never reaches `Connected`. A full relaunch (or storage reset) after a short settle
+ * gives the chain time to catch up.
  *
  * The two levers here:
  *  - `waitForDashboardOrStuck` fails a wedged attempt early (≈`STUCK_PAIRING_TIMEOUT`)
@@ -26,7 +25,7 @@ import { STUCK_PAIRING_TIMEOUT, VERY_LONG_TIMEOUT } from './timeouts';
 export const SIGN_IN_ATTEMPTS = 3;
 export const SIGN_IN_RETRY_DELAY_MS = 10_000;
 
-/** Thrown when the pairing handshake is wedged in `Pending` past the threshold. */
+/** Thrown when pairing is wedged in `AuthState.Authenticating` past the threshold. */
 export class StuckPairingError extends Error {
   constructor(seconds: number) {
     super(`Pairing stuck on "Completing pairing…" for ${seconds}s without reaching /dashboard`);
@@ -35,17 +34,16 @@ export class StuckPairingError extends Error {
 }
 
 /**
- * Thrown when the app shows the "Limit Reached" pairing error — the peer
- * reported no free allowance slots (`no free statement-store slot for device
- * registration` from the signing bot): the bot user's per-day
- * device-registration budget (`LiteStmtStoreSlotsPerPeriod`) is exhausted.
- * Retrying with the same identity is pointless within a run (the budget is
- * daily and each attempt uses a fresh device account), so retries abort and
- * a permanent user heals immediately.
+ * Thrown when the app shows the "Limit Reached" pairing error — the peer reported no
+ * free allowance slots (`no free statement-store slot for device registration`): the
+ * identity's per-day device-registration budget (`LiteStmtStoreSlotsPerPeriod`) is
+ * exhausted. Retrying with the same identity is pointless within a run (the budget is
+ * daily and each attempt uses a fresh device account), so retries abort and the caller
+ * clears the signer's saved pairings instead — see `signInWithReset`.
  */
 export class PairingLimitError extends Error {
   constructor() {
-    super('Pairing rejected with "Limit Reached" — the bot user\'s daily allowance-slot budget is exhausted');
+    super('Pairing rejected with "Limit Reached" — this identity\'s daily allowance-slot budget is exhausted');
     this.name = 'PairingLimitError';
   }
 }
@@ -119,13 +117,10 @@ export async function withSignInRetries<T>(
       lastError = err;
       if (i === attempts) break;
       // The slot budget is per-day: every retry pairs a fresh device account, so
-      // it hits the same exhausted budget. Surface immediately (a permanent
-      // user's caller heals; anything else fails fast instead of burning
-      // attempts).
+      // it hits the same exhausted budget. Surface immediately so the caller can
+      // reset the signer (`signInWithReset`) instead of burning attempts here.
       if (err instanceof PairingLimitError) break;
-      console.warn(
-        `[${opts.label}] sign-in attempt ${i}/${attempts} failed (${errorMessage(err)}); ` + `retrying in ${delayMs / 1000}s…`,
-      );
+      console.warn(`[${opts.label}] sign-in ${i}/${attempts} failed (${errorMessage(err)}), retry in ${delayMs / 1000}s`);
       await new Promise(resolve => setTimeout(resolve, delayMs));
       if (opts.beforeRetry) await opts.beforeRetry();
     }
@@ -135,65 +130,65 @@ export async function withSignInRetries<T>(
 }
 
 /**
- * A permanent user wedged in pairing (`StuckPairingError` — the bot's DB says
- * attested but the chain was redeployed, personhood gone) or rejected with
- * "Limit Reached" (`PairingLimitError` — the user's 10/day allowance-slot
- * budget is exhausted) is unrecoverable by retry. Both are fixed by deleting
- * the bot user — recreation issues fresh keys/entropy, so the next run attests
- * cleanly into a fresh slot space. Random `testbot…` users are already fresh;
- * deleting them buys nothing.
+ * Both failures are unrecoverable by retry against the same signer state: a wedged
+ * pairing means the chain never finalised this device, and "Limit Reached" means the
+ * identity's daily statement-store slot budget is spent. Clearing the saved pairings is
+ * what unblocks recovery — `truapi-host` refuses to rotate an identity while any paired
+ * device still depends on it.
+ *
+ * Unlike the bot-era heal this replaces, there is no permanent-vs-random distinction to
+ * make: every slot is a durable identity, so the reset applies to all of them.
  */
-export function shouldHealPermanentUser(err: unknown, username: string): boolean {
-  return (err instanceof StuckPairingError || err instanceof PairingLimitError) && isPermanentBotUsername(username);
+export function shouldResetSigner(err: unknown): boolean {
+  return err instanceof StuckPairingError || err instanceof PairingLimitError;
 }
 
 /**
- * Sign in as `username` with the shared retry policy; if the attempts exhaust
- * on a wedged pairing AND the user is permanent, heal: best-effort DELETE the
- * bot user, then retry the whole flow as a freshly generated identity
- * (attested on the spot). Returns the username that actually signed in so the
- * caller can log/assert against it.
+ * The two methods a reset needs. Narrower than `SigningHost` on purpose: it states the
+ * dependency honestly and lets a test hand in a plain object with no type assertion.
  */
-export async function signInWithHeal(opts: {
+type ResettableSigner = {
+  stop(): Promise<void>;
+  removeDevices(): Promise<void>;
+};
+
+/**
+ * Sign in with the shared retry policy; if the attempts exhaust on a wedged pairing or
+ * an exhausted slot budget, clear the signer's saved pairings and try once more.
+ *
+ * The first phase is deliberately short (2 + 2): the real recovery is the reset, so
+ * spending the full budget before reaching it only delays it.
+ */
+export async function signInWithReset(opts: {
   label: string;
-  network: string;
-  botUrl: string;
-  botToken: string | undefined;
-  username: string;
-  attempt: (username: string) => Promise<void>;
+  signingHost: ResettableSigner;
+  attempt: () => Promise<void>;
   beforeRetry?: () => Promise<void>;
   retryDelayMs?: number;
-}): Promise<string> {
+}): Promise<void> {
   try {
-    // Permanent users keep a short first phase — their real recovery is the
-    // heal below (2 + 2). A non-permanent identity never heals, so it keeps
-    // the full shared budget instead of silently dropping from 3 to 2.
-    await withSignInRetries(() => opts.attempt(opts.username), {
+    await withSignInRetries(opts.attempt, {
       label: opts.label,
-      attempts: isPermanentBotUsername(opts.username) ? 2 : SIGN_IN_ATTEMPTS,
-      delayMs: opts.retryDelayMs,
-      beforeRetry: opts.beforeRetry,
-    });
-    return opts.username;
-  } catch (err) {
-    if (!shouldHealPermanentUser(err, opts.username)) throw err;
-
-    console.warn(
-      `[${opts.label}] permanent user "${opts.username}" is wedged (${errorMessage(err)}); ` +
-        `deleting it on the bot and falling back to a fresh identity. ` +
-        `The next run recreates "${opts.username}" with one clean attestation.`,
-    );
-    await deleteBotUser({ username: opts.username, network: opts.network, botUrl: opts.botUrl, botToken: opts.botToken });
-
-    const fresh = generateBotUsername();
-    await new BotUserSession(fresh, opts.botUrl, opts.botToken).ensure(opts.network);
-    if (opts.beforeRetry) await opts.beforeRetry();
-    await withSignInRetries(() => opts.attempt(fresh), {
-      label: `${opts.label}:healed`,
       attempts: 2,
       delayMs: opts.retryDelayMs,
       beforeRetry: opts.beforeRetry,
     });
-    return fresh;
+
+    return;
+  } catch (err) {
+    if (!shouldResetSigner(err)) throw err;
+
+    console.warn(`[${opts.label}] signer wedged (${errorMessage(err)}), clearing pairings and retrying`);
+    // Order matters: the process must be down before its pairings are cleared.
+    await opts.signingHost.stop();
+    await opts.signingHost.removeDevices();
+    if (opts.beforeRetry) await opts.beforeRetry();
+
+    await withSignInRetries(opts.attempt, {
+      label: `${opts.label}:reset`,
+      attempts: 2,
+      delayMs: opts.retryDelayMs,
+      beforeRetry: opts.beforeRetry,
+    });
   }
 }

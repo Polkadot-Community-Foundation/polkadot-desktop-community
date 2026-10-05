@@ -1,7 +1,10 @@
 import { AccountId } from '@polkadot-api/substrate-bindings';
+import { fromHex } from 'polkadot-api/utils';
 
-import { ensurePappProvider, loadDeviceIdentity, loadUserIdentity, statementStoreAdapter } from '@/domains/application';
+import { statementStoreAdapter } from '@/domains/application';
 import { createP2PChatManagerV2 } from '@/domains/chat';
+import { type UserIdentity, deviceIdentityUseCase } from '@/domains/device';
+import { truapiRuntime, truapiRuntimeUseCase } from '@/aggregates/truapi-runtime';
 
 import { p2pChatManager$ } from './state/manager';
 
@@ -18,17 +21,49 @@ import { p2pChatManager$ } from './state/manager';
 let initInFlight = false;
 let disposeRequestedDuringInit = false;
 
+/**
+ * The paired user's identity, as the core reports it.
+ *
+ * Every public half comes off `SessionUiInfo`; the chat secret is an explicit
+ * `CoreAdmin` read. `null` whenever the session is absent or missing a field the
+ * channel cannot run without — a partial identity would open a channel no peer can
+ * reach, which is worse than not opening one.
+ *
+ * `ssoEncPubKey` is always `null`: it marked a Mobile SSO v0.2.2 peer capability
+ * that nothing consumes now that signing runs in the core.
+ */
+async function loadUserIdentity(): Promise<UserIdentity | null> {
+  const authState = truapiRuntime.get().authState;
+  if (authState?.tag !== 'Connected') return null;
+
+  const { chatPublicKey, identityAccountId, publicKey, deviceEncPublicKey, peerStatementAccountId } = authState.value;
+  if (!chatPublicKey || !identityAccountId || !deviceEncPublicKey || !peerStatementAccountId) return null;
+
+  const chatSecret = await truapiRuntimeUseCase.getChatIdentityKey();
+  if (!chatSecret) return null;
+
+  return {
+    identityChatPublicKey: fromHex(chatPublicKey),
+    identityChatPrivateKey: fromHex(chatSecret),
+    identitySr25519PublicKey: fromHex(identityAccountId),
+    rootSr25519PublicKey: fromHex(publicKey),
+    peerDeviceEncPubKey: fromHex(deviceEncPublicKey),
+    peerDeviceStatementAccountId: fromHex(peerStatementAccountId),
+    ssoEncPubKey: null,
+  };
+}
+
 async function initialize(): Promise<void> {
   if (p2pChatManager$.get() || initInFlight) return;
   initInFlight = true;
   disposeRequestedDuringInit = false;
 
   try {
-    // The V2 pairing signal is the SDK-owned device + user identity, not the
-    // session id surfaced by `useSession()`. Until the identity persists, defer
-    // — the binding re-invokes when the session settles into the V2 identity.
-    const [device, userIdentity] = await Promise.all([loadDeviceIdentity(), loadUserIdentity()]);
-    if (!device || !userIdentity) return;
+    // The device identity is host-owned and always resolves; the user identity is
+    // the pairing signal, and until it persists there is nothing to run a channel
+    // for — the binding re-invokes when the session settles.
+    const [device, userIdentity] = await Promise.all([deviceIdentityUseCase.getDeviceIdentity(), loadUserIdentity()]);
+    if (!userIdentity) return;
 
     // userId must be SS58(device.statementAccountPublicKey) to match the
     // V2 session's localAccount and the device-sync `ownUserId`, so synced
@@ -37,7 +72,6 @@ async function initialize(): Promise<void> {
 
     const manager = await createP2PChatManagerV2({
       statementStore: statementStoreAdapter,
-      identity: (await ensurePappProvider()).identity,
       userId,
       device,
       userIdentity,

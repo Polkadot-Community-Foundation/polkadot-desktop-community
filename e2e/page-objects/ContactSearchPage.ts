@@ -92,36 +92,51 @@ export class ContactSearchPage {
     await this.messageInput.fill(text);
   }
 
+  /** The error line the draft room renders when a send failed and can be retried. */
+  get sendError() {
+    return this.page.getByText('Could not send the invitation', { exact: false });
+  }
+
   /**
    * Send the invitation message (which creates the outgoing request) and wait
    * for the draft compose input to dismiss.
    *
-   * Retries on transient on-chain failures — the first attempt can fail with
+   * Retries only on a **surfaced** failure — the first attempt can fail with
    * "Could not find encryption key for {address}" when the peer's P256 key
    * hasn't propagated through the Alice-side chain client yet (common right
-   * after both users finished sign-in). The draft input stays put on error, so
-   * a second send usually succeeds once the query refreshes.
+   * after both users finished sign-in), and the draft room says so and comes
+   * back. A timeout is not a retryable signal here: `MessageInput` unmounts the
+   * send button for the whole `useTransition` that the send runs in, so while a
+   * send is still in flight there is nothing left to click and a retry can only
+   * fail on a locator that will not resolve until the send settles. So each
+   * attempt waits out the on-chain round trip, and the next one starts only
+   * once the app has said the last one failed.
    */
-  async submitRequest(options: { retries?: number; retryDelayMs?: number } = {}) {
-    // Generous first-attempt timeout so we don't double-send: the first send
-    // normally succeeds on-chain, but the UI can take >10s to swap the draft
-    // room for the outgoing-pending room while the statement is confirmed. A
-    // retry in that window posts a duplicate request that pollutes the peer's
-    // accept list on the next scenario.
-    const { retries = 3, retryDelayMs = 3000 } = options;
+  async submitRequest(options: { retries?: number } = {}) {
+    const { retries = 3 } = options;
     for (let attempt = 1; attempt <= retries; attempt++) {
       await expect(this.sendButton).toBeVisible({ timeout: DEFAULT_TIMEOUT });
       await this.sendButton.click();
-      try {
-        await expect(this.messageInput).toBeHidden({ timeout: DEFAULT_TIMEOUT });
-        return;
-      } catch {
-        if (attempt === retries) {
-          throw new Error(`[ContactSearchPage] Send invitation did not dismiss the draft compose view after ${retries} attempts`);
-        }
-        console.warn(`[ContactSearchPage] Send invitation attempt ${attempt} did not dismiss; retrying in ${retryDelayMs}ms...`);
-        await this.page.waitForTimeout(retryDelayMs);
+
+      // Whichever lands first decides: the draft closing is success, the error
+      // line is a retryable failure. Racing them means a fast failure is not
+      // charged the full on-chain budget.
+      const settled = await Promise.race([
+        this.messageInput.waitFor({ state: 'hidden', timeout: VERY_LONG_TIMEOUT }).then(() => 'sent' as const),
+        this.sendError.waitFor({ state: 'visible', timeout: VERY_LONG_TIMEOUT }).then(() => 'failed' as const),
+      ]).catch(() => 'stuck' as const);
+
+      if (settled === 'sent') return;
+      if (settled === 'stuck') {
+        throw new Error(
+          '[ContactSearchPage] Send invitation neither dismissed the draft nor reported an error ' +
+            `within ${VERY_LONG_TIMEOUT}ms — the send is still in flight, so retrying cannot help.`,
+        );
       }
+      if (attempt === retries) {
+        throw new Error(`[ContactSearchPage] Send invitation reported an error on all ${retries} attempts`);
+      }
+      console.warn(`[contact-search] invite ${attempt}/${retries} reported an error, retrying`);
     }
   }
 }

@@ -12,8 +12,8 @@ import { FAVORITES_FOLDER_ID, foldersUseCase, useFavoriteProductIds, useRemoveIt
 import { useDotNsLabels } from '@/domains/product';
 import { isNativeAddableDashboardId, openFavoriteItemSideEffect } from '@/features/dashboard';
 import { favoritesService } from '../service';
+import { openAddToFavoritesDialog } from '../state/addToFavoritesDialog';
 
-import { AddToFavoritesDialog } from './AddToFavoritesDialog';
 import { FavoritesStatePlaceholder } from './FavoritesStatePlaceholder';
 import { SortableFavoriteItem } from './SortableFavoriteItem';
 
@@ -22,7 +22,6 @@ export const FavoritesFullscreen = () => {
   const { data: favoriteIds } = useFavoriteProductIds();
   const { removeItemFromFolder } = useRemoveItemFromFolder();
   const [query, setQuery] = useState('');
-  const [isAddOpen, setIsAddOpen] = useState(false);
 
   // Product-centric SPA: render every product favourite by id (resolved per card),
   // so catalog-added favourites show even when not installed. Native items (e.g.
@@ -104,7 +103,7 @@ export const FavoritesFullscreen = () => {
           data-testid={TEST_IDS.favoritesAddButton}
           aria-label={t('feature.favorites.addAria')}
           className="flex size-6 cursor-pointer items-center justify-center rounded-full text-fg-primary hover:bg-bg-action-secondary-hover"
-          onClick={() => setIsAddOpen(true)}
+          onClick={openAddToFavoritesDialog}
         >
           <Plus className="size-4" aria-hidden />
         </button>
@@ -132,7 +131,7 @@ export const FavoritesFullscreen = () => {
           title={<FormattedMessage id="feature.favorites.emptyTitle" />}
           description={<FormattedMessage id="feature.favorites.emptyDescription" />}
           action={
-            <Button size="sm" data-testid={TEST_IDS.favoritesBrowseApps} onClick={() => setIsAddOpen(true)}>
+            <Button size="sm" data-testid={TEST_IDS.favoritesBrowseApps} onClick={openAddToFavoritesDialog}>
               <FormattedMessage id="feature.favorites.browseApps" />
             </Button>
           }
@@ -147,7 +146,7 @@ export const FavoritesFullscreen = () => {
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={visibleIds} strategy={rectSortingStrategy}>
-            <div className="grid flex-1 auto-rows-min grid-cols-6 gap-4 overflow-y-auto p-2">
+            <div className="grid flex-1 auto-rows-min grid-cols-6 gap-2 overflow-y-auto p-2">
               {visibleIds.map(itemId => (
                 <SortableFavoriteItem
                   key={itemId}
@@ -161,8 +160,6 @@ export const FavoritesFullscreen = () => {
           </SortableContext>
         </DndContext>
       )}
-
-      <AddToFavoritesDialog isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} />
     </div>
   );
 };

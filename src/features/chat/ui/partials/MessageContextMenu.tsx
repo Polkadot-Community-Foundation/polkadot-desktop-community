@@ -139,10 +139,12 @@ export const MessageContextMenu = ({
     isOutgoing && (message.content.type === 'text' || message.content.type === 'richText' || message.content.type === 'reply');
 
   return createPortal(
+    // no-drag: this layer portals to <body> and can flip upward over the toolbar's
+    // drag region (see src/index.css) — without it, presses there go to the OS.
     <div
       ref={containerRef}
       className="pointer-events-none fixed z-50 flex flex-col items-start gap-1.5"
-      style={{ left: position.x, top: position.y }}
+      style={{ left: position.x, top: position.y, appRegion: 'no-drag' }}
     >
       {showFullPicker ? (
         <div className="pointer-events-auto">
