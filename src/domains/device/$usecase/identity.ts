@@ -1,6 +1,11 @@
+import { encodeCoreStorageKey } from '@parity/truapi-host';
+
+import { coreStorageUseCase } from '@/domains/product';
 import { deviceIdentityRepository } from '../identity/repository';
 import { deviceIdentityService } from '../identity/service';
 import { type DeviceIdentity } from '../identity/types';
+
+const PAIRING_IDENTITY_KEY = encodeCoreStorageKey({ tag: 'PairingDeviceIdentity' });
 
 // One in-flight mint per process. Without it two callers arriving in the same tick
 // both see an empty store and both generate; the repository would settle the race,
@@ -30,23 +35,32 @@ async function load(): Promise<DeviceIdentity> {
   return toIdentity(stored.statementAccountSeed, stored.encryptionPrivateKey);
 }
 
-/**
- * This device's identity, minted on first use and stable for the install.
- *
- * The host owns these keys outright — they are not derived from the paired session,
- * so they survive a re-pair, and no wallet is involved in creating them. The
- * invariant this enforces is that the install has exactly **one** identity for its
- * lifetime: `statementAccountPublicKey` is how peers address this device in the
- * multi-device protocol, so minting a second one silently orphans every peer that
- * already knows the first.
- */
-function getDeviceIdentity(): Promise<DeviceIdentity> {
+function getMintedIdentity(): Promise<DeviceIdentity> {
   loading ??= load().catch((error: unknown) => {
     loading = null;
     throw error;
   });
 
   return loading;
+}
+
+/**
+ * This device's identity.
+ *
+ * Once the core has paired, this is the identity it advertised in the handshake: the
+ * wallet allocated the statement allowance to that account and addresses device sync to
+ * that encryption key, so peers only know this device by it. It lives until logout,
+ * when the core discards it.
+ *
+ * The core creates that identity when a login starts; until then the install's own minted
+ * keys stand in. Read on every call, not memoised, so an identity created after the first
+ * read takes effect.
+ */
+async function getDeviceIdentity(): Promise<DeviceIdentity> {
+  const paired = await coreStorageUseCase.readSlot(PAIRING_IDENTITY_KEY);
+  if (paired) return deviceIdentityService.fromPairingIdentity(paired);
+
+  return getMintedIdentity();
 }
 
 /**
