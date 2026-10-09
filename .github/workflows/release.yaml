@@ -34,9 +34,10 @@ name: Release (Paseo / DEV)
 #     new v* tag every weekday and publish a GitHub Release off it unattended, and then
 #     `gh workflow run release-pipeline.yml` on top.
 #
-# Versioned releases in this fork are cut by pushing a v* tag by hand. If upstream's
-# pipeline is ever wanted here, reconcile the two paths deliberately — do not restore the
-# files.
+# Versioned releases in this fork are cut by pushing a v* tag by hand. A tag with a semver
+# pre-release suffix (v0.1.4-rc.1) publishes a pre-release that never becomes Latest. If
+# upstream's pipeline is ever wanted here, reconcile the two paths deliberately — do not
+# restore the files.
 #
 # WEEKLY TRACK — this workflow does carry a schedule of its own (Thursday 18:00 UTC), and
 # it is deliberately NOT the thing deleted above. The differences are the whole point:
@@ -397,9 +398,11 @@ jobs:
           fi
           sha256sum "${files[@]}" | tee SHA256SUMS.txt
 
-      # A tag run publishes under its own v* tag as a full release. A scheduled run has no
-      # tag, so mint a dated one and mark it a PRE-release — that is what keeps the weekly
-      # cadence off the version line and out of any future auto-update `latest`.
+      # A tag run publishes under its own v* tag: a full release, or a PRE-release when the
+      # tag carries a semver pre-release suffix (v0.1.4-rc.1). A scheduled run has no tag, so
+      # mint a dated one and mark it a PRE-release — that is what keeps the weekly cadence off
+      # the version line. A pre-release is never Latest, which is what the auto-updater's
+      # stable channel installs.
       - name: Resolve release channel
         id: channel
         shell: bash
@@ -414,10 +417,14 @@ jobs:
               echo "weekly=true"
             } >> "$GITHUB_OUTPUT"
           else
+            PRERELEASE=false
+            if [[ "${GITHUB_REF_NAME}" == v*-* ]]; then
+              PRERELEASE=true
+            fi
             {
               echo "tag=${GITHUB_REF_NAME}"
               echo "name=${GITHUB_REF_NAME}"
-              echo "prerelease=false"
+              echo "prerelease=${PRERELEASE}"
               echo "weekly=false"
             } >> "$GITHUB_OUTPUT"
           fi
@@ -450,6 +457,7 @@ jobs:
           tag_name: ${{ steps.channel.outputs.tag }}
           name: ${{ steps.channel.outputs.name }}
           prerelease: ${{ steps.channel.outputs.prerelease }}
+          make_latest: ${{ steps.channel.outputs.prerelease == 'true' && 'false' || 'true' }}
           body_path: NOTES.md
           # latest*.yml only exists when an auto-update feed is configured (publish
           # block in electron-builder.js). Don't fail the release when it's absent —
