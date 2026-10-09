@@ -18,7 +18,7 @@ import { OnboardingPage } from '../page-objects/OnboardingPage';
 
 import { setupPlatformParameter } from './allure-metadata';
 
-const CHAT_PAIR_ENVIRONMENT_ID: E2eEnvironmentId = 'nightly';
+const CHAT_PAIR_ENVIRONMENT_ID: E2eEnvironmentId = 'paseo';
 const CHAT_PAIR_NETWORK = envToNetwork(CHAT_PAIR_ENVIRONMENT_ID);
 
 /**

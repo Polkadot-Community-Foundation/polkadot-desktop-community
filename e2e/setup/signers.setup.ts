@@ -117,7 +117,7 @@ async function runWithConcurrency<T>(tasks: (() => Promise<T>)[], limit: number)
  * silent.
  */
 setup('warm signer slots', async () => {
-  const network = envToNetwork('nightly');
+  const network = envToNetwork('paseo');
   if (SLOTS.length === 0) {
     console.info('[setup] no signer-backed project invoked; nothing to warm');
 

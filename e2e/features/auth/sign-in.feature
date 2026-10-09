@@ -4,9 +4,9 @@ Feature: Sign In
   @allure.label.feature:Sign_in_PaseoNextV2 @allure.id:14689
   Scenario: TC-2.1.1 Sign in on Paseo Next V2 via signing bot reaches the dashboard
     Given the app is launched in autotest mode
-    And the user selects the "nightly" environment
+    And the user selects the "paseo" environment
     And the QR code is displayed on onboarding screen
-    When the user signs in on "nightly"
+    When the user signs in on "paseo"
     Then the user is redirected to dashboard
     And user info is visible in the top bar
 
@@ -30,7 +30,7 @@ Feature: Sign In
   @allure.label.feature:Log_out @allure.id:14698
   Scenario: TC-2.3.1 Logout clears session and redirects to onboarding
     Given the app is launched in autotest mode
-    And the user is signed in on "nightly"
+    And the user is signed in on "paseo"
     When the user clicks logout
     Then user secrets are removed from localStorage
     And the user is redirected to onboarding screen

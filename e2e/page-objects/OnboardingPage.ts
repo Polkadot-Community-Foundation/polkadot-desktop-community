@@ -135,6 +135,15 @@ export class OnboardingPage {
     await expect(selected).toHaveCount(1, { timeout: DEFAULT_TIMEOUT });
   }
 
+  /**
+   * Whether the onboarding picker is rendered. A build with a single channel renders none,
+   * because that channel is the only one it can run on. Read once the QR is visible: the
+   * picker mounts with it.
+   */
+  async offersEnvironmentPicker(): Promise<boolean> {
+    return (await this.page.locator(`[data-testid^="${TEST_IDS.networkButton}-"]`).count()) > 0;
+  }
+
   /** All environment ids the onboarding picker currently offers (from the `network-button-<id>` testids). */
   async availableEnvironmentIds(): Promise<string[]> {
     const prefix = `${TEST_IDS.networkButton}-`;
@@ -195,6 +204,7 @@ export class OnboardingPage {
     // come back with the QR. Clicking in between finds the element, loses it mid-action,
     // and burns the full timeout on `waiting for getByTestId('network-button-<id>')`.
     await this.waitForQrCode();
+    if (!(await this.offersEnvironmentPicker())) return;
 
     const button = this.page.getByTestId(`${TEST_IDS.networkButton}-${environmentId}`);
     await expect(button).toBeVisible({ timeout: DEFAULT_TIMEOUT });

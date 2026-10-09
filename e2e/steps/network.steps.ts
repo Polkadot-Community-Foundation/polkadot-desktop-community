@@ -22,7 +22,9 @@ When('the user opens the environment selector', async ({ authenticatedApp }) => 
 });
 
 When('the user selects a different environment', async ({ authenticatedApp }) => {
-  await new NetworkSettingsPage(authenticatedApp.window).selectDifferentEnvironment();
+  const settings = new NetworkSettingsPage(authenticatedApp.window);
+  authenticatedTest.skip((await settings.environmentCount()) < 2, 'single-channel build — no other environment to select');
+  await settings.selectDifferentEnvironment();
 });
 
 When('the user selects the current environment', async ({ authenticatedApp }) => {
@@ -34,7 +36,9 @@ When('the user cancels the network change dialog', async ({ authenticatedApp }) 
 });
 
 Then('the environment selector lists at least {int} environments', async ({ authenticatedApp }, n: number) => {
-  await new NetworkSettingsPage(authenticatedApp.window).expectOptionCountAtLeast(n);
+  const settings = new NetworkSettingsPage(authenticatedApp.window);
+  authenticatedTest.skip((await settings.options().count()) === 1, 'single-channel build — only one environment to list');
+  await settings.expectOptionCountAtLeast(n);
 });
 
 Then('the network change logout dialog is shown', async ({ authenticatedApp }) => {

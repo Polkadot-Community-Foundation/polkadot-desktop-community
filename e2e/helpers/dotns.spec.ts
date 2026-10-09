@@ -13,6 +13,7 @@ describe('networkTld', () => {
   it('answers each environment its own suffix', () => {
     expect(networkTld('nightly')).toBe('.paseo');
     expect(networkTld('unstable')).toBe(FALLBACK_TLD);
+    expect(networkTld('paseo')).toBe('.dot');
   });
 });
 
@@ -33,6 +34,7 @@ describe('E2E_DOTNS_TLD', () => {
 
     expect(dotns.networkTld('nightly')).toBe('.example');
     expect(dotns.networkTld('unstable')).toBe('.example');
+    expect(dotns.networkTld('paseo')).toBe('.example');
   });
 
   it('leaves the app fallback alone — it mirrors the app, it is not a knob', async () => {
