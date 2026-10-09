@@ -1,10 +1,16 @@
 import 'fake-indexeddb/auto';
 
+import { encodeCoreStorageKey } from '@parity/truapi-host';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type DeviceIdentityRow, database } from '@/shared/database';
+import { coreStorageUseCase } from '@/domains/product';
+import { deviceIdentityService } from '../identity/service';
+import { type DeviceIdentity } from '../identity/types';
 
 import { deviceIdentityUseCase } from './identity';
+
+const PAIRING_IDENTITY_KEY = encodeCoreStorageKey({ tag: 'PairingDeviceIdentity' });
 
 // The repository runs for real on the fake IndexedDB imported above: what these cases
 // pin is the one-identity invariant, which lives in the row the table ends up holding.
@@ -22,7 +28,27 @@ describe('deviceIdentityUseCase.getDeviceIdentity', () => {
     // The module memoizes the identity for the process, which is the behaviour under
     // test; the reset drops that memo and the row so each case starts from an empty store.
     await deviceIdentityUseCase.resetDeviceIdentity();
+    await coreStorageUseCase.clearSlot(PAIRING_IDENTITY_KEY);
     vi.restoreAllMocks();
+  });
+
+  it('acts as the identity the core paired with once there is one', async () => {
+    const encoded = new Uint8Array(160).fill(1);
+    const paired: DeviceIdentity = {
+      statementAccountSeed: new Uint8Array(64).fill(2),
+      statementAccountPublicKey: new Uint8Array(32).fill(3),
+      encryptionPrivateKey: new Uint8Array(32).fill(4),
+      encryptionPublicKey: new Uint8Array(32).fill(5),
+    };
+    await coreStorageUseCase.writeSlot(PAIRING_IDENTITY_KEY, encoded);
+    const decode = vi.spyOn(deviceIdentityService, 'fromPairingIdentity').mockReturnValue(paired);
+    const add = vi.spyOn(table, 'add');
+
+    const identity = await deviceIdentityUseCase.getDeviceIdentity();
+
+    expect(decode).toHaveBeenCalledWith(encoded);
+    expect(identity).toBe(paired);
+    expect(add).not.toHaveBeenCalled();
   });
 
   it('mints and persists an identity on first use', async () => {

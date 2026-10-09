@@ -1,5 +1,5 @@
 import { x25519 } from '@noble/curves/ed25519.js';
-import { deriveSr25519PublicKey } from '@novasamatech/statement-store';
+import { deriveSr25519PublicKey, signWithSr25519Secret, verifySr25519Signature } from '@novasamatech/statement-store';
 import { describe, expect, it } from 'vitest';
 
 import { deviceIdentityService } from './service';
@@ -10,6 +10,7 @@ const {
   generateEncryptionPrivateKey,
   generateStatementAccountSeed,
   isValidEncryptionPublicKey,
+  fromPairingIdentity,
 } = deviceIdentityService;
 
 describe('generateStatementAccountSeed', () => {
@@ -119,5 +120,59 @@ describe('isValidEncryptionPublicKey', () => {
   // ones are caught at agreement time (RFC 7748), not here.
   it('accepts any 32 bytes — validity is enforced at key agreement', () => {
     expect(isValidEncryptionPublicKey(new Uint8Array(32).fill(0xff))).toBe(true);
+  });
+});
+
+// The core's `PairingDeviceIdentity` as it writes it: schnorrkel `SecretKey::to_bytes`,
+// whose scalar is the Ed25519-expanded one divided by the cofactor 8.
+function encodePairingIdentity(expandedSecret: Uint8Array, encryptionPrivateKey: Uint8Array): Uint8Array {
+  const schnorrkelSecret = new Uint8Array(64);
+  let remainder = 0;
+  for (let i = 31; i >= 0; i--) {
+    const value = (remainder << 8) | expandedSecret[i]!;
+    schnorrkelSecret[i] = value >> 3;
+    remainder = value & 7;
+  }
+  schnorrkelSecret.set(expandedSecret.subarray(32), 32);
+
+  const encoded = new Uint8Array(160);
+  encoded.set(schnorrkelSecret, 0);
+  encoded.set(deriveSr25519PublicKey(expandedSecret), 64);
+  encoded.set(encryptionPrivateKey, 96);
+  encoded.set(x25519.getPublicKey(encryptionPrivateKey), 128);
+
+  return encoded;
+}
+
+describe('fromPairingIdentity', () => {
+  it('signs as the advertised statement account and keeps the advertised encryption key', () => {
+    const expandedSecret = generateStatementAccountSeed();
+    const encryptionPrivateKey = generateEncryptionPrivateKey();
+
+    const identity = fromPairingIdentity(encodePairingIdentity(expandedSecret, encryptionPrivateKey));
+
+    expect(Buffer.from(identity.statementAccountSeed).equals(Buffer.from(expandedSecret))).toBe(true);
+    expect(Buffer.from(identity.encryptionPublicKey).equals(Buffer.from(x25519.getPublicKey(encryptionPrivateKey)))).toBe(true);
+    const message = new TextEncoder().encode('statement');
+    const signature = signWithSr25519Secret(identity.statementAccountSeed, message);
+    expect(verifySr25519Signature(message, signature, identity.statementAccountPublicKey)).toBe(true);
+  });
+
+  it('rejects a slot of the wrong length', () => {
+    expect(() => fromPairingIdentity(new Uint8Array(159))).toThrow('expected 160');
+  });
+
+  it('rejects a statement public key that does not match the secret', () => {
+    const encoded = encodePairingIdentity(generateStatementAccountSeed(), generateEncryptionPrivateKey());
+    encoded[64] = encoded[64]! ^ 0xff;
+
+    expect(() => fromPairingIdentity(encoded)).toThrow('statement secret does not match');
+  });
+
+  it('rejects an encryption public key that does not match the secret', () => {
+    const encoded = encodePairingIdentity(generateStatementAccountSeed(), generateEncryptionPrivateKey());
+    encoded[128] = encoded[128]! ^ 0xff;
+
+    expect(() => fromPairingIdentity(encoded)).toThrow('encryption secret does not match');
   });
 });
