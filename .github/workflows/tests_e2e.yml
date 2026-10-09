@@ -25,6 +25,11 @@ env:
   ALLURE_TOKEN: ${{ secrets.ALLURE_TOKEN }}
   ALLURE_JOB_RUN_ID: ${{ github.event.inputs.ALLURE_JOB_RUN_ID }}
   ALLURE_RESULTS: allure-results
+  # The devnet identity backend lands usernames through a serial queue, about one a
+  # minute, so a cold run provisioning many signers outlasts truapi-host's default
+  # 120-second wait. Kept under the harness's 600-second ready timeout.
+  HOST_CLI_DOTNS_USERNAME_WAIT_SECS: 420
+  E2E_PROVISION_CONCURRENCY: 3
 
 permissions:
   contents: read

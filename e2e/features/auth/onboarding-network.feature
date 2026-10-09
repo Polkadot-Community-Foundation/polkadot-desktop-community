@@ -10,7 +10,7 @@ Feature: Onboarding Network Selection
   Scenario: TC-1.2.1 Default environment is Paseo Next V2 on a fresh start
     Given the app is launched in autotest mode
     And the QR code is displayed on onboarding screen
-    Then the selected environment is "nightly"
+    Then the selected environment is "paseo"
 
   # Switches to whatever OTHER channel the build offers (not a hard-coded id), and self-skips
   # when fewer than 2 channels are configured.
@@ -18,9 +18,9 @@ Feature: Onboarding Network Selection
   Scenario: TC-1.2.2 Switching environment reloads the app and re-pairs on the new network
     Given the app is launched in autotest mode
     And the QR code is displayed on onboarding screen
-    And the selected environment is "nightly"
+    And the selected environment is "paseo"
     When the user switches to a different environment
-    Then the selected environment changed from "nightly"
+    Then the selected environment changed from "paseo"
     And the QR code is displayed on onboarding screen
 
   # TC-1.2.3 (14683) Network segment buttons are disabled while pairing is in progress — SKIPPED.

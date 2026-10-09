@@ -15,10 +15,10 @@ import { UserPopover } from '../page-objects/UserPopover';
 const { Given, When, Then } = createBdd(test);
 
 function parseEnvironmentId(value: string): E2eEnvironmentId {
-  if (value === 'nightly' || value === 'unstable') {
+  if (value === 'nightly' || value === 'unstable' || value === 'paseo') {
     return value;
   }
-  throw new Error(`Unknown environment id: "${value}". Expected nightly | unstable.`);
+  throw new Error(`Unknown environment id: "${value}". Expected nightly | unstable | paseo.`);
 }
 
 /**
@@ -75,6 +75,8 @@ Given('the user selects the {string} environment', async ({ electronApp }, envir
 
 Then('the selected environment is {string}', async ({ electronApp }, environment: string) => {
   const onboarding = new OnboardingPage(electronApp.window);
+  await onboarding.waitForQrCode();
+  test.skip(!(await onboarding.offersEnvironmentPicker()), 'single-channel build — no environment picker to read');
   await onboarding.expectSelectedEnvironment(parseEnvironmentId(environment));
 });
 

@@ -29,6 +29,15 @@ export class NetworkSettingsPage {
     await expect(this.options().first()).toBeVisible({ timeout: DEFAULT_TIMEOUT });
   }
 
+  /** How many environments the build offers. Opens the select and closes it again. */
+  async environmentCount(): Promise<number> {
+    await this.openSelect();
+    const count = await this.options().count();
+    await this.page.keyboard.press('Escape');
+    await expect(this.options().first()).toBeHidden({ timeout: DEFAULT_TIMEOUT });
+    return count;
+  }
+
   async currentValue(): Promise<string> {
     return (await this.trigger.textContent())?.trim() ?? '';
   }

@@ -16,7 +16,7 @@ export const FALLBACK_TLD = '.dot';
  * Verified: with nothing signed in, the browser project's address bar reads
  * "Enter .paseo address".
  */
-export const DEFAULT_ENVIRONMENT_ID: E2eEnvironmentId = 'nightly';
+export const DEFAULT_ENVIRONMENT_ID: E2eEnvironmentId = 'paseo';
 
 /**
  * The dotNS suffix each environment serves. Since paritytech/dotns#201 it is
@@ -34,6 +34,9 @@ const ENV_TO_DOTNS_TLD: Record<E2eEnvironmentId, string> = {
   // PreviewNet predates the per-network TLD and answers with empty data, so the
   // app falls back.
   unstable: FALLBACK_TLD,
+  // `DotnsProtocolRegistry.tld()` on the PCF devnet (registry
+  // 0xdDF3D3838Ff056F15602fC5a65927f185679C36F) answers ".dot".
+  paseo: '.dot',
 };
 
 // The app validates the on-chain value with the same shape (`networkTldSchema`),

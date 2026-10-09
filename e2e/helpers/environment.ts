@@ -5,13 +5,15 @@
  *
  * The catalog's channel keys are `nightly` (display "Paseo Next V2") and `unstable`
  * (display "PreviewNet"); the networks they map to are `paseo-next-v2` and `previewnet`.
+ * The PCF catalog has a single channel, `paseo`, which is the PCF devnet (`devnet`).
  */
 
-export type E2eEnvironmentId = 'nightly' | 'unstable';
+export type E2eEnvironmentId = 'nightly' | 'unstable' | 'paseo';
 
 const ENV_TO_NETWORK: Record<E2eEnvironmentId, string> = {
   nightly: 'paseo-next-v2',
   unstable: 'previewnet',
+  paseo: 'devnet',
 };
 
 export function envToNetwork(envId: E2eEnvironmentId): string {

@@ -23,7 +23,7 @@ import { OnboardingPage } from '../page-objects/OnboardingPage';
 import { setupPlatformParameter } from './allure-metadata';
 import { test as baseTest } from './base';
 
-export const AUTH_ENVIRONMENT_ID: E2eEnvironmentId = 'nightly';
+export const AUTH_ENVIRONMENT_ID: E2eEnvironmentId = 'paseo';
 const AUTH_NETWORK = envToNetwork(AUTH_ENVIRONMENT_ID);
 
 /**
