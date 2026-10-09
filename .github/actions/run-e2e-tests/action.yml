@@ -175,14 +175,27 @@ runs:
         allure-token: ${{ env.ALLURE_TOKEN }}
         allure-project-id: ${{ env.ALLURE_PROJECT_ID }}
 
+    # The PCF build of truapi-host carries the `devnet` network preset. It is unpacked
+    # outside the installer layout and run with updates off, so the self-updater never
+    # swaps it for an upstream release that lacks the preset.
     - name: Install truapi-host
       if: inputs.signer-backed == 'true'
       shell: bash
+      env:
+        TRUAPI_HOST_VERSION: 0.23.0-pcf.1
+        TRUAPI_HOST_SHA256: deb6a9eb7262430d5eb51a4df1a96f8866e92908735f0442d36ad7e31b942caa
       run: |
         set -euo pipefail
-        curl -fsSL https://raw.githubusercontent.com/paritytech/host-rust-core/main/scripts/truapi-host-installer.sh | bash
-        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-        "$HOME/.local/bin/truapi-host" --version
+        archive="truapi-host-${TRUAPI_HOST_VERSION}-x86_64-unknown-linux-musl.tar.gz"
+        curl -fsSL --retry 5 -o "${RUNNER_TEMP}/${archive}" \
+          "https://github.com/Polkadot-Community-Foundation/trinity-user-agents/releases/download/%40parity%2Ftruapi%40${TRUAPI_HOST_VERSION}/${archive}"
+        echo "${TRUAPI_HOST_SHA256}  ${RUNNER_TEMP}/${archive}" | sha256sum -c -
+        install_dir="${RUNNER_TEMP}/truapi-host"
+        mkdir -p "${install_dir}"
+        tar -xzf "${RUNNER_TEMP}/${archive}" -C "${install_dir}"
+        echo "TRUAPI_HOST_BIN=${install_dir}/truapi-host" >> "$GITHUB_ENV"
+        echo "TRUAPI_HOST_NO_UPDATE=1" >> "$GITHUB_ENV"
+        "${install_dir}/truapi-host" --version
 
     - name: Restore signer identities
       if: ${{ inputs.signer-backed == 'true' && inputs.identity-cache == 'true' }}
@@ -195,9 +208,9 @@ runs:
         # `github.run_id` alone is not enough either: it is identical for every
         # matrix shard, so all shards would race for one key, the first to finish
         # would win, and the rest would silently persist nothing.
-        key: truapi-host-identities-paseo-next-v2-${{ inputs.cache-scope }}-${{ github.run_id }}
+        key: truapi-host-identities-devnet-${{ inputs.cache-scope }}-${{ github.run_id }}
         restore-keys: |
-          truapi-host-identities-paseo-next-v2-${{ inputs.cache-scope }}-
+          truapi-host-identities-devnet-${{ inputs.cache-scope }}-
 
     - name: Run E2E tests (Allure)
       if: steps.allure-config.outputs.enabled == 'true'
@@ -249,7 +262,7 @@ runs:
       uses: actions/cache/save@v4
       with:
         path: .truapi-host
-        key: truapi-host-identities-paseo-next-v2-${{ inputs.cache-scope }}-${{ github.run_id }}
+        key: truapi-host-identities-devnet-${{ inputs.cache-scope }}-${{ github.run_id }}
 
     - name: Export Allure launch info
       id: export-launch-info
