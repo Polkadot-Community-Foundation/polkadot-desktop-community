@@ -54,7 +54,7 @@ describe('SignalingContentCodec', () => {
     expect(decoded.tag).toBe('Answer');
   });
 
-  it('Candidates at discriminant 3, with candidates as a single Bytes blob (SCALE-encoded Vec<MinimalCandidate>)', () => {
+  it('Candidates at discriminant 3, with the candidates as a single SCALE-encoded blob', () => {
     const inner = MinimalCandidatesVecCodec.enc([]);
     const encoded = SignalingContentCodec.enc({
       tag: 'Candidates',

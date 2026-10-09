@@ -5,7 +5,7 @@ Feature: Offline access
   Scenario: TC-13.1.1 User pins a product for offline use
     Given the user is authenticated
     And the user is on the dashboard
-    And the user opens "coinflipgame03" in a new tab
+    And the user opens "host-playground" in a new tab
     When the user opens the product actions menu
     And the user selects "Enable offline access"
     And the user confirms the offline access dialog
@@ -15,7 +15,7 @@ Feature: Offline access
   Scenario: TC-13.1.2 Cancel the Enable offline dialog
     Given the user is authenticated
     And the user is on the dashboard
-    And the user opens "coinflipgame03" in a new tab
+    And the user opens "host-playground" in a new tab
     When the user opens the product actions menu
     And the user selects "Enable offline access"
     And the user cancels the offline access dialog
@@ -26,7 +26,7 @@ Feature: Offline access
   Scenario: TC-13.2.1 Remove offline access from a pinned product
     Given the user is authenticated
     And the user is on the dashboard
-    And the user opens "coinflipgame03" in a new tab
+    And the user opens "host-playground" in a new tab
     When the user opens the product actions menu
     And the user selects "Enable offline access"
     And the user confirms the offline access dialog
@@ -40,7 +40,7 @@ Feature: Offline access
   Scenario: TC-13.5.1 Forgetting a pinned product clears its offline cache and local storage
     Given the user is authenticated
     And the user is on the dashboard
-    And the user opens "coinflipgame03" in a new tab
+    And the user opens "host-playground" in a new tab
     When the user opens the product actions menu
     And the user selects "Enable offline access"
     And the user confirms the offline access dialog
@@ -49,4 +49,4 @@ Feature: Offline access
     And the user opens product settings from the actions menu
     And the user clicks the "Forget App" product setting
     And the user confirms forgetting the product
-    Then the "coinflipgame03" product is removed from the apps settings list
+    Then the "host-playground" product is removed from the apps settings list

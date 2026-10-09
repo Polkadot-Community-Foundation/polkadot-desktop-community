@@ -10,33 +10,31 @@ const persisted: ChatMessage[] = [];
 const roomsSubject = new Subject<ProductChatRoom[]>();
 const roomsReadParams: { accountId: string }[] = [];
 
-vi.mock('@/domains/product', () => ({
-  commitmentUseCase: { commitProductByIdentifier: vi.fn().mockResolvedValue(true) },
-  productsResource: { read$: () => of([]) },
-}));
-
-vi.mock('../product/resource', () => ({
+// The four writes are stubbed so the test can observe them.
+vi.mock(import('../product/resource'), async importOriginal => ({
+  ...(await importOriginal()),
   createMessageInProductRoom: (message: ChatMessage) => {
     persisted.push(message);
-    return of(undefined);
-  },
-  deleteMessagesInProductRoom: () => of(undefined),
-  deleteProductRoom: () => of(undefined),
-  markProductMessagesAsRead: () => of(undefined),
-  // Keyed per room: every session object for the same room observes one stream.
-  messagesResource: {
-    read$: (room: ProductChatRoom) => defer(() => of(persisted.filter(m => m.sessionId === room.sessionId))),
-  },
-  roomsResource: {
-    read$: (params: { accountId: string }) => {
-      roomsReadParams.push(params);
 
-      return roomsSubject.asObservable();
-    },
+    return of({ messageId: message.messageId });
   },
+  deleteMessagesInProductRoom: () => of(null),
+  deleteProductRoom: () => of(null),
+  markProductMessagesAsRead: () => of(null),
 }));
 
 const { productRoomUseCase } = await import('./productRoom');
+const { messagesResource, roomsResource } = await import('../product/resource');
+
+// Keyed per room: every session object for the same room observes one stream.
+function seedResources() {
+  messagesResource.instead(({ sessionId }) => defer(() => of(persisted.filter(m => m.sessionId === sessionId))));
+  roomsResource.instead(params => {
+    roomsReadParams.push({ accountId: params.accountId });
+
+    return roomsSubject.asObservable();
+  });
+}
 
 const userId = parse(accountId, '0xuser');
 
@@ -52,6 +50,7 @@ const room: ProductChatRoom = {
 
 describe('watchProductRooms', () => {
   beforeEach(() => {
+    seedResources();
     roomsReadParams.length = 0;
   });
 
@@ -92,6 +91,7 @@ describe('watchProductRooms', () => {
 
 describe('createProductChatSession', () => {
   beforeEach(() => {
+    seedResources();
     persisted.length = 0;
   });
 

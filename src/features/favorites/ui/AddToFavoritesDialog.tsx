@@ -27,7 +27,7 @@ export const AddToFavoritesDialog = ({ isOpen, onClose }: Props) => {
   const { t } = useTranslation();
   // Gated on `isOpen` so the browse-chain listing only loads while the dialog is up.
   const { data: listings, pending, error, refresh } = usePublishedAppListings(isOpen);
-  const { data: favoriteIds } = useFavoriteProductIds();
+  const { data: favoriteIds, pending: favoritesPending } = useFavoriteProductIds();
   const { addToFavorites } = useAddToFavorites();
   const { removeItemFromFolder } = useRemoveItemFromFolder();
   const [query, setQuery] = useState('');
@@ -41,11 +41,15 @@ export const AddToFavoritesDialog = ({ isOpen, onClose }: Props) => {
   // rather than offering cards that would be favourited under the wrong name.
   const { data: tld, pending: tldPending, error: tldError, refresh: refreshTld } = useDotNsTld();
 
-  // Snapshot once per open — keyed on `isOpen` only (NOT live favoriteIds), so
-  // adding a product mid-session doesn't re-run this and drop it from the list.
+  // Snapshot once per open, on the first settled membership read — keyed on
+  // `isOpen` + `favoritesPending` only (NOT live favoriteIds), so adding a product
+  // mid-session doesn't re-run this and drop it from the list. Snapshotting at
+  // mount instead would capture the empty default whenever the layout read has not
+  // settled yet, and nothing would re-run it — already-favorite products would then
+  // be offered for adding.
   useEffect(() => {
-    if (isOpen) setExcludedAtOpen(new Set(favoriteIds));
-  }, [isOpen]);
+    if (isOpen && !favoritesPending) setExcludedAtOpen(new Set(favoriteIds));
+  }, [isOpen, favoritesPending]);
 
   const products = useMemo(
     () =>
@@ -102,7 +106,7 @@ export const AddToFavoritesDialog = ({ isOpen, onClose }: Props) => {
         {/* Fixed-height scroll area: the frame stays put while the results/empty
             state change, so filtering never resizes the dialog. */}
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-          {pending || tldPending ? (
+          {pending || tldPending || favoritesPending ? (
             <div
               role="status"
               aria-label={t('feature.favorites.addDialog.loadingAria')}

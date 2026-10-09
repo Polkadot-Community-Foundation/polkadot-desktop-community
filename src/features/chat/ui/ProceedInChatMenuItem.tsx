@@ -5,6 +5,7 @@ import { useCallback } from 'react';
 import { useTranslation } from '@/shared/translation';
 import { useProductRooms } from '@/domains/chat';
 import { useCommitProductByIdentifier, useDisplayedProduct } from '@/domains/product';
+import { useTruapiUserId } from '@/aggregates/truapi-runtime';
 import { MenuItem } from '@/features/product-actions-menu';
 import { useOpenChatTab } from '../hooks/useOpenChatTab';
 import { useOpenProductChatRoom } from '../hooks/useOpenProductChatRoom';
@@ -17,7 +18,7 @@ type Props = {
 export const ProceedInChatMenuItem = ({ productId, closeMenu }: Props) => {
   const { t } = useTranslation();
   const { data: product } = useDisplayedProduct(productId);
-  const { data: persistedRooms } = useProductRooms(productId);
+  const { data: persistedRooms } = useProductRooms(productId, useTruapiUserId());
   const openChatRoom = useOpenProductChatRoom();
   const openChatTab = useOpenChatTab();
   const { run: commitProduct } = useCommitProductByIdentifier();

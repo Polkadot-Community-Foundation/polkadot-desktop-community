@@ -78,7 +78,7 @@ export async function waitForProbeResults(window: Page, timeoutMs = 60_000): Pro
           const summary = JSON.parse(summaryStr);
           const collected = Object.keys(results).length;
           if (typeof summary.total === 'number' && collected < summary.total) {
-            console.warn(`[probes] Collected ${collected}/${summary.total} probe results — some may have been lost`);
+            console.warn(`[probes] ${collected}/${summary.total} results collected, some were lost`);
           }
         } catch {
           // Summary parse failed — still resolve with what we have

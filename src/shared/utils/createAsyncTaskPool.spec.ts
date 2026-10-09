@@ -1,5 +1,7 @@
 import { setTimeout } from 'node:timers/promises';
 
+import { describe, expect, it, vi } from 'vitest';
+
 import { createAsyncTaskPool } from './createAsyncTaskPool';
 
 const delay = (ttl: number = 0) => setTimeout(ttl);

@@ -9,7 +9,7 @@ const SANDBOX_PREFIX = 'sandbox-';
 
 // Webview-backed executables map to a partition SLOT. The worker executable is
 // headless (no partition of its own); if it ever reaches the builder it shares
-// the 'app' slot — matching permissionsService.modalityForKind(worker) === 'app'.
+// the 'app' slot.
 // If another executable becomes webview-backed, add its slot here.
 const SANDBOX_SLOTS = ['app', 'widget'] as const;
 type SandboxSlot = (typeof SANDBOX_SLOTS)[number];
@@ -306,27 +306,12 @@ export function sanitizeWebPreferences(prefs: SandboxPrefs, preloadPath: string)
   prefs.sandbox = true;
 }
 
-export type ElectronSandboxPermissions =
-  | 'clipboard-read'
-  | 'clipboard-sanitized-write'
-  | 'display-capture'
-  | 'fullscreen'
-  | 'geolocation'
-  | 'idle-detection'
-  | 'media'
-  | 'mediaKeySystem'
-  | 'midi'
-  | 'midiSysex'
-  | 'notifications'
-  | 'pointerLock'
-  | 'keyboardLock'
-  | 'openExternal'
-  | 'speaker-selection'
-  | 'storage-access'
-  | 'top-level-storage-access'
-  | 'window-management'
-  | 'unknown'
-  | 'fileSystem';
+// Electron's permission union, derived from its own handler signature rather than
+// hand-copied — it grows a member every major (Electron 44 added `ar`,
+// `background-fetch`, …), and a mirror drifts out of sync each time.
+export type ElectronSandboxPermissions = Parameters<
+  NonNullable<Parameters<Electron.Session['setPermissionRequestHandler']>[0]>
+>[1];
 
 // DevicePermissionType is re-declared locally to avoid a runtime import from the renderer
 export type DevicePermissionType = 'Camera' | 'Microphone' | 'Location';

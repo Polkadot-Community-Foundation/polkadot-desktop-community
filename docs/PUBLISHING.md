@@ -42,7 +42,6 @@ Remote Config it has no chain catalog and fails to boot** (see section 3).
 | ------------------------- | ----------------------------------------------------- | --------------------------------------- |
 | `SENTRY_DSN`              | Sentry crash/issue reporting (baked in at build time) | Crash reporting is disabled by default  |
 | `VITE_WEBRTC_TURN_SECRET` | TURN relay credential for device-sync                 | STUN-only fallback (works on most NATs) |
-| `BOT_TOKEN`               | Signing-bot API token for e2e auth tests              | Bot-backed e2e projects fail            |
 
 ### Signing & distribution — set in the CI environment (not needed for local dev)
 
@@ -69,7 +68,6 @@ Remote Config it has no chain catalog and fails to boot** (see section 3).
 | `APP_ID_DEVELOP`, `PRODUCT_NAME_DEVELOP`, `APP_NAME_DEVELOP`                  | Optional second identity for non-production builds, making develop a separate application. See section 4.                                                                                                                                                                                           |
 | `LOGGER`                                                                      | Any non-empty value enables verbose logging in all three targets.                                                                                                                                                                                                                                   |
 | `RENDERER_SOURCE`                                                             | `localhost` (dev server) or `filesystem` (built assets); build scripts set it for you.                                                                                                                                                                                                              |
-| `BOT_URL`                                                                     | Signing-bot base URL for e2e tests (`secrets.SIGNING_BOT_URL` in CI). Empty = the bot-backed e2e projects fail fast.                                                                                                                                                                                |
 
 ---
 
@@ -84,12 +82,73 @@ Remote Config is effectively required for any real deployment.
 
 1. Create a Firebase project and a web app in it; copy the client identifiers
    into the `VITE_FIREBASE_*` variables.
-2. Create the Remote Config parameters (`chains_v2` is the JSON array of chain
-   definitions). Per-channel values are served with Remote Config conditions:
-   the app selects a channel by setting the `environment` custom signal, and
-   the matching `Common <id> - signal` condition serves that channel's values.
-3. The `VITE_ENVIRONMENTS` catalog maps channel ids to `chains_v2` entry ids —
-   keep them in sync.
+2. Create the Remote Config parameters (§3.1). Per-channel values are served
+   with Remote Config conditions: the app selects a channel by setting the
+   `environment` custom signal, and the matching `Common <id> - signal`
+   condition serves that channel's values.
+3. Describe your channels in the `VITE_ENVIRONMENTS` catalog (§3.2) — its
+   `roles` reference `chains_v2` entry ids, so keep the two in sync.
+
+### 3.1 Remote Config parameters
+
+The app ships no bundled defaults: every parameter below has to exist in your
+Firebase project, and an unset one reads back as `null`. JSON values are stored
+as Remote Config strings. Each read is validated by a Valibot schema — the
+schema file, not this table, is the authoritative shape.
+
+| Key                    | Type          | Needed for                            | Read by / schema                                                                                        | Description                                                                                                                                                                                                                                                                                        |
+| ---------------------- | ------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chains_v2`            | JSON array    | app start-up (**required**)           | `src/domains/network/chain/resource.ts`, `remoteChainsSchema` in `src/domains/network/chain/schemas.ts` | The chain catalog. Entry fields below; entry `chainId` labels are what `VITE_ENVIRONMENTS` roles reference.                                                                                                                                                                                        |
+| `dot_ns_config`        | JSON object   | resolving apps by name (**required**) | environment assembly, `dotNsConfigSchema` in `src/domains/application/environment/schemas.ts`           | `{ "resolverContractAddress": "…", "registryContractAddress": "…" }` — 20-byte hex contract addresses of the dotNS deployment (`0x` prefix optional).                                                                                                                                              |
+| `identity_backend_url` | string (URL)  | contact search (**required**)         | environment assembly, `remoteUrlSchema`                                                                 | Base URL of your deployment of [device-uniqueness-backend-community](https://github.com/paritytech/device-uniqueness-backend-community) — username search and the proof-of-compute puzzle.                                                                                                         |
+| `ipfs_gateway_url`     | string (URL)  | loading app bundles (**required**)    | environment assembly, `remoteUrlSchema`                                                                 | IPFS gateway the app fetches product bundles through when content is not on the Bulletin Chain.                                                                                                                                                                                                    |
+| `w3s_gate_mode`        | string (enum) | start-up gate (optional)              | `src/bootstrap.ts`, `web3SummitGateModeSchema`                                                          | One of `VERIFICATION_DISABLED` / `VERIFICATION_ENABLED` / `VERIFICATION_ENABLED_SKIPPABLE` / `W3S_ENDED`. **Unset falls back to `VERIFICATION_ENABLED`**; `W3S_ENDED` short-circuits boot to the "event ended" screen — set `VERIFICATION_DISABLED` for a deployment without the Web3 Summit flow. |
+
+A `chains_v2` entry (`remoteChainSchema` is a loose object — extra fields pass
+through unvalidated):
+
+```jsonc
+{
+  "chainId": "alpha-people", // label (what VITE_ENVIRONMENTS roles point at) or a bare genesis hash
+  "genesisHash": "1234…abcd", // hex WITHOUT 0x; may be empty when chainId carries the hash
+  "name": "Alpha People Chain",
+  "addressPrefix": 0,
+  "nodes": [{ "url": "wss://rpc.example.com", "name": "Example node" }],
+  "assets": [{ "assetId": 0, "symbol": "DOT", "precision": 10 }], // + optional name/priceId/type/typeExtras/icon
+  "parentId": null, // optional; relay the chain is a parachain of
+  "options": [], // optional feature flags
+  "externalApi": { "hop": [] }, // optional; bulletin HOP relay multiaddrs
+}
+```
+
+### 3.2 The `VITE_ENVIRONMENTS` catalog
+
+Build-time JSON (`rawEnvironmentsConfigSchema` in
+`src/domains/application/environment/schemas.ts`) describing every
+environment-specific value Remote Config does **not** serve, so no channel
+names live in code:
+
+```jsonc
+{
+  "default": "alpha", // channel selected when none is persisted; must be a key of `channels`
+  "shared": {
+    // defaults every channel inherits; a channel may override any of them
+    "hostChatNetwork": "example-net", // network id the host-chat SDK's createAccountService accepts
+    "iosBundleId": "com.example.app", // pairing deeplink target
+    "digitalDollarAsset": { "assetId": 1, "symbol": "tUSD", "precision": 6, "palletName": "Assets" },
+  },
+  "channels": {
+    "alpha": {
+      "name": "Alpha Testnet", // display label in the environment picker
+      // chains_v2 entry labels (chainId) for each chain role
+      "roles": { "people": "alpha-people", "bulletin": "alpha-bulletin", "assetHub": "alpha-asset-hub" },
+    },
+  },
+}
+```
+
+`digitalDollarAsset` is the token coinage payments are denominated in; its
+`symbol` is what transfer amounts in chat are labelled with.
 
 ---
 

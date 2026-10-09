@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { of } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -34,7 +34,11 @@ describe('CallButtons', () => {
   });
 
   afterEach(() => {
-    setCallIdle();
+    // Reset runs while the component is still mounted (unmount is a later afterEach),
+    // so the resulting re-render must be wrapped in act.
+    act(() => {
+      setCallIdle();
+    });
   });
 
   it('enables both buttons when no call is active', () => {

@@ -24,20 +24,34 @@ function useChainResolvedProduct(identifier: Nullable<string>) {
   const tld = useDotNsTld();
   const tldSettled = !tld.pending && tld.error === null;
 
+  const params = identifier && environment && tldSettled ? { identifier, environment, tld: tld.data } : null;
+  const key = params ? chainResolveCacheKey(params.environment, params.identifier, params.tld) : null;
+
   const result = useRead(chainResolveResource, {
-    params: identifier && environment && tldSettled ? { identifier, environment, tld: tld.data } : null,
+    params,
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- narrowing null to typed defaultValue
-    defaultValue: null as Product | null,
-    map: (cache, params) =>
-      params ? (cache[chainResolveCacheKey(params.environment, params.identifier, params.tld)] ?? null) : null,
+    defaultValue: null as ChainProjection | null,
+    // Tagged with the key it came from: `useRead` keeps its last value while a read is
+    // re-running or its entry has left the cache, and only the key says whether that
+    // value still names this identifier. `undefined` for an entry that is not cached,
+    // so `useRead` can tell it was dropped from one that resolved to `null` (not on chain).
+    map: (cache, { environment: env, identifier: id, tld: suffix }) => {
+      const entryKey = chainResolveCacheKey(env, id, suffix);
+
+      return entryKey in cache ? { key: entryKey, product: cache[entryKey] ?? null } : undefined;
+    },
   });
 
   // `enabled` is what the caller asked for: with `identifier === null` there is
   // nothing to wait on, and claiming pending would stall `useDisplayedProduct` for
   // a product already served from the DB — or, worse, report the TLD's failure
   // against a localhost webview that needs no dotNS at all.
-  return dependentRead(result, tld, { enabled: nonNullable(identifier) });
+  const read = dependentRead(result, tld, { enabled: nonNullable(identifier) });
+
+  return { ...read, data: read.data?.key === key ? read.data.product : null };
 }
+
+type ChainProjection = { key: string; product: Product | null };
 
 // Every row in `products` is a committed (installed) product, so "all products"
 // and "installed products" are the same set — one hook covers both.
@@ -80,16 +94,17 @@ export function useDisplayedProduct(productId: Nullable<string>): { data: Produc
   // Resolve from chain only for identifiers with no committed row — committed
   // products are served from the live DB above and never enter the chain cache,
   // so the two reads can't duplicate or diverge.
-  const {
-    data: chain,
-    pending: chainPending,
-    error: chainError,
-  } = useChainResolvedProduct(persistedPending || nonNullable(persisted) ? null : productId);
+  const chainIdentifier = persistedPending || nonNullable(persisted) ? null : productId;
+  const chain = useChainResolvedProduct(chainIdentifier);
+  // Committing a product drops its chain entry a render before the live DB row arrives.
+  // The product stays in `data` meanwhile, but no read stands behind it, so the gap
+  // reports pending rather than settled.
+  const chainAwaited = nonNullable(chainIdentifier) && !chain.fulfilled && !nonNullable(chain.error);
 
   return {
-    data: persisted ?? chain,
-    pending: persistedPending || chainPending,
-    error: persistedError ?? chainError,
+    data: persisted ?? chain.data,
+    pending: persistedPending || chain.pending || chainAwaited,
+    error: persistedError ?? chain.error,
   };
 }
 

@@ -3,6 +3,7 @@ import { useCallback } from 'react';
 
 import { useUserProductRooms } from '@/domains/chat';
 import { resolveProductUseCase } from '@/domains/product';
+import { useTruapiUserId } from '@/aggregates/truapi-runtime';
 
 import { pickProductSurface } from './pickProductSurface';
 
@@ -11,7 +12,7 @@ import { pickProductSurface } from './pickProductSurface';
 // decide *what* opening means are fetched lazily here, on press.
 export const useOpenProductSurface = () => {
   const navigate = useNavigate();
-  const { data: rooms } = useUserProductRooms();
+  const { data: rooms } = useUserProductRooms(useTruapiUserId());
 
   return useCallback(
     async (productId: string) => {

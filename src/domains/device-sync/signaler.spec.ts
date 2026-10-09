@@ -295,7 +295,7 @@ describe('startSignaler — initiator', () => {
 });
 
 describe('startSignaler — acceptor', () => {
-  it('adopts the first Offer, drops a same-id duplicate, and resets on a different-id Offer (restarted initiator)', async () => {
+  it('adopts the first Offer, drops a same-id duplicate, and resets on a different-id Offer', async () => {
     const sent: SyncSignalingEnvelope[] = [];
     const sessionMessages$ = new Subject<SyncSignalingEnvelope>();
     const { peerConn } = makeAcceptorPeerConn();
@@ -316,7 +316,7 @@ describe('startSignaler — acceptor', () => {
     await settleBatch();
     expect(peerConn.applyRemoteOffer).toHaveBeenCalledTimes(1);
     expect(onAcceptedOfferId).toHaveBeenCalledWith('A');
-    expect(sent.some(e => e.message.tag === 'Answer' && e.offerId === 'A')).toBe(true);
+    expect(sent.map(e => [e.message.tag, e.offerId])).toContainEqual(['Answer', 'A']);
 
     // A same-id Offer (statement-store replay) is a no-op — not re-applied,
     // no reset. The PC's mid-handshake DTLS must not be torn down.
@@ -435,7 +435,7 @@ describe('startSignaler — acceptor', () => {
     // The resumed handler must bail after the close — never build/send an
     // Answer (createAnswer) against the torn-down PC.
     expect(peerConn.createAnswer).not.toHaveBeenCalled();
-    expect(sent.some(e => e.message.tag === 'Answer')).toBe(false);
+    expect(sent.map(e => e.message.tag)).not.toContain('Answer');
   });
 });
 

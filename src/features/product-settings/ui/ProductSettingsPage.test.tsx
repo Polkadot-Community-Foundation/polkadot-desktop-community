@@ -2,76 +2,27 @@
 
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { type PropsWithChildren, type ReactNode } from 'react';
+import { of } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { forgetProductMock, useDisplayedProductMock, useAllAliasPermissionsMock } = vi.hoisted(() => ({
-  forgetProductMock: vi.fn(),
-  useDisplayedProductMock: vi.fn(() => ({ data: null as unknown, pending: false, error: null })),
-  useAllAliasPermissionsMock: vi.fn(() => ({ data: [] as unknown[] })),
-}));
-
-vi.mock('@novasamatech/tr-ui', () => {
-  const Dialog = ({ open, children }: PropsWithChildren<{ open: boolean }>) => (open ? <div>{children}</div> : null);
-  Dialog.Content = ({ children }: PropsWithChildren<{ showCloseButton?: boolean }>) => <div>{children}</div>;
-  Dialog.Header = ({ children }: PropsWithChildren) => <div>{children}</div>;
-  Dialog.Footer = ({ children }: PropsWithChildren) => <div>{children}</div>;
-  Dialog.Title = ({ children }: PropsWithChildren) => <div>{children}</div>;
-  Dialog.Description = ({ children }: PropsWithChildren) => <div>{children}</div>;
-  Dialog.Close = ({ children }: PropsWithChildren<{ asChild?: boolean }>) => <div>{children}</div>;
-
-  return {
-    Dialog,
-    Button: ({ children, onClick }: PropsWithChildren<{ onClick?: VoidFunction }>) => (
-      <button onClick={onClick}>{children}</button>
-    ),
-    ScrollArea: ({ children }: PropsWithChildren) => <div>{children}</div>,
-    toastSuccess: vi.fn(),
-  };
-});
-
-vi.mock('@tanstack/react-router', () => ({
-  useNavigate: () => vi.fn(),
-}));
-
-vi.mock('@/domains/product', () => ({
-  useDisplayedProduct: useDisplayedProductMock,
-  useOfflineCacheSize: () => 0,
-  useProductPermissions: () => ({ data: null }),
-  useAllAliasPermissions: useAllAliasPermissionsMock,
-  lifecycleUseCase: { clearProductCache: vi.fn() },
-  permissionsService: {
-    // grant-wins roll-up, matching the real service contract.
-    rollupPermissionStatus: (statuses: string[]) =>
-      statuses.includes('granted') ? 'granted' : statuses.includes('denied') ? 'denied' : 'ask',
-  },
-  productService: { refreshTargetIdentifiers: () => new Set() },
-}));
-
-vi.mock('@/aggregates/product-loading', () => ({
-  onProductRefreshRequestedSideEffect: { apply: vi.fn() },
-}));
-
-vi.mock('@/aggregates/product-management', () => ({
-  useForgetProduct: () => ({ forgetProduct: forgetProductMock }),
-}));
-
-vi.mock('@/widgets/Permission', () => ({
-  STATUS_LABEL_KEYS: {
-    ask: 'feature.permissionSettings.status.ask',
-    granted: 'feature.permissionSettings.status.granted',
-    denied: 'feature.permissionSettings.status.denied',
-  },
-  getPermissionMeta: () => undefined,
-}));
-
-vi.mock('@/widgets/ProductIcon', () => ({
-  ProductIcon: ({ fallback }: { fallback: ReactNode }) => <div>{fallback}</div>,
-}));
-
 import { TranslationProvider } from '@/shared/translation';
+import { type PersistedProduct, lifecycleUseCase, permissionsUseCase, productsResource } from '@/domains/product';
+import { productManagementUseCase } from '@/aggregates/product-management';
 
 import { ProductSettingsPage } from './ProductSettingsPage';
+
+// The permission reads are core-backed (an injected adapter, not a resource), so the
+// use-case methods behind the hooks are spied in place. `permissionsService` and
+// `productService` stay real: the grant-wins roll-up is a business rule, and a copy
+// of it here would pass after the real one changed.
+vi.spyOn(permissionsUseCase, 'watchProductPermissions').mockReturnValue(of([]));
+const watchGrantedAccountAccess = vi.spyOn(permissionsUseCase, 'watchGrantedAccountAccess').mockReturnValue(of([]));
+vi.spyOn(lifecycleUseCase, 'clearProductCache').mockResolvedValue();
+const forgetProductMock = vi.spyOn(productManagementUseCase, 'forgetProduct').mockResolvedValue(true);
+
+function seedProducts(records: Partial<PersistedProduct>[]) {
+  productsResource.instead(() => of(records as PersistedProduct[]));
+}
 
 const renderPage = (productId: string) =>
   render(
@@ -83,8 +34,7 @@ const renderPage = (productId: string) =>
 describe('ProductSettingsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useDisplayedProductMock.mockReturnValue({ data: null, pending: false, error: null });
-    useAllAliasPermissionsMock.mockReturnValue({ data: [] });
+    watchGrantedAccountAccess.mockReturnValue(of([]));
   });
 
   it('forgets a permission-only product even when it cannot be resolved', async () => {
@@ -92,39 +42,26 @@ describe('ProductSettingsPage', () => {
     renderPage('localhost:5173');
 
     // Page-level button opens the dialog; the second 'Forget App' is the confirm.
-    await user.click(screen.getByText('Forget App'));
+    await user.click(await screen.findByText('Forget App'));
     const confirm = screen.getAllByText('Forget App')[1]!;
     await user.click(confirm);
 
     expect(forgetProductMock).toHaveBeenCalledWith('localhost:5173');
   });
 
-  it('renders the product description', () => {
-    useDisplayedProductMock.mockReturnValue({
-      data: { baseName: 'editor.dot', displayName: 'Editor', description: 'Lightweight editor' },
-      pending: false,
-      error: null,
-    });
+  it('renders the product description', async () => {
+    seedProducts([{ baseName: 'editor.dot', displayName: 'Editor', description: 'Lightweight editor' }]);
     renderPage('editor.dot');
 
-    expect(screen.getByText('Lightweight editor')).toBeInTheDocument();
+    expect(await screen.findByText('Lightweight editor')).toBeInTheDocument();
   });
 
-  it('lists an alias permission stored as "ask" (allow-once) with the "Ask (Default)" status', () => {
-    useAllAliasPermissionsMock.mockReturnValue({
-      data: [
-        {
-          key: 'localhost:5173::dot',
-          requesterProductId: 'localhost:5173',
-          requestedContextId: 'dot',
-          status: 'ask',
-        },
-      ],
-    });
+  it('lists account access held at "ask" with the "Ask (Default)" status', async () => {
+    watchGrantedAccountAccess.mockReturnValue(of([{ targetProductId: 'dot', status: 'ask' }]));
 
     renderPage('localhost:5173');
 
-    expect(screen.getByText('Alias')).toBeInTheDocument();
+    expect(await screen.findByText('Alias')).toBeInTheDocument();
     expect(screen.getByText('Ask (Default)')).toBeInTheDocument();
     expect(screen.queryByText('Denied')).not.toBeInTheDocument();
   });

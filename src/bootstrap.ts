@@ -1,30 +1,23 @@
 /* eslint-disable import-x/max-dependencies */
-import { AccountId } from '@polkadot-api/substrate-bindings';
-
 import { AUTOTEST_ENABLED, E2E_TEST_ENABLED } from '@/shared/autotest';
 import { deleteLegacyDatabases } from '@/shared/database';
 import { isDev, isElectron, isProductionBuild, isWeb } from '@/shared/env';
 import { registerFeatures } from '@/shared/feature';
 import {
-  ensurePappProvider,
   environmentUseCase,
   failActivePeopleChain,
-  hydrateUserIdentity,
-  loadDeviceIdentity,
   setActivePeopleChain,
-  watchHostPappSessionTeardown,
   web3SummitGateModeSchema,
   web3SummitGateService,
 } from '@/domains/application';
-import { peerGateway } from '@/domains/chat/p2p/peer/gateway';
+import { chainResource, initChainConnectionLifecycle, initConnectionModeSwitch, initLightClient } from '@/domains/network';
 import {
-  type ConsumerInfoLookup,
-  createDeviceSyncTransport,
-  startDeviceSyncIfReady,
-  startDeviceSyncOnIdentity,
-} from '@/domains/device-sync';
-import { chainResource, initChainConnectionLifecycle } from '@/domains/network';
-import { bootstrapProduct, offlineCacheUseCase, resolveProductUseCase } from '@/domains/product';
+  bootstrapProduct,
+  offlineCacheUseCase,
+  permissionsService,
+  permissionsUseCase,
+  resolveProductUseCase,
+} from '@/domains/product';
 import {
   REMOTE_CONFIG_KEYS,
   bootstrapRemoteConfig,
@@ -32,8 +25,9 @@ import {
   remoteConfigGateway,
   remoteConfigReady,
 } from '@/domains/remote-config';
-import { userIdentity$ } from '@/domains/sso';
 import { productManagementUseCase } from '@/aggregates/product-management';
+import { productWorkersUseCase } from '@/aggregates/product-workers';
+import { truapiRuntimeUseCase } from '@/aggregates/truapi-runtime';
 import { appShellFeature } from '@/features/app-shell';
 import { browserFeature } from '@/features/browser';
 import { callFeature } from '@/features/call';
@@ -43,17 +37,18 @@ import { dashboardFeature } from '@/features/dashboard';
 import { favoritesFeature } from '@/features/favorites';
 import { inputModalityFeature } from '@/features/input-modality';
 import { languageSettingsFeature } from '@/features/language-settings';
+import { networkConnectionFeature } from '@/features/network-connection';
 import { bootstrapNotifications, notificationsFeature } from '@/features/notifications';
 import { offlineAccessFeature } from '@/features/offline-access';
 import { onboardingFeature } from '@/features/onboarding';
 import { permissionSettingsFeature } from '@/features/permission-settings';
 import { productActionsMenuFeature } from '@/features/product-actions-menu';
 import { productDashboardFeature } from '@/features/product-dashboard';
+import { bootstrapProductRuntime, productRuntimeFeature } from '@/features/product-runtime';
 import { productSettingsFeature } from '@/features/product-settings';
 import { productWidgetFeature } from '@/features/product-widget';
 import { productWorkerFeature } from '@/features/product-worker';
 import { settingsFeature } from '@/features/settings';
-import { signingBotAutopairFeature } from '@/features/signing-bot-autopair';
 import { statementStoreNetworkFeature } from '@/features/statement-store-network';
 import { themeToggleFeature } from '@/features/theme-toggle';
 import { updateCheckFeature } from '@/features/update-check';
@@ -111,86 +106,63 @@ const runBootstrap = async (): Promise<BootstrapOutcome> => {
 
   // Wire the product domain's host IPC handlers up front, before any product can
   // run. Test runs deny unmatched remote-URL requests instead of prompting.
-  bootstrapProduct({ promptForUnmatchedRemoteAccess: !AUTOTEST_ENABLED && !E2E_TEST_ENABLED });
+  bootstrapProduct({
+    promptForUnmatchedRemoteAccess: !AUTOTEST_ENABLED && !E2E_TEST_ENABLED,
+    // Lazy: the core runtime is created asynchronously and does not exist yet at this
+    // point. Each call awaits the handle instead of capturing it. The domain bounds
+    // these calls, so a runtime that never starts fails closed rather than hanging.
+    permissionsAdapter: {
+      getStatus: async (productId, request) =>
+        (await truapiRuntimeUseCase.whenRuntimeReady()).getPermissionAuthorizationStatus(productId, request),
+      getStatuses: async (productId, requests) =>
+        (await truapiRuntimeUseCase.whenRuntimeReady()).getPermissionAuthorizationStatuses(productId, requests),
+      setStatus: async (productId, request, status) =>
+        (await truapiRuntimeUseCase.whenRuntimeReady()).setPermissionAuthorizationStatus(productId, request, status),
+    },
+  });
+
+  // Test-only hook: grant a remote-URL permission through the core, the same path an
+  // "Allow always" takes. e2e reaches domain code only through `window`, and permissions
+  // are core-owned, so a raw storage seed cannot work. `setPermissionStatus` awaits the
+  // runtime, so this resolves once the core is up.
+  if (AUTOTEST_ENABLED || E2E_TEST_ENABLED) {
+    window.__grantRemoteUrlPermission = async (productId, url) => {
+      const request = permissionsService.toAuthorizationRequest('ExternalRequest', { pattern: url });
+      if (request) await permissionsUseCase.setPermissionStatus({ productId, request, status: 'granted' });
+    };
+  }
 
   // Branch-era databases consolidated into polkadot-desktop-app-v1. Best-effort.
   void deleteLegacyDatabases();
 
   initChainConnectionLifecycle();
+  initConnectionModeSwitch();
+
+  // Run the workers the core says are wanted. Deliberately not awaited: it waits for
+  // the runtime, which is started later by a React binding, and boot must not block
+  // on that.
+  void productWorkersUseCase.watchDemand().catch((error: unknown) => {
+    console.error('[bootstrap] product worker demand watcher failed to start', error);
+  });
+
+  // Boot the embedded light client before any chain is locked, so the (synchronous)
+  // availability check the connection layer and the settings UI both make sees the
+  // real catalog. Not fatal: on failure every chain falls back to its RPC nodes.
+  await initLightClient().catch((error: unknown) => {
+    console.error('[bootstrap] light client unavailable — chains will use RPC', error);
+  });
 
   // V2 multi-device identity is owned by the SDK (host-papp); the app reads it
   // back via `@/domains/application`. The device-sync/SSO stack is Electron-only.
   if (isElectron()) {
-    const papp = await ensurePappProvider();
-    const peerResolver = peerGateway.createPeerResolver(papp.identity, activeEnvironment.backendUrl);
+    // TODO(truapi): re-wire device-sync to the core's session identity in Task 12.
+    // It was driven by `userIdentity$`, which host-papp's V2 handshake populated;
+    // the core owns the session now and nothing sets that state. Recover the old
+    // wiring with `git show 295585d0:src/bootstrap.ts` when the core can expose
+    // session-derived identity material (docs/_plans/truapi-upstream-issues.md § 2).
 
-    const resolveConsumerInfo: ConsumerInfoLookup = accountId => peerResolver.getPeerContact(accountId);
-
-    // React to identity establishment / rotation / logout. A fresh SSO V2
-    // handshake mid-session emits a new userIdentity here, so the orchestrator
-    // starts without waiting for an app relaunch. The device identity is only
-    // present once paired, so we load it per-identity from the SDK.
-    //
-    // `startDeviceSyncOnIdentity` owns the start/stop sequencing: it tears down
-    // the previous orchestrator before starting the next (even mid-start) and
-    // collapses the hydrate+pair double-emit of the SAME identity — so two
-    // orchestrators (and their two expiry allocators) never race on the same
-    // statement account. This factory keeps only the app-boundary wiring:
-    // device load, transport creation, and env-derived ICE config.
-    startDeviceSyncOnIdentity({
-      identity$: userIdentity$.value$,
-      start: async (userIdentity, signal) => {
-        const device = await loadDeviceIdentity();
-        // A newer identity superseded us while loading the device — drop this
-        // start before it creates a transport/orchestrator that would race.
-        if (signal.aborted) return () => {};
-        if (!device) {
-          console.error('[bootstrap] user identity present but no device identity in the SDK — skipping device-sync');
-          return () => {};
-        }
-
-        const transport = createDeviceSyncTransport(device.statementAccountSeed);
-
-        // VITE_WEBRTC_TURN_TTL (seconds) overrides the credential lifetime; unset/invalid → NaN → builder default.
-        const turnTtl = Number(import.meta.env['VITE_WEBRTC_TURN_TTL']);
-
-        return startDeviceSyncIfReady({
-          device,
-          userIdentity,
-          // Seed with the authorising PApp device captured at handshake; the
-          // full roster lands via `SyncEntity.Devices` once the DC is open.
-          fetchInitialPeers: () =>
-            Promise.resolve([
-              {
-                statementAccountId: userIdentity.peerDeviceStatementAccountId,
-                encryptionPublicKey: userIdentity.peerDeviceEncPubKey,
-              },
-            ]),
-          subscribeStatementTopic: transport.subscribeStatementTopic,
-          postStatement: transport.postStatement,
-          resolveConsumerInfo,
-          // Must match the chat manager's `userId` (which is `SS58(device.statementAccountPublicKey)`
-          // for V2 sessions — the V2 session's `localAccount`) so synced rooms land under the same
-          // `P2PRoom.userId` the chat-list hook queries against. Using `identitySr25519PublicKey`
-          // here writes synced rooms with a userId the UI never reads.
-          ownUserId: AccountId().dec(device.statementAccountPublicKey),
-          iceConfig: {
-            turnHost: import.meta.env['VITE_WEBRTC_TURN_HOST'],
-            turnSecret: import.meta.env['VITE_WEBRTC_TURN_SECRET'],
-            turnTtlSeconds: turnTtl > 0 ? turnTtl : undefined,
-          },
-          signal,
-        });
-      },
-    });
-
-    hydrateUserIdentity().catch((error: unknown) => {
-      console.error('Failed to hydrate user identity:', error);
-    });
-
-    // Single local-teardown path on the host-papp session list (see
-    // `watchHostPappSessionTeardown`).
-    void watchHostPappSessionTeardown();
+    // Single local-teardown path, now on the core's auth state.
+    truapiRuntimeUseCase.watchSessionTeardown();
   }
 
   registerFeatures([
@@ -210,16 +182,21 @@ const runBootstrap = async (): Promise<BootstrapOutcome> => {
     languageSettingsFeature,
     inputModalityFeature,
     themeToggleFeature,
+    networkConnectionFeature,
     productSettingsFeature,
     permissionSettingsFeature,
     onboardingFeature,
-    signingBotAutopairFeature,
+    productRuntimeFeature,
     notificationsFeature,
     ...(isProductionBuild() ? [] : [updateCheckFeature, statementStoreNetworkFeature, customChainsFeature]),
   ]);
 
   // Cancel notifications for products uninstalled while the app was closed.
   bootstrapNotifications();
+
+  // Boot the TrUAPI core here rather than from a component: the route loaders wait
+  // for its first auth report before they let the app render.
+  bootstrapProductRuntime(activeEnvironment);
 
   // First run only: give a brand-new user the default dashboard (layout +
   // default product). No-op once a dashboard exists. The seeded card is named

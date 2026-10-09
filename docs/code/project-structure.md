@@ -188,6 +188,15 @@ export const accountService = { isChainAccount /* ... */ };
   access, not a business decision.
 - Mutations are plain Observable-returning (or async) functions exported here or from `$usecase/`. Consumed via `useAction`. No
   primitive wrapper.
+- **Every resource declares a `.mock(fn)`** on its builder: same signature as `.request()` / `.subscribe()`, placed after it (before
+  it the response type is still `never` and the mock does not compile). Under the test execution environment
+  (`@/shared/execution-environment`, set by `vitest.setup.js`) every resource serves its mock, so any spec reading through this
+  resource gets a usable value without wiring one, and a resource that skipped its mock instead runs its real request in every
+  one of those specs. Keep the mock body an inline literal: it ships in the production bundle, so importing a fixture
+  module from it ships the fixtures too. Driving one specific case is a separate tool, `instead(fn)` — see `style.md` § Files and
+  tests. The one exception is a resource whose request performs **no external I/O** — every input is a parameter or a gateway the
+  test setup already doubles — where a mock would replace real logic with a synthetic value and cover less than the real path
+  already does. Say so in a comment above the builder; silence reads as an omission.
 
 **`gateway.ts`** _(optional, for stateless external I/O — RPC, HTTP, IPFS, P2P — that doesn't fit a resource cache)_ — single
 `${entityName}Gateway` object of adapter functions.
@@ -286,7 +295,8 @@ A **cross-feature, cross-domain reusable data-flow module** — the data-flow re
 **Constraints**:
 
 - Built on `@/shared/rxstate` + RxJS.
-- May depend on domains and other aggregates; never on features/widgets/routes.
+- May depend on domains and other aggregates; never on features/widgets/routes, and never on the app root (`@/router`) — it
+  imports every feature. `import-x/no-restricted-paths` enforces the last one.
 - Owns no _backend_ persistence (gateways, repositories, resource caching, schemas → domain). **May** persist runtime state to
   localStorage / sessionStorage via `persistLocalStorage`.
 - Must own meaningful cross-cutting runtime state. May bridge external events (Electron IPC, native subscriptions) into that state
@@ -483,6 +493,11 @@ is one library with a single `index.ts` public surface. Consumers import from `@
 - `@/shared/hooks` — generic React hooks (`useRead`, `useAction`, plus DOM/intersection/etc. helpers).
 - `@/shared/components` — presentational components.
 - `@/shared/resource` — `createQueryResource` / `createStreamResource` primitives consumed by domain `resource.ts`.
+- `@/shared/execution-environment` — the `'runtime' | 'test'` switch (`ExecutionEnvironment`, `setExecutionEnvironment`,
+  `getExecutionEnvironment`, `isTestEnvironment`) and the reset signal (`onExecutionEnvironmentReset`,
+  `resetExecutionEnvironment`). Distinct from `@/shared/env`, which _detects_ host facts: this one is _set_ by the test harness.
+  `createState` and the resource builders subscribe to the reset at creation and return to their initial value; the library
+  knows nothing about them.
 - `@/shared/rxstate` — `createState`, `createEvent`, `combine`, `persistLocalStorage` consumed by aggregate `state/` (and, for
   persistence only, a domain `repository.ts` via `persistLocalStorage` — a domain has no `state/`).
 - `@/shared/di` — slot/pipeline/SDK primitives consumed by `feature.tsx`.
@@ -503,28 +518,25 @@ is one library with a single `index.ts` public surface. Consumers import from `@
 
 Codebase-wide rules. The cut rules above say where things belong; this section says what NOT to do.
 
-1. **Single-line passthrough use case** — a `${name}UseCase` whose only method calls one resource. Inline at the caller; the
-   wrapper buys nothing.
-
-2. **A resource reading another resource, or a use case** — the data layer is flat: a resource composes leaves and parameters
+1. **A resource reading another resource, or a use case** — the data layer is flat: a resource composes leaves and parameters
    only. Neither direction of reasoning exempts it (not "it only adds caching", not a barrel re-export). Whatever the resource
    was reaching for arrives as a **parameter** instead, supplied by the use case that read it — see
    [the artifact table](#where-each-artifact-sits).
 
-3. **Inline `useRead(resource, {...})` at a feature callsite** — features call named domain hooks (`useProducts`,
+2. **Inline `useRead(resource, {...})` at a feature callsite** — features call named domain hooks (`useProducts`,
    `useProductById`). The `useRead` indirection lives in the domain's `hooks.ts`.
 
-4. **Domain `hooks.ts` doing feature-specific shaping** — if a hook only matters for one feature, it belongs in that feature's
+3. **Domain `hooks.ts` doing feature-specific shaping** — if a hook only matters for one feature, it belongs in that feature's
    `hooks/`.
 
-5. **Aggregate persisting backend data** — backend persistence is the domain's job. Aggregates persist _runtime_ state
+4. **Aggregate persisting backend data** — backend persistence is the domain's job. Aggregates persist _runtime_ state
    (selections, in-flight flags) to localStorage via `persistLocalStorage` only.
 
-6. **Cross-impl coupling** — domains don't import from aggregates / features / widgets / routes. Aggregates don't import from
+5. **Cross-impl coupling** — domains don't import from aggregates / features / widgets / routes. Aggregates don't import from
    features / widgets / routes. Features may consume aggregates and domains but never export shared stores.
 
-7. **Mutation primitive wrapper** — there is no `createMutation`. Writes are plain functions; React binding is `useAction(fn)`.
+6. **Mutation primitive wrapper** — there is no `createMutation`. Writes are plain functions; React binding is `useAction(fn)`.
 
-8. **`hooks.ts` reaching into `repository.ts` / `gateway.ts`** — hooks bind to resources, use cases, and services only. A repository or gateway is consumed solely by a `resource.ts` (or a use case). A hook that needs persisted or wire data reads it through a resource — never the storage/wire leaf directly.
+7. **`hooks.ts` reaching into `repository.ts` / `gateway.ts`** — hooks bind to resources, use cases, and services only. A repository or gateway is consumed solely by a `resource.ts` (or a use case). A hook that needs persisted or wire data reads it through a resource — never the storage/wire leaf directly.
 
-9. **UI presentation vocabulary inside a domain** — a domain (service / resource / types) must not encode how a value is _presented_: no UI-widget names (`banner`, `badge`, `toast`), no visibility decision (`null`/absent meaning "hide"), no copy/icon mapping. The domain exposes a **semantic** state (e.g. `'syncing' | 'synced' | 'stale' | 'error' | 'inactive'`); the consuming feature maps that to icon / copy / visibility. _Why:_ presentation is the feature's job — baking it into the domain couples the business core to one UI and forces a synonym ("banner state") where a domain concept ("sync status") belongs. A `service.ts` predicate may express a domain condition, but the word for the rendered thing lives in the feature.
+8. **UI presentation vocabulary inside a domain** — a domain (service / resource / types) must not encode how a value is _presented_: no UI-widget names (`banner`, `badge`, `toast`), no visibility decision (`null`/absent meaning "hide"), no copy/icon mapping. The domain exposes a **semantic** state (e.g. `'syncing' | 'synced' | 'stale' | 'error' | 'inactive'`); the consuming feature maps that to icon / copy / visibility. _Why:_ presentation is the feature's job — baking it into the domain couples the business core to one UI and forces a synonym ("banner state") where a domain concept ("sync status") belongs. A `service.ts` predicate may express a domain condition, but the word for the rendered thing lives in the feature.

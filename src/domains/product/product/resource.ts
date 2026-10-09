@@ -1,3 +1,4 @@
+import { of } from 'rxjs';
 import { namehash } from 'viem';
 
 import { createQueryResource, createStreamResource } from '@/shared/resource';
@@ -17,6 +18,7 @@ export const productsResource = createStreamResource({
   key: () => 'products',
 })
   .subscribe<PersistedProduct[]>(() => productDb.subscribeToAll())
+  .mock(() => of([]))
   .cache<PersistedProduct[]>({
     initial: [],
     map(_, products) {
@@ -143,6 +145,7 @@ export const chainResolveResource = createQueryResource<{ identifier: string; en
   .request<Product | null>(({ identifier, environment, tld }) =>
     readProductFromChain(environment, dotNsService.baseNameOf(identifier, tld)),
   )
+  .mock(() => null)
   .timeout(60_000)
   .cache<Record<string, Product | null>>({
     staleAfter: 60_000,

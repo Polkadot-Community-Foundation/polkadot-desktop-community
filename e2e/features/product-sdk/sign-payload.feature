@@ -7,13 +7,13 @@ Feature: Sign Payload review
   "Create Transaction with Product Account" action opens it (createTransaction).
 
   @allure.id:14865
-  Scenario: TC-8.2.1 Sign payload review screen shows account, network, fee and call title
+  Scenario: TC-8.2.1 Sign payload review screen shows account, network and call title
     Given the user is authenticated
     And the test product "host-playground" is opened
     And the user clicks the "Signing" tab
     When the user runs "Create Transaction with Product Account"
     And the user opens the signing review screen
-    Then the signing review shows account, network, fee and call title
+    Then the signing review shows account, network and call title
     When the user cancels the signing review
 
   @allure.id:14866

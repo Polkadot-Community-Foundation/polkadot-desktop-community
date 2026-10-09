@@ -40,7 +40,7 @@ export type P2PChatManager = {
 };
 
 export type SearchResult = {
-  candidateAccountId: string;
+  accountId: string;
   username: string;
   status: string;
 };

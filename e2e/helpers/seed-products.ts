@@ -4,6 +4,14 @@ import { RECENT_PRODUCTS_STORAGE_KEY } from '@/domains/product/recents/constants
 
 import { DEFAULT_TIMEOUT } from './timeouts';
 
+declare global {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-definitions -- augmenting the lib `Window` interface requires `interface`
+  interface Window {
+    /** Test-only grant hook wired in `src/bootstrap.ts` under AUTOTEST/e2e. */
+    __grantRemoteUrlPermission?: (productId: string, url: string) => Promise<void>;
+  }
+}
+
 /**
  * Pre-launch product seeding for the e2e suite.
  *
@@ -195,28 +203,19 @@ export async function seedAddressBarRecents(page: Page, baseNames: string[]): Pr
 }
 
 /**
- * Grant a product the Open-External-URL permission for a URL pattern.
+ * Grant a product the external-URL permission for `pattern`.
  *
- * `resolveRemoteUrlAccess` honours a stored decision and otherwise prompts — but
- * e2e builds pass `promptForUnmatchedRemoteAccess: false` (see `src/bootstrap.ts`),
- * so an unmatched URL is denied outright and no dialog is ever raised. A test
- * about what the host does with a *permitted* external link therefore has to
- * establish the grant itself; without it the sandbox logs
- * `External navigation denied by permission` and nothing reaches the system
- * browser.
- *
- * `pattern` is a URL. Its path matches exactly or as a `/`-delimited prefix, and
- * a path of `/` matches the whole host.
+ * e2e builds pass `promptForUnmatchedRemoteAccess: false` (`src/bootstrap.ts`), so an
+ * unmatched URL is denied with no dialog. A test about a permitted external link must
+ * establish the grant itself. Permissions are core-owned, so this grants through the
+ * core via `window.__grantRemoteUrlPermission` rather than seeding storage by hand. No
+ * reload needed: the core holds the grant the moment it is set.
  */
 export async function seedRemoteUrlPermission(page: Page, productId: string, pattern: string): Promise<void> {
   await waitForRenderer(page);
-  await idbPut(page, 'productPermissions', [
-    {
-      productId,
-      devicePermissions: [],
-      remotePermissions: [{ payload: { type: 'Remote', pattern }, modality: 'app', status: 'granted' }],
-    },
-  ]);
+  // The hook is wired late in `bootstrap` (after async work), so wait for it.
+  await page.waitForFunction(() => typeof window.__grantRemoteUrlPermission === 'function', { timeout: DEFAULT_TIMEOUT });
+  await page.evaluate(({ id, url }) => window.__grantRemoteUrlPermission?.(id, url), { id: productId, url: pattern });
 }
 
 /** Seed the main dashboard layout with a single product-widget card. */

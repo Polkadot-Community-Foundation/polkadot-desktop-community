@@ -1,37 +1,23 @@
 // @vitest-environment happy-dom
 
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import { of } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { useInteractedProductsMock, useDisplayedProductMock } = vi.hoisted(() => ({
-  useInteractedProductsMock: vi.fn(() => ({ data: [] as { kind: 'permissionOnly'; productId: string }[] })),
-  useDisplayedProductMock: vi.fn(() => ({ data: null, pending: false, error: null })),
-}));
-
-vi.mock('@novasamatech/tr-ui', async importOriginal => ({
-  ...(await importOriginal<object>()),
-  Input: (props: object) => <input {...props} />,
-}));
-
-vi.mock('@tanstack/react-router', () => ({
-  useNavigate: () => vi.fn(),
-}));
-
-vi.mock('@/domains/product', () => ({
-  useInteractedProducts: useInteractedProductsMock,
-  useDisplayedProduct: useDisplayedProductMock,
-  isLocalhostUrl: (url: string) => url.startsWith('http://localhost') || url.startsWith('localhost'),
-  productService: { matchesQuery: () => true },
-  useDotNsTld: () => ({ data: '.dot', pending: false, error: null, refresh: vi.fn() }),
-}));
-
-vi.mock('@/widgets/ProductIcon', () => ({
-  ProductIcon: () => <div />,
-}));
-
 import { TranslationProvider } from '@/shared/translation';
+import { chainResolveResource } from '@/domains/product';
+// eslint-disable-next-line boundaries/dependencies -- the read behind the hook; the barrel exposes the hook but not the use case
+import { interactionUseCase } from '@/domains/product/$usecase/interaction';
 
 import { ProductListSettingsPage } from './ProductListSettingsPage';
+
+// A permission-only row comes from the core's permission slots — an adapter, not a
+// resource — so the use-case read behind the hook is spied in place.
+const watchInteractedProducts = vi.spyOn(interactionUseCase, 'watchInteractedProducts').mockReturnValue(of([]));
+
+// Nothing is committed, so every row falls through to the chain resolution, which
+// is the read under test.
+const resolveFromChain = vi.fn(({ identifier: _identifier }: { identifier: string }) => null);
 
 const renderPage = () =>
   render(
@@ -43,24 +29,25 @@ const renderPage = () =>
 describe('ProductListSettingsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useDisplayedProductMock.mockReturnValue({ data: null, pending: false, error: null });
+    resolveFromChain.mockClear();
+    chainResolveResource.instead(resolveFromChain);
   });
 
-  it('renders a permission-only row with the raw id as fallback label', () => {
-    useInteractedProductsMock.mockReturnValue({ data: [{ kind: 'permissionOnly', productId: 'browsed.dot' }] });
+  it('renders a permission-only row with the raw id as fallback label', async () => {
+    watchInteractedProducts.mockReturnValue(of([{ kind: 'permissionOnly', productId: 'browsed.dot' }]));
 
     renderPage();
 
-    expect(useDisplayedProductMock).toHaveBeenCalledWith('browsed.dot');
+    await waitFor(() => expect(resolveFromChain).toHaveBeenCalledWith(expect.objectContaining({ identifier: 'browsed.dot' })));
     expect(screen.getAllByText('browsed.dot').length).toBeGreaterThan(0);
   });
 
-  it('does not chain-resolve localhost permission-only entries', () => {
-    useInteractedProductsMock.mockReturnValue({ data: [{ kind: 'permissionOnly', productId: 'localhost:5173' }] });
+  it('does not chain-resolve localhost permission-only entries', async () => {
+    watchInteractedProducts.mockReturnValue(of([{ kind: 'permissionOnly', productId: 'localhost:5173' }]));
 
     renderPage();
 
-    expect(useDisplayedProductMock).toHaveBeenCalledWith(null);
-    expect(screen.getAllByText('localhost:5173').length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('localhost:5173')).length).toBeGreaterThan(0);
+    expect(resolveFromChain).not.toHaveBeenCalled();
   });
 });

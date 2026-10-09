@@ -4,6 +4,7 @@ import { type CallWindowLaunch } from '@/shared/call-bridge';
 import {
   type DevicePermissionType,
   type ExecutableKind,
+  type OsDevicePermissionStatus,
   type PermissionStatus,
   type ProductArchive,
   type RemotePermissionIpcRequest,
@@ -60,8 +61,6 @@ const API = {
   // Passed via launchElectronApp() in e2e tests, not baked into the build
   autotest: !!process.env['AUTOTEST'],
   e2eTest: !!process.env['E2E_TEST'],
-  botUrl: process.env['BOT_URL'] || '',
-  botToken: process.env['BOT_TOKEN'] || '',
   getHostMetadata: (): Promise<{
     hostName?: string;
     hostVersion?: string;
@@ -162,6 +161,9 @@ const API = {
   },
   requestSystemDevicePermission: (permission: string): Promise<boolean> => {
     return ipcRenderer.invoke('requestSystemDevicePermission', permission);
+  },
+  getSystemDevicePermissionStatus: (permission: string): Promise<OsDevicePermissionStatus> => {
+    return ipcRenderer.invoke('getSystemDevicePermissionStatus', permission);
   },
   openSystemPrivacySettings: (permission: 'Camera' | 'Microphone'): Promise<boolean> => {
     return ipcRenderer.invoke('openSystemPrivacySettings', permission);
@@ -431,6 +433,9 @@ const API = {
     PermissionStatus
   >('devicePermission'),
   onRemotePermissionRequest: createPreloadRequestHandler<RemotePermissionIpcRequest, PermissionStatus>('remotePermission'),
+  // Answer `true` only after opening the URL as a host tab; `false` sends it back to
+  // the sandbox's external-open path, which keeps the per-product permission gate.
+  onSandboxWindowOpen: createPreloadRequestHandler<{ url: string }, boolean>('sandboxWindowOpen'),
   hasDevicePermission: (productId: string, permission: string): Promise<boolean | null> => {
     return ipcRenderer.invoke('hasDevicePermission', productId, permission);
   },

@@ -131,7 +131,6 @@ const buildManager = () =>
   createP2PChatManagerV2({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/consistent-type-assertions -- test double for the SDK adapter; only the mocked session touches it
     statementStore: {} as any,
-    identity: { getIdentity: vi.fn() },
     userId: OWN_USER_ID,
     device: {
       statementAccountPublicKey: key(0x11),

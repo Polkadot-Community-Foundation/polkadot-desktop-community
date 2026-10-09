@@ -35,17 +35,17 @@ export const ChatIdCodec = Enum({
   Contact: AccountIdCodec, // 0
 });
 
-export const DeviceStatusCodec = Enum({
+const DeviceStatusCodec = Enum({
   ACTIVE: _void, // 0
 });
 
-export const OutgoingStatusCodec = Enum({
+const OutgoingStatusCodec = Enum({
   NEW: _void, // 0
   SENT: _void, // 1
   DELIVERED: _void, // 2
 });
 
-export const IncomingStatusCodec = Enum({
+const IncomingStatusCodec = Enum({
   NEW: _void, // 0
   SEEN: _void, // 1
 });
@@ -55,7 +55,7 @@ export const LocalStatusCodec = Enum({
   Incoming: IncomingStatusCodec, // 1
 });
 
-export const LocalDeviceCodec = Struct({
+const LocalDeviceCodec = Struct({
   statementAccountId: AccountIdCodec,
   encryptionPublicKey: EncrPublicKeyCodec,
   status: DeviceStatusCodec,
@@ -76,13 +76,13 @@ export const SyncEntityCodec = Enum({
   Messages: Vector(LocalMessageCodec), // 3
 });
 
-export const SyncUpdateCodec = Struct({
+const SyncUpdateCodec = Struct({
   id: u32,
   entities: Vector(SyncEntityCodec),
   timePoint: u64,
 });
 
-export const SyncUpdateAckCodec = Struct({
+const SyncUpdateAckCodec = Struct({
   id: u32,
 });
 

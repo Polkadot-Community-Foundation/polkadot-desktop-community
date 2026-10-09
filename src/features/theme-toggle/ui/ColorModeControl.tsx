@@ -1,9 +1,9 @@
 import { Monitor, Moon, Sun } from 'lucide-react';
 import { type ComponentType } from 'react';
 
-import { type ThemePreference, saveTheme, useThemePreference } from '@/shared/hooks';
 import { useTranslation } from '@/shared/translation';
 import { cnTw } from '@/shared/utils';
+import { type ThemePreference, useSetThemePreference, useThemePreference } from '@/domains/application';
 
 type Segment = { value: ThemePreference; labelKey: string; icon: ComponentType<{ className?: string }> };
 
@@ -16,6 +16,7 @@ const SEGMENTS: Segment[] = [
 export const ColorModeControl = () => {
   const { t } = useTranslation();
   const preference = useThemePreference();
+  const { run: setPreference } = useSetThemePreference();
 
   return (
     <div role="radiogroup" className="inline-flex items-center gap-0.5 rounded-full bg-bg-surface-nested p-0.5">
@@ -34,7 +35,7 @@ export const ColorModeControl = () => {
                 ? 'bg-bg-surface-container text-fg-primary shadow-[0_1px_2px_0_var(--shadow-soft)]'
                 : 'text-fg-secondary hover:text-fg-primary',
             )}
-            onClick={() => saveTheme(value)}
+            onClick={() => setPreference(value)}
           >
             <Icon className="size-4 shrink-0" />
             {t(labelKey)}

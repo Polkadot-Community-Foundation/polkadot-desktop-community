@@ -6,7 +6,7 @@ Feature: Permission settings entity pages
   permission (/settings/privacy/permissions/<id>) listing the apps that use a
   permission. Both are populated only by apps that have requested a permission,
   so each scenario first drives host-playground to grant a device permission
-  (the auto-approver clicks "Allow Always" — no @manual-permissions here), then
+  (the auto-approver answers the dialog — no @manual-permissions here), then
   asserts on the settings pages.
 
   @allure.id:14800
@@ -74,7 +74,9 @@ Feature: Permission settings entity pages
     And the user opens the "Notifications" permission
     Then the "host-playground" app is listed for the permission
 
-  @allure.id:14811
+  # @skip: needs a granted alias context, and the alias request cannot reach its
+  # dialog on this deployment — see the note in `alias-permissions.feature`.
+  @allure.id:14811 @skip
   Scenario: TC-6.5.3 Manage alias contexts from app settings
     Given the user is authenticated
     And the test product "host-playground" is opened

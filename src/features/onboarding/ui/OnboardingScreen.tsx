@@ -1,22 +1,19 @@
-import { QrCode } from '@novasamatech/host-papp-react-ui';
 import { Button, toastError, useTheme } from '@novasamatech/tr-ui';
 import { useNavigate } from '@tanstack/react-router';
 import { Loader, Smartphone } from 'lucide-react';
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import PolkadotLogo from '@/shared/assets/images/logo.svg?jsx';
-import { Spinner } from '@/shared/components';
-import { Slot } from '@/shared/di';
+import { AUTOTEST_ENABLED } from '@/shared/autotest';
+import { LoadingScreen, QrCode, Spinner } from '@/shared/components';
 import { isProductionBuild, reloadApp } from '@/shared/env';
 import { useRxState } from '@/shared/rxstate';
 import { TEST_IDS } from '@/shared/test-ids';
 import { useTranslation } from '@/shared/translation';
 import { cnTw } from '@/shared/utils';
-import { type EnvironmentId, environmentService, sessionUseCase } from '@/domains/application';
-import { userIdentity$ } from '@/domains/sso';
+import { type EnvironmentId, environmentService } from '@/domains/application';
 import { networkSettings } from '@/aggregates/network-settings';
-import { onboardingTopSlot } from '../di';
-import { useHandshakeV2 } from '../hooks/useHandshakeV2';
+import { truapiRuntimeUseCase, useTruapiAuthState } from '@/aggregates/truapi-runtime';
 import { useOnboardingConnection } from '../hooks/useOnboardingConnection';
 
 import { OnboardingConnectionPanel } from './OnboardingConnectionPanel';
@@ -31,26 +28,40 @@ export const OnboardingScreen = () => {
 
   const navigate = useNavigate();
 
-  const { qrPayload, state: handshakeState, isLoading: handshakeLoading } = useHandshakeV2();
-  const [persistedUserIdentity] = useRxState(userIdentity$);
+  const authState = useTruapiAuthState();
   const connectionState = useOnboardingConnection();
 
-  // Already paired (cold-start with stored V2 identity, or just transitioned to
-  // Success): jump straight to the dashboard. The check covers both the
-  // immediately-after-pairing path and the launch-with-stored-identity path.
+  // `sawPairing` tells a real new pairing (which reaches `Pairing`) from the silent boot
+  // reconnect of an already-paired session, so only the latter is hidden below.
+  const [sawPairing, setSawPairing] = useState(false);
   useEffect(() => {
-    if (handshakeState.tag === 'Success' || persistedUserIdentity !== null) {
+    if (authState?.tag === 'Pairing') setSawPairing(true);
+  }, [authState?.tag]);
+
+  // The core owns the session, so pairing starts by asking it to. Only from
+  // `Disconnected` — asking again while a pairing is already live would strand
+  // the deeplink the user is looking at.
+  useEffect(() => {
+    if (authState?.tag !== 'Disconnected') return;
+
+    void truapiRuntimeUseCase.requestLogin().catch((error: unknown) => {
+      console.error('[truapi] login request failed', error);
+    });
+  }, [authState?.tag]);
+
+  useEffect(() => {
+    if (authState?.tag === 'Connected') {
       navigate({ to: '/dashboard' });
     }
-  }, [handshakeState.tag, persistedUserIdentity, navigate]);
+  }, [authState?.tag, navigate]);
 
-  const hasError = handshakeState.tag === 'Failed';
+  const hasError = authState?.tag === 'LoginFailed';
 
-  // The peer sends Failed reasons as free-form strings; classify the ones we
+  // The wallet sends failure reasons as free-form strings; classify the ones we
   // want specialised UX for. Everything else falls back to the verbatim reason.
   const errorContent = useMemo(() => {
-    if (handshakeState.tag !== 'Failed') return null;
-    const reason = handshakeState.reason ?? '';
+    if (authState?.tag !== 'LoginFailed') return null;
+    const reason = authState.value.reason;
     if (/no\s+free.*slot|slot.*available|limit\s*=/i.test(reason)) {
       return {
         kind: 'noFreeSlots' as const,
@@ -63,7 +74,7 @@ export const OnboardingScreen = () => {
       title: t('feature.onboarding.errorTitle'),
       description: reason || t('feature.onboarding.error'),
     };
-  }, [handshakeState, t]);
+  }, [authState, t]);
 
   useEffect(() => {
     // Only toast generic pairing errors. Recognized states (e.g. account setup)
@@ -74,26 +85,23 @@ export const OnboardingScreen = () => {
     }
   }, [hasError, errorContent, connectionState]);
 
-  // QR is only useful while we're still waiting for Android to scan it
-  // (Idle/Submitted). Once Android sends Pending the handshake is in flight —
-  // the QR is no longer scannable, so swap it for a loader.
-  const showQR = !hasError && qrPayload !== null && (handshakeState.tag === 'Idle' || handshakeState.tag === 'Submitted');
-  const showHandshakeProgress = !hasError && handshakeState.tag === 'Pending';
+  // The core emits the deeplink only while it is scannable: `Pairing` is left as
+  // soon as the wallet answers, so there is no separate "still showing a stale
+  // QR" case to exclude here.
+  const qrPayload = authState?.tag === 'Pairing' ? authState.value.deeplink : null;
+  const showQR = qrPayload !== null;
+  const showHandshakeProgress = authState?.tag === 'Authenticating';
   // Lock the network switcher only while the pairing flow is mid-handshake (QR
   // not yet shown, no error). During connection states, or once the QR/error is
   // visible, the user may switch networks.
-  const isNetworkSelectionDisabled = connectionState === 'pairing' && !showQR && !hasError && !handshakeLoading;
+  const isNetworkSelectionDisabled = connectionState === 'pairing' && !showQR && !hasError;
 
+  // The core owns the device identity and mints fresh pairing material per
+  // attempt, so a retry is just another login — no identity reset, no reload.
   const handleRetry = useCallback(() => {
-    // Reload only once the reset has landed: it goes through the SDK's storage
-    // adapter now, so a reload that outruns it hands the retry the very device
-    // keypair that just failed to pair.
-    void sessionUseCase
-      .resetDeviceIdentity()
-      .catch((error: unknown) => {
-        console.error('[sso] retry: device identity reset failed', error);
-      })
-      .finally(reloadApp);
+    void truapiRuntimeUseCase.requestLogin().catch((error: unknown) => {
+      console.error('[truapi] login retry failed', error);
+    });
   }, []);
 
   const handleEnvironmentChange = (value: EnvironmentId) => {
@@ -104,6 +112,17 @@ export const OnboardingScreen = () => {
   };
 
   const environments = environmentService.list();
+
+  // Hide the login chrome behind the loading screen through the silent boot reconnect, so
+  // an already-paired user never sees it flash on restart.
+  const isBootReconnecting =
+    connectionState === 'pairing' &&
+    !sawPairing &&
+    !hasError &&
+    (authState === null || authState.tag === 'Disconnected' || authState.tag === 'Authenticating');
+  if (isBootReconnecting) {
+    return <LoadingScreen />;
+  }
 
   // What fills the QR box, in priority order: a connection state preempts the
   // pairing flow; otherwise show the QR, the in-flight handshake spinner, the
@@ -151,10 +170,6 @@ export const OnboardingScreen = () => {
       className="flex min-h-screen w-screen flex-col items-center justify-center overflow-y-auto bg-bg-surface-nested pt-6 pb-2"
       style={{ appRegion: 'drag' }}
     >
-      <div className="mb-4 w-full max-w-300 px-6 empty:hidden" style={{ appRegion: 'no-drag' }}>
-        <Slot id={onboardingTopSlot} props={{ qrPayload, environmentId: settings.environmentId }} />
-      </div>
-
       <div
         className="flex flex-col items-center gap-4 px-6 xl:flex-row xl:items-center xl:gap-16"
         style={{ appRegion: 'no-drag' }}
@@ -209,6 +224,10 @@ export const OnboardingScreen = () => {
           {/* QR Code */}
           <div
             data-testid={TEST_IDS.onboardingQrContainer}
+            // Autotest seam: the e2e harness reads the pairing deeplink from here and hands it to a
+            // local `truapi-host` signer. `undefined` rather than null/'' so React omits the attribute
+            // entirely outside autotest — the harness waits on its presence.
+            data-pairing-deeplink={AUTOTEST_ENABLED && qrPayload !== null ? qrPayload : undefined}
             className="box-border flex h-100.5 w-100.5 shrink-0 items-center justify-center rounded-4xl border border-stroke-primary bg-bg-surface-container p-6 shadow-[0px_1px_2px_0px_var(--shadow-soft)]"
           >
             {renderQrBoxContent()}

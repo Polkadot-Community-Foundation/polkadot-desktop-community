@@ -1,9 +1,12 @@
 import { firstValueFrom } from 'rxjs';
+import * as v from 'valibot';
 
 import { getChains } from '../chain/resource';
-import { type GenesisHash } from '../chain/types';
+import { genesisHash } from '../chain/schemas';
+import { type Chain, type GenesisHash } from '../chain/types';
 import { customChainGateway } from '../custom-chain/gateway';
 import { addCustomChain, customChainsResource } from '../custom-chain/resource';
+import { customChainService } from '../custom-chain/service';
 
 export type AddCustomChainResult =
   | { status: 'added'; name: string; genesisHash: GenesisHash }
@@ -40,6 +43,32 @@ async function discoverAndAddChain(endpoint: string, name: string): Promise<AddC
   return { status: 'added', name: displayName, genesisHash: discovered.genesisHash };
 }
 
+/**
+ * Every chain the host serves — the configured set plus the user's own — keyed by
+ * genesis hash.
+ *
+ * The imperative twin of `useAllChainsMap`, for callers outside React. Read on
+ * demand rather than held: a caller that keeps the map sees a chain the user adds
+ * only if it re-reads, and the host callbacks answer per request anyway.
+ */
+async function getAllChainsMap(): Promise<Record<GenesisHash, Chain>> {
+  const [builtin, custom] = await Promise.all([getChains(), firstValueFrom(customChainsResource.read$({}))]);
+
+  const map: Record<GenesisHash, Chain> = {};
+  for (const chain of builtin ?? []) {
+    map[chain.genesisHash] = chain;
+  }
+
+  for (const [hash, entry] of Object.entries(custom ?? {})) {
+    const parsed = v.safeParse(genesisHash, hash);
+    // A malformed key is one unusable custom chain, not a reason to serve none.
+    if (parsed.success) map[parsed.output] = customChainService.buildChain(parsed.output, entry);
+  }
+
+  return map;
+}
+
 export const customChainUseCase = {
   discoverAndAddChain,
+  getAllChainsMap,
 };

@@ -1,18 +1,9 @@
 // @vitest-environment happy-dom
 
-import { act, renderHook } from '@testing-library/react';
-import { type BehaviorSubject } from 'rxjs';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { type BehaviorSubject, of } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const usePeopleChainStatus = vi.fn();
-const useAuthentication = vi.fn();
-
-vi.mock('@/aggregates/network-settings', () => ({
-  usePeopleChainStatus: () => usePeopleChainStatus(),
-}));
-vi.mock('@novasamatech/host-papp-react-ui', () => ({
-  useAuthentication: () => useAuthentication(),
-}));
 // `online$` is mocked as a BehaviorSubject so the test can drive offline/online
 // transitions that feed the "internet restored" window.
 vi.mock('@/shared/env', async () => {
@@ -21,61 +12,63 @@ vi.mock('@/shared/env', async () => {
 });
 
 import { online$ } from '@/shared/env';
+import { type ConnectionStatus, chainConnectionStatusResource } from '@/domains/network';
+import { truapiRuntimeUseCase } from '@/aggregates/truapi-runtime';
 
 import { useOnboardingConnection } from './useOnboardingConnection';
 
 const onlineSubject = online$ as unknown as BehaviorSubject<boolean>;
 
+// Both aggregate hooks run for real: the people-chain status is stated on the network
+// resource it reads, and the auth state is published through the runtime it watches.
+const chainStatus = (status: ConnectionStatus) => chainConnectionStatusResource.instead(() => of(status));
+
 beforeEach(() => {
-  vi.useFakeTimers();
   onlineSubject.next(true);
-  useAuthentication.mockReturnValue({ pairingStatus: { step: 'pairing' }, authenticate: vi.fn() });
-  usePeopleChainStatus.mockReturnValue({ networkName: 'X', status: 'offline' });
+  truapiRuntimeUseCase.publishAuthState({ tag: 'Pairing', value: { deeplink: 'polkadotapp://pair?handshake=0x00' } });
+  chainStatus('connecting');
 });
 
 afterEach(() => {
-  vi.clearAllMocks();
+  truapiRuntimeUseCase.dispose();
   vi.useRealTimers();
 });
 
 describe('useOnboardingConnection', () => {
-  it('returns offline when the people chain is offline', () => {
+  it('returns reaching when reconnecting without a recent internet restore', async () => {
     const { result } = renderHook(() => useOnboardingConnection());
-    expect(result.current).toBe('offline');
+    await waitFor(() => expect(result.current).toBe('reaching'));
   });
 
-  it('returns reaching when reconnecting without a recent internet restore', () => {
-    usePeopleChainStatus.mockReturnValue({ networkName: 'X', status: 'reconnecting' });
+  it('shows restored briefly after the browser comes back online, then reaching', async () => {
     const { result } = renderHook(() => useOnboardingConnection());
-    expect(result.current).toBe('reaching');
-  });
+    await waitFor(() => expect(result.current).toBe('reaching'));
 
-  it('shows restored briefly after the browser comes back online, then reaching', () => {
-    usePeopleChainStatus.mockReturnValue({ networkName: 'X', status: 'reconnecting' });
-    const { result, rerender } = renderHook(() => useOnboardingConnection());
-    expect(result.current).toBe('reaching');
-
+    vi.useFakeTimers();
     act(() => {
       onlineSubject.next(false);
       onlineSubject.next(true);
     });
-    rerender();
     expect(result.current).toBe('restored');
 
     act(() => {
       vi.advanceTimersByTime(1600);
     });
-    rerender();
     expect(result.current).toBe('reaching');
   });
 
-  it('returns accountSetup when connected with a recognized identity error', () => {
-    usePeopleChainStatus.mockReturnValue({ networkName: 'X', status: 'connected' });
-    useAuthentication.mockReturnValue({
-      pairingStatus: { step: 'pairingError', message: 'OriginPersonProviderError' },
-      authenticate: vi.fn(),
-    });
+  it('returns accountSetup when connected with a recognized identity error', async () => {
+    chainStatus('connected');
+    truapiRuntimeUseCase.publishAuthState({ tag: 'LoginFailed', value: { reason: 'OriginPersonProviderError' } as never });
     const { result } = renderHook(() => useOnboardingConnection());
-    expect(result.current).toBe('accountSetup');
+    await waitFor(() => expect(result.current).toBe('accountSetup'));
+  });
+
+  // Last: `justRestored$` is a module-level stream, so the offline → online flip the next
+  // `beforeEach` performs would open a "restored" window over whichever case followed.
+  it('returns offline when the browser is offline', async () => {
+    onlineSubject.next(false);
+    const { result } = renderHook(() => useOnboardingConnection());
+    await waitFor(() => expect(result.current).toBe('offline'));
   });
 });

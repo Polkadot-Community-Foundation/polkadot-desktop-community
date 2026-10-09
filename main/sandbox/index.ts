@@ -510,6 +510,45 @@ export function setupSandbox(main: () => WebContents | null) {
   ipcRenderer.on('sandbox:ping', (_e, seq) => {
     try { ipcRenderer.send('sandbox:pong', { seq, t: performance.now() }); } catch (_) {}
   });
+  // Trackpad swipe navigation: the host reduces these into a back/forward gesture. "consumed" follows
+  // Chrome's overscroll rule — the page scrolls first, and only a wheel it cannot use becomes a swipe.
+  // The root scroller's overflow is the viewport's: html's, or body's when html's is visible (CSS propagation).
+  const rootOverflowX = () => {
+    const html = getComputedStyle(document.documentElement).overflowX;
+    return html !== 'visible' || !document.body ? html : getComputedStyle(document.body).overflowX;
+  };
+  const canScrollX = (el, deltaX) => {
+    if (!(el instanceof Element) || el.scrollWidth <= el.clientWidth) return false;
+    // When html's overflow is visible, body's overflow propagates to the viewport: body itself never scrolls.
+    if (el === document.body && el !== document.scrollingElement && getComputedStyle(document.documentElement).overflowX === 'visible') return false;
+    if (el === document.scrollingElement) {
+      const overflowX = rootOverflowX();
+      if (overflowX === 'hidden' || overflowX === 'clip') return false;
+    } else {
+      const overflowX = getComputedStyle(el).overflowX;
+      if (overflowX !== 'auto' && overflowX !== 'scroll') return false;
+    }
+    const left = Math.abs(el.scrollLeft);
+    return deltaX < 0 ? left > 0 : left + el.clientWidth < el.scrollWidth - 1;
+  };
+  // Chrome's opt-out from swipe navigation: overscroll-behavior-x other than auto on a scroll container in the chain.
+  // It applies only to scroll containers, and the viewport takes it from html alone — never from body.
+  const optsOutOfSwipe = (el) => {
+    if (!(el instanceof Element) || el === document.body) return false;
+    const style = getComputedStyle(el);
+    if (style.overscrollBehaviorX === 'auto') return false;
+    return el === document.documentElement || (style.overflowX !== 'visible' && style.overflowX !== 'clip');
+  };
+  window.addEventListener('wheel', (event) => {
+    if (!event.isTrusted || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+    const { deltaX, deltaY } = event;
+    if (deltaX === 0 && deltaY === 0) return;
+    // composedPath() is empty once dispatch ends, so the scroll check runs now; defaultPrevented is final only after.
+    const scrollable = deltaX !== 0 && event.composedPath().some((el) => canScrollX(el, deltaX) || optsOutOfSwipe(el));
+    setTimeout(() => {
+      try { ipcRenderer.sendToHost('host:wheel', { deltaX, deltaY, consumed: scrollable || event.defaultPrevented }); } catch (_) {}
+    }, 0);
+  }, { passive: true });
 `;
 
         preloadSaved = true;
@@ -577,18 +616,47 @@ export function setupSandbox(main: () => WebContents | null) {
       }
     });
 
-    // Forcing default browser usage for external links — only https, and only after the
-    // product's Open-External-URL permission is granted (opened async; the handler must
-    // return synchronously).
+    // A cross-product `window.open` has to reach a host tab, not the system browser.
+    // Which URLs are products is not knowable here: it depends on the active network's
+    // dotNS TLD and its `.li` gateway aliases, and nothing in the main process tracks
+    // either. So the shell decides and opens the tab; main only routes, and keeps the
+    // external path (with its per-product permission gate) for everything else.
+    //
+    // Always denies: the handler must answer synchronously, and both outcomes are
+    // asynchronous — the shell is asked over IPC, and an external open awaits a
+    // permission decision. Nothing is ever opened as an Electron popup window.
     contents.setWindowOpenHandler(({ url }) => {
+      void routeWindowOpen(url);
+
+      return { action: 'deny' };
+    });
+
+    async function routeWindowOpen(url: string): Promise<void> {
+      if (await openedInShell(url)) return;
+
       const result = isExternalUrlAllowed(url);
       if (result.allowed && result.href) {
         openExternalIfPermitted(result.href, 'open');
       } else {
         console.warn('[sandbox] Blocked shell.openExternal for:', url);
       }
-      return { action: 'deny' };
-    });
+    }
+
+    // `true` once the shell has recognised the URL as a product and opened a tab for it.
+    // A shell that is gone, wedged or erroring answers `false`, which falls the caller
+    // through to the external path — the behaviour this had before it could ask.
+    async function openedInShell(url: string): Promise<boolean> {
+      const shellWC = main();
+      if (!shellWC || shellWC.isDestroyed()) return false;
+
+      try {
+        return await createMainRequest<{ url: string }, boolean>(shellWC, 'sandboxWindowOpen', { url });
+      } catch (error) {
+        console.warn('[sandbox] sandboxWindowOpen request failed', { url, error });
+
+        return false;
+      }
+    }
 
     contents.on('render-process-gone', (_, details) => {
       sendToShell(WEBVIEW_RENDER_PROCESS_GONE, {

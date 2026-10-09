@@ -1,5 +1,3 @@
-export { type ResolvedTheme, type ThemePreference, saveTheme, useBrowserTheme, useThemePreference } from './useBrowserTheme';
-export { type ThemeName, THEME_NAMES, readThemeName, saveThemeName, useThemeName } from './useThemeName';
 export { usePrevious } from './usePrevious';
 export { useToggle } from './useToggle';
 export { useThrottle } from './useThrottle';

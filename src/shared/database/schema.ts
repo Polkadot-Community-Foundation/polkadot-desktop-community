@@ -1,14 +1,16 @@
 import Dexie, { type Table, type Transaction } from 'dexie';
 
 import {
-  type AliasPermissionRow,
+  type CoreStorageRow,
   type DashboardLayoutRow,
   type DeclinedUpdateRow,
+  type DeviceIdentityRow,
+  type LightClientDatabaseRow,
   type ProductExecutableCacheRow,
   type ProductLocalStorageRow,
   type ProductPermissionsRow,
   type ProductRow,
-  type ProductSubtreeRow,
+  type ThemeSettingsRow,
 } from './types';
 
 export const APP_DB_NAME = 'polkadot-desktop-app-v1';
@@ -59,18 +61,55 @@ dexie.version(3).stores({ declinedUpdates: 'key, baseName' });
 // serve the previous pairing's key. No .upgrade() fn — a brand-new store has
 // nothing to migrate.
 dexie.version(4).stores({ productSubtrees: 'key, sessionId, productId' });
+// v5: additive store for host-private slots owned by the TrUAPI core (auth session,
+// pairing device identity, permission authorizations, allowance keys). The core
+// addresses them by an opaque SCALE-encoded key which we hex-encode, so the host
+// never interprets the contents. No .upgrade() fn — a brand-new store has nothing
+// to migrate.
+dexie.version(5).stores({ coreStorage: 'key' });
+// v6: additive single-row store for this device's own keys. The host mints and keeps
+// them itself — they identify this install in the multi-device protocol and are not
+// derivable from the paired session. No .upgrade() fn — a brand-new store has nothing
+// to migrate.
+dexie.version(6).stores({ deviceIdentity: 'id' });
+// v7: `productSubtrees` is dropped. The TrUAPI core derives product accounts itself,
+// so nothing writes or reads the store; `null` deletes it. The rows held public keys
+// only, so there is nothing to migrate out first.
+dexie.version(7).stores({ productSubtrees: null });
+// v8: additive single-row store for the theme the user picked. Moved off localStorage
+// so the setting is read and written through the same database as everything else and
+// the resource can observe it with liveQuery instead of a window event. No .upgrade()
+// fn — the previous localStorage values are not carried over.
+dexie.version(8).stores({ themeSettings: 'id' });
+// v9: `coreStorage` gains indexes on the key's own decoded fields, so the host can ask
+// which permission slots it holds — a question the core's point-lookup API cannot
+// answer. Indexes only, no `.upgrade()`. Rows written before v9 carry none of the new
+// columns and are backfilled once at bootstrap, not here: decoding a key needs the
+// TrUAPI codec, and `@/shared` may not know TrUAPI vocabulary.
+dexie.version(9).stores({ coreStorage: 'key, slotTag, productId, [slotTag+productId]' });
+// v10: `productPermissions` and `aliasPermissions` are dropped. The TrUAPI core owns
+// every permission decision and persists it through the host's own `coreStorage`
+// callbacks, so a second host-side copy could only disagree with it. `null` deletes the
+// store. Decisions already made are NOT migrated: the core has never seen them, and
+// re-prompting is the honest outcome of the host no longer being an authority.
+dexie.version(10).stores({ productPermissions: null, aliasPermissions: null });
+// v11: warm-start blobs for the embedded light client, keyed by genesis hash. A new
+// store needs no `.upgrade()` — there is nothing to migrate. The rows are disposable
+// smoldot state: dropping one costs a resync of that chain, never correctness.
+dexie.version(11).stores({ lightClientDatabases: 'genesisHash' });
 
 export const appDatabase = dexie;
 
 export const database = {
   products: dexie.table<ProductRow, string>('products'),
   dashboardLayouts: dexie.table<DashboardLayoutRow, string>('dashboardLayouts'),
-  aliasPermissions: dexie.table<AliasPermissionRow, string>('aliasPermissions'),
   productLocalStorage: dexie.table<ProductLocalStorageRow, string>('productLocalStorage'),
-  productPermissions: dexie.table<ProductPermissionsRow, string>('productPermissions'),
   productExecutableCache: dexie.table<ProductExecutableCacheRow, string>('productExecutableCache'),
   declinedUpdates: dexie.table<DeclinedUpdateRow, string>('declinedUpdates'),
-  productSubtrees: dexie.table<ProductSubtreeRow, string>('productSubtrees'),
+  coreStorage: dexie.table<CoreStorageRow, string>('coreStorage'),
+  deviceIdentity: dexie.table<DeviceIdentityRow, string>('deviceIdentity'),
+  themeSettings: dexie.table<ThemeSettingsRow, string>('themeSettings'),
+  lightClientDatabases: dexie.table<LightClientDatabaseRow, string>('lightClientDatabases'),
 };
 
 export type AppTable<T> = Table<T, string>;

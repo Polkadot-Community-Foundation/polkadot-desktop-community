@@ -1,42 +1,28 @@
+// @vitest-environment happy-dom
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { resolveProductMock, openDialogMock, isIconInFavoritesMock, removeIconMock, addProductToDashboardMock, toastSuccessMock } =
-  vi.hoisted(() => ({
-    resolveProductMock: vi.fn(),
-    openDialogMock: vi.fn(),
-    isIconInFavoritesMock: vi.fn(() => Promise.resolve(false)),
-    removeIconMock: vi.fn(() => Promise.resolve(true)),
-    addProductToDashboardMock: vi.fn(() => Promise.resolve({ ok: true })),
-    toastSuccessMock: vi.fn(),
-  }));
+const { toastSuccessMock } = vi.hoisted(() => ({ toastSuccessMock: vi.fn() }));
 
-vi.mock('@novasamatech/tr-ui', () => ({
-  toastSuccess: (args: unknown) => toastSuccessMock(args),
-}));
+vi.mock('@novasamatech/tr-ui', async () => {
+  const actual = await vi.importActual<object>('@novasamatech/tr-ui');
 
-vi.mock('@/domains/product', () => ({
-  resolveProductUseCase: { resolveProduct: resolveProductMock },
-  productService: {
-    hasWidget: (product: { baseName: string }) => product.baseName.endsWith('.widget'),
-  },
-}));
+  return { ...actual, toastSuccess: (args: unknown) => toastSuccessMock(args) };
+});
 
-vi.mock('@/aggregates/product-management', () => ({
-  productManagementUseCase: { addProductToDashboard: addProductToDashboardMock },
-}));
-
-vi.mock('@/domains/application', () => ({
-  foldersUseCase: {
-    isIconInFavorites: isIconInFavoritesMock,
-    removeItemFromFolder: removeIconMock,
-  },
-}));
-
-vi.mock('@/features/dashboard', () => ({
-  openAddToDashboardDialog: openDialogMock,
-}));
+import { foldersUseCase } from '@/domains/application';
+import { resolveProductUseCase } from '@/domains/product';
+import { productManagementUseCase } from '@/aggregates/product-management';
+import { getAddToDashboardDialogTarget } from '@/features/dashboard';
 
 import { triggerProductDashboardShortcut } from './triggerProductDashboardShortcut';
+
+// The shortcut composes three use cases, all plain objects spied in place: no chain
+// resolve, no layout write — the routing decision is the only real code on the path.
+const resolveProductMock = vi.spyOn(resolveProductUseCase, 'resolveProduct');
+const isIconInFavoritesMock = vi.spyOn(foldersUseCase, 'isIconInFavorites').mockResolvedValue(false);
+const removeIconMock = vi.spyOn(foldersUseCase, 'removeItemFromFolder').mockResolvedValue(true);
+const addProductToDashboardMock = vi.spyOn(productManagementUseCase, 'addProductToDashboard').mockResolvedValue({ ok: true });
 
 const t = (id: string) => id;
 
@@ -47,16 +33,16 @@ describe('triggerProductDashboardShortcut', () => {
   });
 
   it('opens the add-to-dashboard dialog for widget products', async () => {
-    resolveProductMock.mockResolvedValue({ baseName: 'app.widget', displayName: 'App' });
+    resolveProductMock.mockResolvedValue({ baseName: 'app.widget', displayName: 'App', executables: { widget: {} } } as never);
 
     await triggerProductDashboardShortcut('app.widget', t);
 
-    expect(openDialogMock).toHaveBeenCalledWith('app.widget');
+    expect(getAddToDashboardDialogTarget()).toBe('app.widget');
     expect(addProductToDashboardMock).not.toHaveBeenCalled();
   });
 
   it('adds a non-widget product to favorites when it is not already there', async () => {
-    resolveProductMock.mockResolvedValue({ baseName: 'app.dot', displayName: 'App' });
+    resolveProductMock.mockResolvedValue({ baseName: 'app.dot', displayName: 'App', executables: {} } as never);
 
     await triggerProductDashboardShortcut('app.dot', t);
 
@@ -66,7 +52,7 @@ describe('triggerProductDashboardShortcut', () => {
   });
 
   it('removes a non-widget product from favorites when it is already there', async () => {
-    resolveProductMock.mockResolvedValue({ baseName: 'app.dot', displayName: 'App' });
+    resolveProductMock.mockResolvedValue({ baseName: 'app.dot', displayName: 'App', executables: {} } as never);
     isIconInFavoritesMock.mockResolvedValue(true);
 
     await triggerProductDashboardShortcut('app.dot', t);
@@ -77,12 +63,12 @@ describe('triggerProductDashboardShortcut', () => {
   });
 
   it('keeps the favorites path for a resolved product even when its id is a native addable id', async () => {
-    resolveProductMock.mockResolvedValue({ baseName: 'chat', displayName: 'Chat App' });
+    resolveProductMock.mockResolvedValue({ baseName: 'chat', displayName: 'Chat App', executables: {} } as never);
 
     await triggerProductDashboardShortcut('chat', t);
 
     expect(resolveProductMock).toHaveBeenCalledWith('chat');
-    expect(openDialogMock).not.toHaveBeenCalled();
+    expect(getAddToDashboardDialogTarget()).toBeNull();
     expect(addProductToDashboardMock).toHaveBeenCalledWith(expect.objectContaining({ baseName: 'chat' }), { w: 1, h: 1 });
   });
 
@@ -91,7 +77,7 @@ describe('triggerProductDashboardShortcut', () => {
 
     await triggerProductDashboardShortcut('unknown', t);
 
-    expect(openDialogMock).not.toHaveBeenCalled();
+    expect(getAddToDashboardDialogTarget()).toBeNull();
     expect(addProductToDashboardMock).not.toHaveBeenCalled();
   });
 });

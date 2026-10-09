@@ -5,7 +5,7 @@ import { defineConfig } from 'vitest/config';
 import { folders } from './config/index.js';
 
 // Unit tests for E2E *helpers* (pure node code under `e2e/helpers/`, e.g. the
-// signing-bot retry policy) — NOT the Playwright suites, which run via
+// sign-in retry policy) — NOT the Playwright suites, which run via
 // `test:e2e:*`. Mirrors `vitest.main.config.ts`: an isolated node-env project so
 // these specs run under `npm test` without pulling Playwright into the renderer
 // unit run. Only import Playwright-free modules from specs discovered here.

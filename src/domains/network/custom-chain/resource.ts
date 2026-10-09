@@ -1,4 +1,4 @@
-import { type Observable, map, take } from 'rxjs';
+import { type Observable, map, of, take } from 'rxjs';
 
 import { createStreamResource } from '@/shared/resource';
 import { type GenesisHash } from '../chain/types';
@@ -10,6 +10,7 @@ export const customChainsResource = createStreamResource<object>({
   key: () => 'all',
 })
   .subscribe<CustomChainsRecord>(() => customChainRepository.entries$.value$)
+  .mock(() => of({}))
   .cache<CustomChainsRecord>({
     initial: {},
     map: (_, value) => value,

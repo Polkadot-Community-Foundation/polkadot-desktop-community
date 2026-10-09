@@ -4,13 +4,17 @@ Source: test plan 900, "Regression", on the project's Allure TestOps instance (`
 **270 cases, 14 modules.** This reference + the `e2e/features` suite are the source of truth for
 automation status (the former `regression-automation-plan.md` has been removed).
 
-Automation status as of 2026-06-29 — **193 of 270 linked** to automation via `@allure.id`:
+Automation status as of 2026-09-16 — **189 of 270 linked** to automation via `@allure.id`:
 
-- **`+` (177)** — linked and active (each verified green at least twice locally).
-- **`s` (16)** — linked but `@skip`: body/page-objects/testids are ready, held by an external blocker
+- **`+` (174)** — linked and active (each verified green at least twice locally).
+- **`s` (15)** — linked but `@skip`: body/page-objects/testids are ready, held by an external blocker
   (mostly the paseo-next chat identity backend; a couple of sub-second-timing onboarding cases).
-- **`-` (77)** — not automated: genuinely HARD / manual-by-decision, app feature not yet implemented,
+- **`-` (81)** — not automated: genuinely HARD / manual-by-decision, app feature not yet implemented,
   or infra-blocked. See the relevant `.feature` file comments for the per-case reason.
+
+> **TC-2.1.4 / TC-2.1.5 were de-automated** when e2e sign-in moved off the signing bot: both drove the
+> in-app signing-bot panel, which no longer exists. Their TestOps titles still name the bot — rename
+> them there, not here; this file mirrors TestOps.
 
 Format: `<allureCaseId> | <auto?> | <TC-id> <name>`, where `<auto?>` ∈ {`+`, `s`, `-`} per above. The
 numeric `allureCaseId` is what an e2e scenario tags with `@allure.id:<id>` to auto-link to this case
@@ -34,8 +38,8 @@ on result upload.
 14689 | + | TC-2.1.1 Sign in on Paseo Next V2 via signing bot reaches the dashboard
 14690 | s | TC-2.1.2 Sign in on Previewnet environment
 14691 | - | TC-2.1.3 Sign in on Paseo Next (v1) via signing bot
-14692 | + | TC-2.1.4 Signing-bot health indicator reflects reachability
-14693 | s | TC-2.1.5 Connect button is disabled until QR payload is available
+14692 | - | TC-2.1.4 Signing-bot health indicator reflects reachability
+14693 | - | TC-2.1.5 Connect button is disabled until QR payload is available
 14694 | + | TC-2.2.1 SSO root & identity keys fetched from the PApp on sign-in
 14695 | - | TC-2.2.2 SSO mapper distinguishes explicit vs implicit on create_transaction
 14696 | + | TC-2.2.3 Full username is displayed and updates in the profile popover
@@ -45,8 +49,8 @@ on result upload.
 14700 | - | TC-2.4.1 User button reflects connected / reconnecting / offline states
 14701 | - | TC-2.4.2 Reconnection happens automatically, not only after tapping the profile
 14702 | + | TC-2.4.3 No-connection state shown before sign-in
-14703 | + | TC-2.5.1 Legacy SSO sessions blob is migrated without a DataView error
-14704 | + | TC-2.5.2 Pre-Paseo-Next-V2 settings shape resets cleanly to default environment
+14703 | - | TC-2.5.1 Legacy SSO sessions blob is migrated without a DataView error
+14704 | - | TC-2.5.2 Pre-Paseo-Next-V2 settings shape resets cleanly to default environment
 14705 | + | TC-3.1.1 Dashboard renders after onboarding
 14706 | + | TC-3.1.2 Empty dashboard shows empty state with Add Widget CTA
 14707 | + | TC-3.1.3 Home button returns to dashboard page 1

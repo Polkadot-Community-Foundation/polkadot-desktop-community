@@ -1,59 +1,83 @@
 // @vitest-environment happy-dom
 
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { DropdownMenu } from '@novasamatech/tr-ui';
+import { render, screen, waitFor } from '@testing-library/react';
+import { type PropsWithChildren } from 'react';
+import { of } from 'rxjs';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { useDisplayedProductMock } = vi.hoisted(() => ({
-  useDisplayedProductMock: vi.fn(),
-}));
-
-vi.mock('@/domains/product', () => ({
-  useDisplayedProduct: (id: string | null) => useDisplayedProductMock(id),
-  productService: {
-    hasWidget: (product: { executables: { widget?: unknown } }) => product.executables.widget !== undefined,
-  },
-}));
-
-vi.mock('./AddToDashboardMenuItem', () => ({
-  AddToDashboardMenuItem: () => <div>add-to-dashboard</div>,
-}));
-
-vi.mock('./AddToFavoritesMenuItem', () => ({
-  AddToFavoritesMenuItem: ({ product }: { product: { displayName: string } }) => (
-    <div>add-to-favorites:{product.displayName}</div>
-  ),
-}));
+import { TranslationProvider } from '@/shared/translation';
+import { type PersistedProduct, productsResource } from '@/domains/product';
 
 import { ProductDashboardMenuItem } from './ProductDashboardMenuItem';
 
 const closeMenu = vi.fn();
 
+// The item is a Radix `DropdownMenu.Item`, which only renders inside an open menu; a
+// real one is mounted around it so the item's own selection handling is what runs.
+const MenuHost = ({ children }: PropsWithChildren) => (
+  <DropdownMenu open>
+    <DropdownMenu.Trigger asChild>
+      <button type="button">menu</button>
+    </DropdownMenu.Trigger>
+    <DropdownMenu.Content>{children}</DropdownMenu.Content>
+  </DropdownMenu>
+);
+
+// Both children are real: they render a Radix `DropdownMenu.Item` and read translations,
+// so the subject mounts inside an open menu and the i18n provider.
+const renderItem = (productId: string) =>
+  render(
+    <TranslationProvider>
+      <MenuHost>
+        <ProductDashboardMenuItem productId={productId} closeMenu={closeMenu} />
+      </MenuHost>
+    </TranslationProvider>,
+  );
+
+function makeRecord(overrides: Partial<PersistedProduct> = {}): PersistedProduct {
+  return {
+    baseName: 'a.dot',
+    displayName: 'A',
+    description: '',
+    icon: { cid: 'abc', format: 'png' },
+    executables: {},
+    pinned: false,
+    createdAt: 1000,
+    updatedAt: 1000,
+    ...overrides,
+  };
+}
+
+// The real `useDisplayedProduct` reads through `productsResource`, so a case
+// states its rows there rather than stubbing the hook. That keeps the real
+// `productService.hasWidget` in the assertion path instead of a reimplementation.
 describe('ProductDashboardMenuItem', () => {
-  it('renders nothing until the product is loaded', () => {
-    useDisplayedProductMock.mockReturnValue({ data: null });
-
-    const { container } = render(<ProductDashboardMenuItem productId="a.dot" closeMenu={closeMenu} />);
-
-    expect(container).toBeEmptyDOMElement();
+  beforeEach(() => {
+    vi.clearAllMocks();
   });
 
-  it('shows Add to Dashboard when the manifest defines a widget', () => {
-    useDisplayedProductMock.mockReturnValue({
-      data: { baseName: 'a.dot', displayName: 'A', executables: { widget: {} } },
-    });
+  it('renders no item until the product is loaded', async () => {
+    renderItem('a.dot');
 
-    render(<ProductDashboardMenuItem productId="a.dot" closeMenu={closeMenu} />);
-
-    expect(screen.getByText('add-to-dashboard')).toBeInTheDocument();
+    // The menu itself is mounted; the assertion is that no item ever appears.
+    await waitFor(() => expect(screen.getByRole('menu')).toBeInTheDocument());
+    expect(screen.queryByRole('menuitem')).toBeNull();
   });
 
-  it('shows Add to Favorites when the manifest has no widget', () => {
-    useDisplayedProductMock.mockReturnValue({
-      data: { baseName: 'b.dot', displayName: 'B', executables: { app: {} } },
-    });
+  it('shows Add to Dashboard when the manifest defines a widget', async () => {
+    productsResource.instead(() => of([makeRecord({ executables: { widget: {} as never } })]));
 
-    render(<ProductDashboardMenuItem productId="b.dot" closeMenu={closeMenu} />);
+    renderItem('a.dot');
 
-    expect(screen.getByText('add-to-favorites:B')).toBeInTheDocument();
+    expect(await screen.findByRole('menuitem', { name: 'Add to dashboard' })).toBeInTheDocument();
+  });
+
+  it('shows Add to Favorites when the manifest has no widget', async () => {
+    productsResource.instead(() => of([makeRecord({ baseName: 'b.dot', displayName: 'B', executables: { app: {} as never } })]));
+
+    renderItem('b.dot');
+
+    expect(await screen.findByRole('menuitem', { name: 'Add to Favorites' })).toBeInTheDocument();
   });
 });

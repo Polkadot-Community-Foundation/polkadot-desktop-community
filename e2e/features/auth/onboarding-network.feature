@@ -2,7 +2,7 @@
 Feature: Onboarding Network Selection
 
   Fresh-Electron auth-project scenarios that exercise the onboarding network
-  selector (Environment picker) without pairing — no signing bot required. The
+  selector (Environment picker) without pairing — no signer required. The
   selected segment carries `aria-pressed=true`; switching one reloads the app and
   restarts the pairing (QR) flow on the new network.
 
@@ -29,7 +29,7 @@ Feature: Onboarding Network Selection
   # (OnboardingScreen.tsx). While the QR is displayed and waiting for a phone the buttons stay
   # ENABLED (showQR === true), and they stay enabled during the connection states. The ONLY disabled
   # window is the on-chain Pending phase ("Completing pairing…" spinner) of a live pairing, which
-  # requires a real signing-bot handshake AND winning a race against handshake completion + scarce
+  # requires a real signer handshake AND winning a race against handshake completion + scarce
   # bot slots. The pre-QR-payload window (mount → first payload) is likewise sub-second. This is the
   # same sub-second-race class that already left TC-2.1.5 (connect-gating) skipped. Not
   # deterministically observable; left manual.

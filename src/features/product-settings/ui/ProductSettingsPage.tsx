@@ -7,16 +7,15 @@ import { Slot } from '@/shared/di';
 import { useTranslation } from '@/shared/translation';
 import { formatBytes } from '@/shared/utils';
 import {
-  type AliasPermission,
-  type PermissionStatus,
-  type ProductPermissions,
+  type GrantedAccountAccess,
+  type ProductPermissionEntry,
   lifecycleUseCase,
   permissionsService,
   productService,
-  useAllAliasPermissions,
   useDisplayedProduct,
   useOfflineCacheSize,
-  useProductPermissions,
+  useWatchGrantedAccountAccess,
+  useWatchProductPermissions,
 } from '@/domains/product';
 import { onProductRefreshRequestedSideEffect } from '@/aggregates/product-loading';
 import { useForgetProduct } from '@/aggregates/product-management';
@@ -35,8 +34,8 @@ export const ProductSettingsPage = ({ productId, backLabel, onBack }: Props) => 
   const navigate = useNavigate();
   const { data: product } = useDisplayedProduct(productId);
   const { forgetProduct } = useForgetProduct();
-  const { data: permissions } = useProductPermissions(productId);
-  const { data: allAliasPermissions } = useAllAliasPermissions();
+  const { data: permissionEntries } = useWatchProductPermissions(productId);
+  const { data: accountAccess } = useWatchGrantedAccountAccess(productId);
   const cacheSize = useOfflineCacheSize(productId);
   const [forgetDialogOpen, setForgetDialogOpen] = useState(false);
   const [clearCacheDialogOpen, setClearCacheDialogOpen] = useState(false);
@@ -64,7 +63,7 @@ export const ProductSettingsPage = ({ productId, backLabel, onBack }: Props) => 
     toastSuccess({ title: t('feature.productSettings.toast.cacheCleared', { productName }) });
   };
 
-  const requestedPermissions = buildRequestedPermissions(productId, permissions, allAliasPermissions, t);
+  const requestedPermissions = buildRequestedPermissions(permissionEntries, accountAccess, t);
 
   return (
     <div className="flex min-h-0 flex-col overflow-hidden">
@@ -241,46 +240,29 @@ type RequestedPermission = {
 };
 
 function buildRequestedPermissions(
-  productId: string,
-  permissions: ProductPermissions | null,
-  aliasPermissions: AliasPermission[],
+  permissionEntries: ProductPermissionEntry[],
+  accountAccess: GrantedAccountAccess[],
   t: (id: string, values?: Record<string, string | number>) => string,
 ): RequestedPermission[] {
-  const statusesById = new Map<
-    string,
-    { meta: NonNullable<ReturnType<typeof getPermissionMeta>>; statuses: PermissionStatus[] }
-  >();
+  // Only rows the user has actually answered: a slot exists exactly when a decision
+  // does, so an untouched permission is not a "requested" one.
+  const result: RequestedPermission[] = permissionEntries.flatMap(entry => {
+    if (entry.status === 'ask') return [];
+    const meta = getPermissionMeta(entry.permissionId);
+    if (!meta) return [];
 
-  const collect = (metaId: string | undefined, status: PermissionStatus) => {
-    const meta = metaId ? getPermissionMeta(metaId) : undefined;
-    if (!meta) return;
-    const existing = statusesById.get(meta.id);
-    if (existing) {
-      existing.statuses.push(status);
-    } else {
-      statusesById.set(meta.id, { meta, statuses: [status] });
-    }
-  };
+    return [
+      {
+        id: meta.id,
+        label: t(meta.labelKey),
+        icon: meta.icon,
+        statusText: t(STATUS_LABEL_KEYS[entry.status]),
+      },
+    ];
+  });
 
-  if (permissions) {
-    for (const dp of permissions.devicePermissions) {
-      collect(permissionsService.getSettingsPermissionId(dp.payload.name), dp.status);
-    }
-    for (const rp of permissions.remotePermissions) {
-      collect(permissionsService.resolvePermissionMetaId(rp.payload.type), rp.status);
-    }
-  }
-
-  const result: RequestedPermission[] = [...statusesById.values()].map(({ meta, statuses }) => ({
-    id: meta.id,
-    label: t(meta.labelKey),
-    icon: meta.icon,
-    statusText: t(STATUS_LABEL_KEYS[permissionsService.rollupPermissionStatus(statuses)]),
-  }));
-
-  const aliasEntries = aliasPermissions.filter(entry => entry.requesterProductId === productId);
-  if (aliasEntries.length > 0) {
-    const aliasStatus = permissionsService.rollupPermissionStatus(aliasEntries.map(entry => entry.status));
+  if (accountAccess.length > 0) {
+    const aliasStatus = permissionsService.rollupPermissionStatus(accountAccess.map(entry => entry.status));
     result.push({
       id: 'Alias',
       label: t('feature.productSettings.aliasPermission.label'),

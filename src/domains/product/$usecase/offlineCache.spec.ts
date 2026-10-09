@@ -1,22 +1,19 @@
 import 'fake-indexeddb/auto';
 
 import { okAsync } from 'neverthrow';
+import { firstValueFrom } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { database } from '@/shared/database';
 import { environmentUseCase } from '@/domains/application';
 import { executableCacheRepository } from '../product/executable-cache/repository';
 import { archiveGateway } from '../product/manifest/gateway';
-import { peekExecutableArchive } from '../product/manifest/resource';
+import { executableArchiveResource } from '../product/manifest/resource';
 import { type PersistedProduct, productDb } from '../product/repository';
 import { type Product } from '../product/types';
 
 import { offlineCacheUseCase } from './offlineCache';
 import { resolveProductUseCase } from './resolve';
-
-// peekExecutableArchive is mocked module-wide: default null so existing prefetch
-// tests still fall through to the IPFS fetch; one test overrides it per-call.
-vi.mock('../product/manifest/resource', () => ({ peekExecutableArchive: vi.fn(() => null) }));
 
 const product: Product = {
   baseName: 'app.dot',
@@ -72,10 +69,16 @@ describe('offlineCacheUseCase.prefetchArchives', () => {
   });
 
   it('reuses already-cached bytes and skips the IPFS fetch', async () => {
-    vi.mocked(peekExecutableArchive).mockReturnValueOnce({
-      contenthash: '0xaa',
+    // `peekExecutableArchive` reads the archive resource's cache, so the case is
+    // stated by warming that cache — every other test starts on the empty one the
+    // global reset leaves behind, which is exactly the "nothing cached" case.
+    const cached = {
+      contenthash: '0xaa' as const,
       archive: { domain: 'app.app.dot', origin: 'polkadot://app.app.dot', files: { 'index.html': new Uint8Array([1, 2]) } },
-    });
+    };
+    executableArchiveResource.instead(() => cached);
+    await firstValueFrom(executableArchiveResource.read$({ product, kind: 'app', ipfsGatewayUrl: 'https://ipfs.test' }));
+
     const fetchSpy = vi.spyOn(archiveGateway, 'fetchExecutable');
 
     await offlineCacheUseCase.prefetchArchives(product);

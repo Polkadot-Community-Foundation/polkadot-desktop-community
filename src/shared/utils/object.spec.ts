@@ -1,3 +1,5 @@
+import { describe, expect } from 'vitest';
+
 import { toSerializable } from './objects';
 
 describe('shared/lib/utils/object', () => {

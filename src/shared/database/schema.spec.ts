@@ -10,12 +10,13 @@ import { type ProductPermissionsRow } from './types';
 const TABLE_NAMES = [
   'products',
   'dashboardLayouts',
-  'aliasPermissions',
   'productLocalStorage',
-  'productPermissions',
   'productExecutableCache',
   'declinedUpdates',
-  'productSubtrees',
+  'coreStorage',
+  'deviceIdentity',
+  'themeSettings',
+  'lightClientDatabases',
 ] as const;
 
 const MIGRATION_DB_NAME = 'schema-spec-migration-test';
@@ -28,9 +29,9 @@ describe('unified database', () => {
     await Dexie.delete(MIGRATION_DB_NAME);
   });
 
-  it('opens at version 4 with all 8 tables', async () => {
+  it('opens at version 11 with all 9 tables', async () => {
     await appDatabase.open();
-    expect(appDatabase.verno).toBe(4);
+    expect(appDatabase.verno).toBe(11);
     expect(appDatabase.tables.map(t => t.name).sort()).toEqual([...TABLE_NAMES].sort());
   });
 
@@ -151,26 +152,5 @@ describe('unified database', () => {
     expect(migrated.get('x')?.devicePermissions).toEqual([
       { payload: { name: 'Camera' }, modality: 'widget', status: 'granted' },
     ]);
-  });
-});
-
-describe('productSubtrees store', () => {
-  it('is declared on the app database', () => {
-    expect(database.productSubtrees).toBeDefined();
-  });
-
-  it('round-trips a row keyed by session and product', async () => {
-    await database.productSubtrees.put({
-      key: 's1:demo.dot',
-      sessionId: 's1',
-      productId: 'demo.dot',
-      subtreeKey: new Uint8Array(32).fill(7),
-      createdAt: 1,
-    });
-
-    const row = await database.productSubtrees.get('s1:demo.dot');
-
-    expect(row?.productId).toBe('demo.dot');
-    expect(row?.subtreeKey).toEqual(new Uint8Array(32).fill(7));
   });
 });

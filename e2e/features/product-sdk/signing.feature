@@ -20,7 +20,9 @@ Feature: Signing
     And the user clicks the "Signing" tab
     When the user runs "Sign Raw Message"
     And the user rejects signing
-    Then the result contains "Denied"
+    # The core words a declined review "Rejected"; the product surfaces it verbatim
+    # as "signRaw failed: Rejected".
+    Then the result contains "Rejected"
 
   @allure.id:14862
   Scenario: TC-8.1.1 Sign raw message works correctly in product sandbox

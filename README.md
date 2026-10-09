@@ -1,3 +1,8 @@
+> [!WARNING]
+> This is an experimental proof-of-concept: a prototype and reference implementation developed and published by Parity. This open source code is provided for research, experimentation, and developer education only. It has not been audited, is actively experimental, and may contain bugs, vulnerabilities, or incomplete features — use at your own risk and obtain legal advice as appropriate — DYOR.
+>
+> Parity does not deploy or operate this code and does not run any service behind it; it may update the code based on community feedback. If you experience problems with an app that was built from or distributed using this code, contact the party who built and distributed it, not Parity.
+
 <div align="center">
   <img src="src/shared/assets/images/logo.svg" alt="Polkadot Desktop logo" width="120">
 
@@ -50,7 +55,27 @@ npm start
 npm run start:web
 ```
 
-Copy [`.env.example`](./.env.example) to `.env.local` and fill in your Firebase Remote Config identifiers (`VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID`) and the `VITE_ENVIRONMENTS` channel catalog — the chain catalog is served from Remote Config, so **the app needs them to connect to networks and will fail to boot without them** (`[network] Remote Config "chains_v2" unavailable`). Optional features whose configuration is empty (crash reporting, auto-update, TURN relay) stay disabled. Every variable is documented in [`.env.example`](./.env.example) and [docs/PUBLISHING.md](./docs/PUBLISHING.md).
+### Configure the app
+
+The app ships no bundled chain catalog: all remotely-served configuration comes from Firebase **Remote Config**, and without it bootstrap fails (`[network] Remote Config "chains_v2" unavailable`). Copy [`.env.example`](./.env.example) to `.env.local` — it is loaded from the repository root, not from `src/` — and fill in:
+
+```bash
+# Your Firebase project's web-app client identifiers (public values, not secrets)
+VITE_FIREBASE_API_KEY=<apiKey>
+VITE_FIREBASE_PROJECT_ID=<projectId>
+VITE_FIREBASE_APP_ID=<appId>
+
+# The channel catalog: which chains_v2 entries each environment channel uses
+VITE_ENVIRONMENTS={"default":"alpha","shared":{...},"channels":{"alpha":{"name":"Alpha Testnet","roles":{"people":"alpha-people","bulletin":"alpha-bulletin","assetHub":"alpha-asset-hub"}}}}
+```
+
+Then provide the Remote Config parameters the app reads — a fresh Firebase project serves none of them, which produces an app that cannot connect to anything:
+
+1. **Create a Firebase project** with a web app in it, and copy the client identifiers into the `VITE_FIREBASE_*` variables above.
+2. **Create the Remote Config parameters**: `chains_v2` (the JSON array of chain definitions — which chains and RPC nodes the app uses is not hard-coded, so a fork can point the same build at Polkadot, at [Paseo](https://wiki.polkadot.network/docs/learn-paseo), or at its own network), `dot_ns_config` (dotNS contract addresses), `ipfs_gateway_url`, and `identity_backend_url`. Per-channel values are served through Remote Config conditions: the app selects a channel by setting the `environment` custom signal, and the matching condition serves that channel's values. The keys, their shapes, and a worked `chains_v2` entry are listed in [docs/PUBLISHING.md §3.1](./docs/PUBLISHING.md#31-remote-config-parameters).
+3. **Describe your channels in `VITE_ENVIRONMENTS`**: each channel's `roles` map chain roles (people / bulletin / asset hub) to `chains_v2` entry ids — keep the two in sync; `default` names the starting channel; the `shared` block holds values every channel inherits. The full schema with a worked example is in [docs/PUBLISHING.md §3.2](./docs/PUBLISHING.md#32-the-vite_environments-catalog).
+
+Everything else is optional and stays disabled while unset: crash reporting (`SENTRY_DSN`), the device-sync / calls TURN relay (`VITE_WEBRTC_TURN_*` — the STUN-only fallback works on most NATs), the product-sandbox host allowlists (`SANDBOX_*_ALLOWLIST` — fail-closed: while empty, every product network request goes through the per-product permission prompt), and auto-update (`ENABLE_AUTO_UPDATE`). Every variable is documented inline in [`.env.example`](./.env.example); Firebase setup, packaging identity, signing, and the release pipeline are covered in [docs/PUBLISHING.md](./docs/PUBLISHING.md).
 
 The app talks to Polkadot system chains (People Chain, Asset Hub, Bulletin Chain), and development builds are exercised against Polkadot's [Paseo](https://wiki.polkadot.network/docs/learn-paseo) testnet contour.
 
@@ -81,6 +106,7 @@ Polkadot Desktop is a browser for a web that lives on-chain: apps are published 
 
 - It does **not** hold your keys or your money — signing authority stays on your paired phone. There is no custodian, and nobody can move your account from the desktop.
 - It does **not** route your data through company servers — names resolve on-chain, content comes from the Bulletin Chain / IPFS, and messages travel through the public chain. At present the preferred method for retrieving chain data is RPC, with light-client access supported.
+- It is **not** a production-hardened product — treat it as a reference implementation (see the warning at the top).
 
 ### Under the hood
 
@@ -128,7 +154,14 @@ Issues and pull requests are welcome. Read [CONTRIBUTING.md](./CONTRIBUTING.md) 
 
 ## Security
 
-Report vulnerabilities responsibly following [Parity's security policy](https://github.com/paritytech/.github/blob/main/SECURITY.md) — do not open public issues for security reports. For Parity's disclosure process and Bug Bounty programme, see [parity.io/bug-bounty](https://parity.io/bug-bounty).
+If you build and distribute an app from this code, you are responsible for:
+
+- Reviewing the code yourself — this repository is a reference, not a hardened production build.
+- Checking that the dependencies are up to date and free of known vulnerabilities.
+- Securing your own fork and build environment (keys, secrets, network configuration) and the services you point the app at.
+- Deciding when to pick up new commits; security fixes land on `main` only and older revisions are not backported.
+
+Report vulnerabilities responsibly following [Parity's security policy](https://github.com/paritytech/.github/blob/main/SECURITY.md) — do not open public issues for security reports. For Parity's disclosure process and Bug Bounty programme, see [parity.io/bug-bounty](https://parity.io/bug-bounty). This proof-of-concept is maintained on a best-effort basis: reports are welcome, but there is no commitment to a fix or a timeline.
 
 ## License
 

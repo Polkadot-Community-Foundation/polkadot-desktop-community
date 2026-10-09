@@ -10,9 +10,16 @@ function readRaw(key: string): string | null {
   return raw === '' ? null : raw;
 }
 
-// Return null on missing/invalid; the schema is the trust boundary (RC is
-// untrusted). Reads are sync against the last-activated snapshot, so callers that
-// need fresh data `await remoteConfigReady` first.
+function issuesMessage(issues: [v.BaseIssue<unknown>, ...v.BaseIssue<unknown>[]]): string {
+  return issues.map(issue => issue.message).join('; ');
+}
+
+// Null means absent (RC not ready or the param unset) — the caller decides what
+// an absent value means. A param that IS set but unparseable or schema-invalid is
+// a deployed config bug, not an absence: throw with the reason (the schema is the
+// trust boundary; RC is untrusted) so it surfaces instead of silently falling back.
+// Reads are sync against the last-activated snapshot, so callers that need fresh
+// data `await remoteConfigReady` first.
 function tryGetJson<TSchema extends v.GenericSchema>(key: string, schema: TSchema): v.InferOutput<TSchema> | null {
   const raw = readRaw(key);
   if (raw === null) return null;
@@ -21,14 +28,14 @@ function tryGetJson<TSchema extends v.GenericSchema>(key: string, schema: TSchem
   try {
     parsed = JSON.parse(raw);
   } catch (error) {
-    console.warn(`[remote-config] param "${key}" is not valid JSON`, error);
-    return null;
+    throw new Error(`[remote-config] param "${key}" is not valid JSON`, { cause: error });
   }
 
   const result = v.safeParse(schema, parsed);
   if (!result.success) {
-    console.warn(`[remote-config] param "${key}" failed validation`, result.issues);
-    return null;
+    throw new Error(`[remote-config] param "${key}" failed validation: ${issuesMessage(result.issues)}`, {
+      cause: result.issues,
+    });
   }
   return result.output;
 }
@@ -39,8 +46,9 @@ function tryGetString<TSchema extends v.GenericSchema<string>>(key: string, sche
 
   const result = v.safeParse(schema, raw);
   if (!result.success) {
-    console.warn(`[remote-config] param "${key}" failed validation`, result.issues);
-    return null;
+    throw new Error(`[remote-config] param "${key}" failed validation: ${issuesMessage(result.issues)}`, {
+      cause: result.issues,
+    });
   }
   return result.output;
 }

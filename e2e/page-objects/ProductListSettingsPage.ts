@@ -25,10 +25,16 @@ export class ProductListSettingsPage {
    * Assert no row references the given product address. Matches on the address
    * stem (without the network TLD) since the row description carries the
    * normalized base name.
+   *
+   * Scoped to `main`: forgetting a product does not close the tab it is open in,
+   * so the header keeps showing its address in the bar. A page-wide match counts
+   * that as a surviving row and the assertion can never reach zero.
    */
   async expectProductAbsent(domain: string) {
     await this.expectLoaded();
     const stem = domain.replace(/\.[a-z0-9-]+$/i, '');
-    await expect(this.page.getByText(stem, { exact: false })).toHaveCount(0, { timeout: DEFAULT_TIMEOUT });
+    await expect(this.page.getByRole('main').getByText(stem, { exact: false })).toHaveCount(0, {
+      timeout: DEFAULT_TIMEOUT,
+    });
   }
 }

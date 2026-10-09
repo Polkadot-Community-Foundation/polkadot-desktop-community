@@ -1,14 +1,16 @@
 // @vitest-environment happy-dom
 
-import { render } from '@testing-library/react';
+import { render, waitFor } from '@testing-library/react';
+import { of } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { type ThemePreference, themeResource } from '@/domains/application';
 
 import { NativeThemeSyncer } from './NativeThemeSyncer';
 
-const setPreference = vi.fn();
-vi.mock('@/shared/hooks', () => ({
-  useThemePreference: () => setPreference(),
-}));
+const storePreference = (preference: ThemePreference) => {
+  themeResource.instead(() => of({ preference, variant: 'light' as const, name: 'berlin' }));
+};
 
 afterEach(() => {
   vi.clearAllMocks();
@@ -17,19 +19,19 @@ afterEach(() => {
 });
 
 describe('NativeThemeSyncer', () => {
-  it('pushes the current preference to the native theme bridge on mount', () => {
+  it('pushes the current preference to the native theme bridge on mount', async () => {
     const setNativeTheme = vi.fn();
     // @ts-expect-error partial App bridge for the test
     window.App = { setNativeTheme };
-    setPreference.mockReturnValue('dark');
+    storePreference('dark');
 
     render(<NativeThemeSyncer />);
 
-    expect(setNativeTheme).toHaveBeenCalledWith('dark');
+    await waitFor(() => expect(setNativeTheme).toHaveBeenCalledWith('dark'));
   });
 
   it('does not throw when the bridge is absent (web build)', () => {
-    setPreference.mockReturnValue('system');
+    storePreference('system');
     expect(() => render(<NativeThemeSyncer />)).not.toThrow();
   });
 });

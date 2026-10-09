@@ -60,7 +60,7 @@ productDashboardFeature.inject(addToDashboardModalTransformer, ({ targetId, onCl
 
 // Product favourites-folder item content — claims every non-native id (the
 // dashboard host claims native ids), returning a hook-bound cell.
-productDashboardFeature.inject(folderItemContentTransformer, ({ itemId }) => {
+productDashboardFeature.inject(folderItemContentTransformer, ({ itemId, iconSize }) => {
   if (isNativeAddableDashboardId(itemId)) return null;
-  return <ProductFolderItemContent itemId={itemId} />;
+  return <ProductFolderItemContent itemId={itemId} iconSize={iconSize} />;
 });

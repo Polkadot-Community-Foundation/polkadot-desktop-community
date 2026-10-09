@@ -68,7 +68,7 @@ candidates.
 **Does not own:** input capture, the scan confirmation UI, the candidate list UI, the attachment picker UI (all
 feature); **deriving the context set from the screen** — that is host-UI knowledge, so the feature reads it and passes
 the product ids down as a parameter; **drawing a candidate node** — the tree is carried here and rendered by
-`@/widgets/CustomRenderer`, which chat shares; opening a product surface, product identity, installed-product
+`@/widgets/RendererTree`, which chat shares; opening a product surface, product identity, installed-product
 enumeration (all `product`).
 
 ## Flows
@@ -140,7 +140,7 @@ Recorded so the gap is visible rather than discovered later:
   domain and is deletable in one line, which keeps the fabrication visible instead of resident.
 - **A custom candidate is drawn through a second seam, for want of an SDK method.** RFC-0027 gives a
   custom candidate a `candidateId` precisely so a render call and an action can both name one drawn
-  thing, but `@novasamatech/host-container` exposes exactly one render entry —
+  thing, but the product protocol exposes exactly one render entry —
   `renderChatCustomMessage` — and no generic equivalent. `renderCandidateTransformer` stands in,
   shaped like the subscription that will replace it (a callback plus a teardown), so the real method
   drops in without moving the seam. The action's return path has no stand-in at all: nothing can tell

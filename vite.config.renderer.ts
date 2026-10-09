@@ -51,7 +51,7 @@ const config: UserConfigFn = async ({ mode, command }) => {
       'process.env.BUILD_TIME': JSON.stringify(new Date().toISOString()),
       'process.env.LOGGER': JSON.stringify(process.env['LOGGER']),
       'process.env.SENTRY_DSN': JSON.stringify(process.env['SENTRY_DSN'] ?? ''),
-      // AUTOTEST, BOT_URL, BOT_TOKEN are runtime values injected via preload bridge (window.App)
+      // AUTOTEST is a runtime value injected via the preload bridge (window.App)
       // Not compile-time — allows reusing the same build for normal and e2e runs
     },
     optimizeDeps: {
@@ -69,15 +69,14 @@ const config: UserConfigFn = async ({ mode, command }) => {
     },
     worker: {
       format: 'es',
+      // The TrUAPI core instantiates its wasm inside `@parity/truapi-host/worker-runtime`,
+      // and Vite applies plugins to worker bundles only through `worker.plugins` — the
+      // top-level `wasm()` below never reaches them.
+      plugins: () => [wasm()],
     },
     resolve: {
       tsconfigPaths: true,
-      // Force a single instance for SCALE codecs across desktop + linked SDK packages.
-      // scale-ts uses `instanceof InternalUint8Array` to track decoder byte position
-      // through nested codecs; with the host-papp SDK linked from triangle-js-sdks,
-      // multiple scale-ts copies get bundled and that check fails across realms,
-      // resetting position to 0 and breaking the V2 handshake codec.
-      dedupe: ['react', 'react-dom', 'scale-ts', '@novasamatech/scale', '@novasamatech/statement-store'],
+      dedupe: ['react', 'react-dom'],
     },
     build: {
       sourcemap: isDev ? undefined : 'hidden',
@@ -101,7 +100,7 @@ const config: UserConfigFn = async ({ mode, command }) => {
         },
       },
     },
-    // assetsInclude: ['**/*.wasm'],
+    assetsInclude: ['**/*.wasm'],
     server: {
       port: renderer.server.port,
     },

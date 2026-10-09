@@ -38,7 +38,9 @@ export const DraftInvitationRoom = ({ name, onSend, onCancel, sendError }: Draft
       <div className="shrink-0 border-t border-stroke-primary">
         <div className="flex flex-col gap-2 p-2">
           {sendError && <p className="px-1 text-xs text-fg-error">{sendError}</p>}
-          <MessageInput ref={inputRef} submitAction={onSend} />
+          {/* The invitation send can stay in flight indefinitely (#873), so the button
+              stays put and spins rather than vanishing with nothing in its place. */}
+          <MessageInput ref={inputRef} showSendProgress submitAction={onSend} />
         </div>
       </div>
     </div>

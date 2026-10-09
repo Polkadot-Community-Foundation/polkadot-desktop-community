@@ -18,19 +18,13 @@
 
 import { type Statement } from '@novasamatech/sdk-statement';
 import { type StatementStoreAdapter } from '@novasamatech/statement-store';
+import { scale } from '@parity/truapi';
 
 import { trackedSubscribeStatements } from '@/domains/chat';
 import { contactRepository as defaultContactRepository } from '../identity/repository';
 import { DeviceRosterEvent } from '../identity/schemas';
 import { contactService } from '../identity/service';
 import { type Contact } from '../identity/types';
-
-const fromHex = (hex: string): Uint8Array => {
-  const clean = hex.startsWith('0x') ? hex.slice(2) : hex;
-  const out = new Uint8Array(clean.length / 2);
-  for (let i = 0; i < out.length; i++) out[i] = parseInt(clean.substr(i * 2, 2), 16);
-  return out;
-};
 
 export type RosterSubscriberDeps = {
   statementStore: StatementStoreAdapter;
@@ -68,7 +62,7 @@ const startRosterSubscriber = (deps: RosterSubscriberDeps): VoidFunction => {
 
   if (contacts.length === 0) return () => {};
 
-  const topics = contacts.map(c => fromHex(c.accountId).slice(0, 32));
+  const topics = contacts.map(c => scale.hexToBytes(c.accountId).slice(0, 32));
   const contactsByAccountId = new Map<string, Contact>();
   for (const c of contacts) {
     contactsByAccountId.set(c.accountId.toLowerCase(), c);

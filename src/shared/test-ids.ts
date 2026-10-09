@@ -11,16 +11,6 @@ export const TEST_IDS = {
   onboardingCompletingPairing: 'onboarding-completing-pairing',
   onboardingPairingError: 'onboarding-pairing-error',
 
-  // Signing Bot (autotest mode)
-  signingBotPanel: 'signing-bot-panel',
-  signingBotUrlInput: 'signing-bot-url-input',
-  signingBotTokenInput: 'signing-bot-token-input',
-  signingBotUsernameInput: 'signing-bot-username-input',
-  signingBotConnect: 'signing-bot-connect',
-  signingBotStatus: 'signing-bot-status',
-  signingBotReachable: 'signing-bot-reachable',
-  signingBotUnreachable: 'signing-bot-unreachable',
-
   // Top Bar
   quickChatButton: 'quick-chat-button',
   quickChatPopover: 'quick-chat-popover',
@@ -64,19 +54,20 @@ export const TEST_IDS = {
   findPrevious: 'find-bar-previous',
   findClose: 'find-bar-close',
   zoomIndicator: 'zoom-indicator',
+  swipeNavigationIndicator: 'swipe-navigation-indicator',
   zoomPercent: 'zoom-indicator-percent',
   zoomIn: 'zoom-indicator-in',
   zoomOut: 'zoom-indicator-out',
   zoomReset: 'zoom-indicator-reset',
 
-  // Signing
-  submitErrorAlert: 'submit-error-alert',
+  // The deny button of any product request — every modal's footer carries it, so a test
+  // can decline a request without knowing which of the eleven it is looking at.
+  productRequestDeny: 'product-request-deny',
 
   // Sign Payload / Create Transaction review screen (shared by SignPayloadModal & CreateTransactionModal)
   signReviewCallTitle: 'sign-review-call-title',
   signReviewAccount: 'sign-review-account',
   signReviewNetwork: 'sign-review-network',
-  signReviewFee: 'sign-review-fee',
   signReviewMoreDetails: 'sign-review-more-details',
   signReviewArguments: 'sign-review-arguments',
   signReviewCallData: 'sign-review-call-data',
@@ -85,7 +76,16 @@ export const TEST_IDS = {
   signReviewContinueButton: 'sign-review-continue-button',
 
   // Permission dialogs
+  // `RemotePermissionRequestDialog` is the app's single permission surface: it answers
+  // both the core's device/remote prompt and the host's own remote-URL interception.
+  // Deny, allow-once and allow-always are always rendered.
   permissionDialogAllowAlways: 'permission-dialog-allow-always',
+  permissionDialogAllowOnce: 'permission-dialog-allow-once',
+  permissionDialogDeny: 'permission-dialog-deny',
+  accountAccessDialog: 'account-access-dialog',
+  accountAccessAllow: 'account-access-allow',
+  productSubtreeDialog: 'product-subtree-dialog',
+  productSubtreeAllow: 'product-subtree-allow',
   aliasPermissionAllow: 'alias-permission-allow',
   aliasPermissionDialog: 'alias-permission-dialog',
   keyListingPermissionAllow: 'key-listing-permission-allow',
@@ -242,7 +242,7 @@ export const TEST_IDS = {
   newTabRecentUndo: 'new-tab-recent-undo',
 
   // Permission settings
-  permissionModalityRow: 'permission-modality-row',
+  permissionRow: 'permission-row',
   permissionResetButton: 'permission-reset-button',
 
   // Custom Chains settings
@@ -255,4 +255,12 @@ export const TEST_IDS = {
   // Call buttons
   callAudioButton: 'call-audio-button',
   callVideoButton: 'call-video-button',
+
+  // Network connection settings
+  networkConnectionPreference: 'network-connection-preference',
+  networkConnectionChainRow: 'network-connection-chain-row',
+  networkConnectionChainTabs: 'network-connection-chain-tabs',
+  productLoadNotice: 'product-load-notice',
+  productLoadReloadButton: 'product-load-reload-button',
+  productLoadSwitchButton: 'product-load-switch-button',
 } as const;

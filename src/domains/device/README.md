@@ -4,10 +4,13 @@ The `device` domain owns the **cryptographic identity shapes** for this installa
 (this device's own keys) and `UserIdentity` (the user's keys, shared across their devices) types, plus the stateless helpers that
 generate, derive, and validate the keys those shapes hold.
 
-It is deliberately a **types + pure-crypto** layer. It defines _what_ a device/user identity is and _how_ to derive or validate a
-key from raw secret material — nothing else. It holds **no key material**, does **no I/O**, and owns **no persistence**: the SDK
-(host-papp) owns the secrets at rest, and the `application` domain reads them back into these shapes. Every helper is a pure,
-synchronous function on `Uint8Array`s.
+It is mostly a **types + pure-crypto** layer: it defines _what_ a device/user identity is and _how_ to derive or validate a key
+from raw secret material, and every helper in `deviceIdentityService` is a pure, synchronous function on `Uint8Array`s.
+
+The one exception is **this device's own identity**, which the domain now mints and persists itself
+(`deviceIdentityUseCase.getDeviceIdentity`). It used to come from host-papp's pairing secrets; the TrUAPI core serves no
+equivalent signing key, and these keys are not derived from the paired session anyway — they identify the install, not the
+user — so the host owns them outright. `UserIdentity` remains externally sourced: it comes from the core's session.
 
 ## Vocabulary
 
@@ -25,12 +28,19 @@ synchronous function on `Uint8Array`s.
   secret is length-indistinguishable from a key, so callers must pass the correct field — the guard is shape, not provenance.
 - **`deviceIdentityService`** — the single service object of stateless key helpers: `generateStatementAccountSeed`,
   `deriveStatementAccountPublicKey`, `generateEncryptionPrivateKey`, `deriveEncryptionPublicKey`, `isValidEncryptionPublicKey`.
+- **`deviceIdentityUseCase.getDeviceIdentity`** — `$usecase/identity.ts`. Returns this install's `DeviceIdentity`, minting and
+  persisting it on first call. Enforces the domain's one invariant: an install has exactly **one** identity for its lifetime,
+  because `statementAccountPublicKey` is how peers address this device and a second one silently orphans all of them. Memoized
+  per process; the repository's `add` settles a cross-tab race by keeping whichever landed first.
 
 ## Scope
 
 This domain owns:
 
 - **The identity shapes** — the `DeviceIdentity` / `UserIdentity` types that every consumer reconstructs and passes around.
+- **This device's own keys** — minting them once, persisting them (`identity/repository.ts`, one row), and validating the
+  persisted blob on read (`identity/schemas.ts`). A malformed row reads as a miss and is replaced, because a truncated seed
+  would reach `createSr25519Prover` and sign statements no peer can verify.
 - **Key derivation** — deriving an sr25519 statement-account public key from its seed, and an X25519 encryption public key from
   its private key.
 - **Key validation** — `isValidEncryptionPublicKey`, the trust-boundary predicate that rejects malformed encryption keys before
@@ -38,10 +48,9 @@ This domain owns:
 
 ## Deriving and validating keys
 
-There is one entry point: `deviceIdentityService`, imported from `@/domains/device`. Consumers that reconstruct a
-`DeviceIdentity` from SDK secrets call the `derive*` helpers (see `application`'s `loadDeviceIdentity`); consumers that ingest a
-peer- or SDK-supplied encryption key gate it through `isValidEncryptionPublicKey` before persisting or running ECDH (see
-`device-sync` and `chat/p2p`).
+Consumers that need this device's identity call `deviceIdentityUseCase.getDeviceIdentity()` and never assemble one themselves.
+Consumers that ingest a peer-supplied encryption key gate it through `deviceIdentityService.isValidEncryptionPublicKey` before
+persisting or running ECDH (see `device-sync` and `chat/p2p`).
 
 Rule of thumb: any externally-sourced encryption public key passes `deviceIdentityService.isValidEncryptionPublicKey` before use —
 and since that check is shape-only, the caller is still responsible for reading the right field.
@@ -50,8 +59,8 @@ and since that check is shape-only, the caller is still responsible for reading 
 
 This domain does **not** own:
 
-- **Persistence of key material** — the SDK (host-papp) persists secrets at rest; the `application` domain
-  (`papp-provider`) reads them back into `DeviceIdentity` / `UserIdentity`. This domain never stores or reads keys.
+- **The user's key material** — `UserIdentity` is populated from the TrUAPI core's session, not here. This domain persists
+  only _this device's_ own keys.
 - **The SSO handshake** that populates a `UserIdentity` — owned by the `sso` domain.
 - **Device-sync peers / the `KnownUserDevice` roster** — owned by the `device-sync` domain, which merely _uses_ this domain's
   key validation.

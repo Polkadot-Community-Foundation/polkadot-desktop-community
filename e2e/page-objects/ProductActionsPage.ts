@@ -1,7 +1,7 @@
-import { type Page, expect } from '@playwright/test';
+import { type Locator, type Page, expect } from '@playwright/test';
 
 import { TEST_IDS } from '@/shared/test-ids';
-import { DEFAULT_TIMEOUT } from '../helpers/timeouts';
+import { DEFAULT_TIMEOUT, SHORT_TIMEOUT } from '../helpers/timeouts';
 import { waitForToastsToClear } from '../helpers/toasts';
 
 /**
@@ -60,19 +60,34 @@ export class ProductActionsPage {
     return this.page.getByRole('menuitem', { name: 'Remove from Favorites', exact: true });
   }
 
+  /**
+   * Click a menu item, re-resolving it on each attempt.
+   *
+   * The dashboard item re-renders once `useDisplayedProduct` settles — it swaps
+   * "Add to Dashboard" for "Add to Favorites" by manifest shape — so an item
+   * resolved by an assertion can detach before the click dispatches, and Playwright
+   * then waits out its whole timeout on a node that never comes back. Asserting and
+   * clicking inside one retried block re-resolves both. A retry cannot double-fire:
+   * a landed click closes the menu, so the next attempt finds nothing to click and
+   * the caller's own assertion decides the outcome.
+   */
+  private async clickMenuItem(item: Locator) {
+    await expect(async () => {
+      await expect(item).toBeVisible({ timeout: SHORT_TIMEOUT });
+      await item.click({ timeout: SHORT_TIMEOUT });
+    }).toPass({ timeout: DEFAULT_TIMEOUT });
+  }
+
   async clickAddToFavorites() {
-    await expect(this.addToFavoritesMenuItem).toBeVisible({ timeout: DEFAULT_TIMEOUT });
-    await this.addToFavoritesMenuItem.click();
+    await this.clickMenuItem(this.addToFavoritesMenuItem);
   }
 
   async clickRemoveFromFavorites() {
-    await expect(this.removeFromFavoritesMenuItem).toBeVisible({ timeout: DEFAULT_TIMEOUT });
-    await this.removeFromFavoritesMenuItem.click();
+    await this.clickMenuItem(this.removeFromFavoritesMenuItem);
   }
 
   async openProductSettings() {
-    await expect(this.openSettingsMenuItem).toBeVisible({ timeout: DEFAULT_TIMEOUT });
-    await this.openSettingsMenuItem.click();
+    await this.clickMenuItem(this.openSettingsMenuItem);
   }
 
   async openMenu() {
@@ -81,12 +96,25 @@ export class ProductActionsPage {
     // offline-access action this menu performs raises one — so re-opening the
     // menu right after would click the toast instead.
     await waitForToastsToClear(this.page);
-    await this.menuTrigger.click();
+
+    // Clicking the trigger does not guarantee the menu is open: the same
+    // re-render that detaches items under `clickMenuItem` also drops the
+    // dropdown's open state, and a click that opened nothing would still let
+    // this method return — leaving the caller's own assertion to time out
+    // against a closed menu and blame the item instead of the open. Re-click
+    // until an item is really on screen. Open Settings is the sentinel because
+    // every product's menu renders it, while the slot items above it are
+    // conditional on the product.
+    await expect(async () => {
+      if (!(await this.openSettingsMenuItem.isVisible())) {
+        await this.menuTrigger.click({ timeout: SHORT_TIMEOUT });
+      }
+      await expect(this.openSettingsMenuItem).toBeVisible({ timeout: SHORT_TIMEOUT });
+    }).toPass({ timeout: DEFAULT_TIMEOUT });
   }
 
   async clickOfflineAccessMenuItem() {
-    await expect(this.offlineAccessMenuItem).toBeVisible({ timeout: DEFAULT_TIMEOUT });
-    await this.offlineAccessMenuItem.click();
+    await this.clickMenuItem(this.offlineAccessMenuItem);
   }
 
   async confirmEnableOfflineAccess() {
@@ -128,7 +156,6 @@ export class ProductActionsPage {
    */
   async proceedInChat() {
     await this.openMenu();
-    await expect(this.proceedInChatMenuItem).toBeVisible({ timeout: DEFAULT_TIMEOUT });
-    await this.proceedInChatMenuItem.click();
+    await this.clickMenuItem(this.proceedInChatMenuItem);
   }
 }

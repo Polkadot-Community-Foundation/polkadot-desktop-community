@@ -52,7 +52,7 @@ export type RenderCandidateRequest = {
  *
  * RFC-0027 gives a custom candidate a `candidateId` precisely so a render call
  * and an action can both name one drawn thing — but there is no method to make
- * that call with. `@novasamatech/host-container` exposes exactly one render
+ * that call with. the product protocol exposes exactly one render
  * entry, `renderChatCustomMessage`, and nothing generic; an input candidate has
  * no equivalent. **This is an SDK gap, not a host decision.**
  *

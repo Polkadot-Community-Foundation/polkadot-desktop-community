@@ -1,6 +1,5 @@
-import { type UserSession } from '@novasamatech/host-papp';
-import { useAuthentication, useSessionIdentity } from '@novasamatech/host-papp-react-ui';
 import { Avatar, Popover } from '@novasamatech/tr-ui';
+import { type SessionUiInfo } from '@parity/truapi-host';
 import { useNavigate } from '@tanstack/react-router';
 import { LogIn, LogOut, Settings, WifiOff } from 'lucide-react';
 import { type PropsWithChildren, type ReactNode, memo, useEffect, useState } from 'react';
@@ -11,6 +10,7 @@ import { TEST_IDS } from '@/shared/test-ids';
 import { useTranslation } from '@/shared/translation';
 import { browserTabs } from '@/aggregates/browser-tabs';
 import { type PeopleChainStatus } from '@/aggregates/network-settings';
+import { truapiRuntimeUseCase } from '@/aggregates/truapi-runtime';
 import { SETTINGS } from '@/features/settings';
 
 // The popover banner shows the shared chain status; the signed-out case is
@@ -18,7 +18,8 @@ import { SETTINGS } from '@/features/settings';
 export type UserPopoverConnectionState = PeopleChainStatus;
 
 type Props = PropsWithChildren<{
-  session: UserSession | null;
+  session: SessionUiInfo | null;
+  username: string;
   connectionState: UserPopoverConnectionState | 'no-connection';
   networkName: string;
   defaultOpen?: boolean;
@@ -113,13 +114,10 @@ const ActionRow = ({ icon, label, testId, onClick }: ActionRowProps) => (
   </button>
 );
 
-export const UserInfoPopover = memo(({ session, connectionState, networkName, defaultOpen, children }: Props) => {
+export const UserInfoPopover = memo(({ session, username, connectionState, networkName, defaultOpen, children }: Props) => {
   const { t } = useTranslation();
-  const auth = useAuthentication();
   const navigate = useNavigate();
-  const [identity] = useSessionIdentity(session);
   const [open, setOpen] = useState(defaultOpen ?? false);
-  const username = identity?.fullUsername ?? identity?.liteUsername ?? t('common.status.unknownUser');
   const isConnected = session !== null;
 
   // Non-modal Radix popovers detect outside clicks via document `pointerdown`,
@@ -151,10 +149,10 @@ export const UserInfoPopover = memo(({ session, connectionState, networkName, de
       return;
     }
 
-    // host-papp drops the SDK session whether or not the peer could be notified,
-    // and the session-teardown watcher turns that into the full local logout
-    // (see `watchHostPappSessionTeardown`).
-    auth.disconnect(session).catch((error: unknown) => {
+    // The core drops the session whether or not the wallet could be notified, and
+    // `watchCoreSessionTeardown` turns that Connected -> Disconnected transition
+    // into the full local logout.
+    truapiRuntimeUseCase.disconnectSession().catch((error: unknown) => {
       console.error('[sso] logout disconnect failed', error);
     });
   };

@@ -1,69 +1,82 @@
 // @vitest-environment happy-dom
 
 import { fireEvent, render, screen } from '@testing-library/react';
-import { IntlProvider } from 'react-intl';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { type ComponentProps } from 'react';
+import { IntlProvider, ReactIntlErrorCode } from 'react-intl';
+import { of } from 'rxjs';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { removeItemFromFolder, apply, state } = vi.hoisted(() => ({
-  removeItemFromFolder: vi.fn(),
-  apply: vi.fn(),
-  state: {
-    favoriteIds: new Set<string>(['coinflip', 'staking']),
-  },
-}));
+// Empty test catalog: ignore the expected missing-translation noise (formatjs#619), keep real errors.
+const onIntlError: ComponentProps<typeof IntlProvider>['onError'] = err => {
+  if (err.code !== ReactIntlErrorCode.MISSING_TRANSLATION) console.error(err);
+};
 
-vi.mock('@/domains/application', () => ({
-  useFavoriteProductIds: () => ({ data: state.favoriteIds }),
-  useAddToFavorites: () => ({ addToFavorites: vi.fn() }),
-  useRemoveItemFromFolder: () => ({ removeItemFromFolder }),
-}));
-vi.mock('@/domains/product', () => ({
-  // Each favourite id resolves to a product (committed-or-chain) for its icon.
-  useDisplayedProduct: (id: string | null) => ({ data: id ? { baseName: id, icon: null } : null }),
-  useProductIcon: () => ({ data: null }),
-  dotNsService: { toShortLabel: (id: string) => id },
-  useDotNsTld: () => ({ data: '.dot', pending: false, error: null, refresh: vi.fn() }),
-  useDotNsLabels: () => ({
-    displayName: (name: string) => name.replace(/\.dot$/, ''),
-    shortLabel: (name: string) => name.replace(/\.dot$/, ''),
-  }),
-  // The always-mounted AddToFavoritesDialog reads the SPA catalog; keep it empty here.
-  usePublishedAppListings: () => ({ data: [], pending: false, error: null, refresh: vi.fn() }),
-  browseService: { productPreviewFromListing: (listing: { label: string }) => ({ baseName: listing.label, icon: null }) },
-}));
-vi.mock('@/features/dashboard', () => ({
-  openFavoriteItemSideEffect: { apply },
-  isNativeAddableDashboardId: () => false,
-  widgetTopbarActionButtonClass: '',
-  widgetTopbarActionVisibilityClass: '',
-}));
+const seedFavorites = (ids: string[]) => {
+  mainDashboardLayoutResource.instead(() =>
+    of({
+      pages: [[{ i: FAVORITES_FOLDER_ID, x: 0, y: 0, w: 1, h: 1, payload: { kind: 'folder' as const, items: ids } }]],
+      activePageIndex: 0,
+    }),
+  );
+
+  const records = ids.map(id => ({
+    baseName: id,
+    displayName: id,
+    description: '',
+    icon: { cid: '', format: 'png' },
+    executables: {},
+    pinned: false,
+    createdAt: 1000,
+    updatedAt: 1000,
+  })) as unknown as PersistedProduct[];
+
+  productsResource.instead(() => of(records));
+};
+
+import { FAVORITES_FOLDER_ID, foldersUseCase, mainDashboardLayoutResource } from '@/domains/application';
+import { type PersistedProduct, productsResource } from '@/domains/product';
+import { openFavoriteItemSideEffect } from '@/features/dashboard';
+import { addToFavoritesDialogOpen } from '../state/addToFavoritesDialog';
 
 import { FavoritesFullscreen } from './FavoritesFullscreen';
 
+// The folder write is a use-case method on a plain object, spied in place: the hook is a
+// `useAction` wrapper over it, so the real hook runs and the spy sees the item id.
+const removeItemFromFolder = vi.spyOn(foldersUseCase, 'removeItemFromFolder').mockResolvedValue(true);
+
 const renderPage = () =>
   render(
-    <IntlProvider locale="en" messages={{}}>
+    <IntlProvider locale="en" messages={{}} onError={onIntlError}>
       <FavoritesFullscreen />
     </IntlProvider>,
   );
 
+// The open is a DI side effect, so the test registers a handler on it rather than
+// standing in for the module that declares it.
+const openFavoriteItem = vi.fn();
+
 describe('FavoritesFullscreen', () => {
   beforeEach(() => {
     removeItemFromFolder.mockClear();
-    apply.mockClear();
-    state.favoriteIds = new Set(['coinflip', 'staking']);
+    openFavoriteItem.mockClear();
+    openFavoriteItemSideEffect.registerHandler({ available: () => true, body: openFavoriteItem });
+    seedFavorites(['coinflip', 'staking']);
   });
 
-  it('renders a card per favorite product', () => {
+  afterEach(() => {
+    openFavoriteItemSideEffect.resetHandlers();
+  });
+
+  it('renders a card per favorite product', async () => {
     renderPage();
-    expect(screen.getByText('coinflip')).toBeInTheDocument();
+    expect(await screen.findByText('coinflip')).toBeInTheDocument();
     expect(screen.getByText('staking')).toBeInTheDocument();
   });
 
   it('opens a product via the side-effect', () => {
     renderPage();
     screen.getByRole('button', { name: 'coinflip' }).click();
-    expect(apply).toHaveBeenCalledWith({ itemId: 'coinflip' });
+    expect(openFavoriteItem).toHaveBeenCalledWith({ itemId: 'coinflip' });
   });
 
   it('removes a product from favorites', () => {
@@ -88,12 +101,17 @@ describe('FavoritesFullscreen', () => {
     expect(screen.getByTestId('favorites-search-no-results')).toBeInTheDocument();
   });
 
-  it('shows the empty state and opens the add dialog via "Browse Apps"', () => {
-    state.favoriteIds = new Set();
+  it('shows the empty state and opens the add dialog via "Browse Apps"', async () => {
+    seedFavorites([]);
     renderPage();
-    expect(screen.getByTestId('favorites-empty-state')).toBeInTheDocument();
-    expect(screen.queryByTestId('add-to-favorites-dialog')).not.toBeInTheDocument();
+    expect(await screen.findByTestId('favorites-empty-state')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('favorites-browse-apps'));
-    expect(screen.getByTestId('add-to-favorites-dialog')).toBeInTheDocument();
+    expect(addToFavoritesDialogOpen.get()).toBe(true);
+  });
+
+  it('opens the add dialog via the header "+" button', () => {
+    renderPage();
+    fireEvent.click(screen.getByTestId('favorites-add-button'));
+    expect(addToFavoritesDialogOpen.get()).toBe(true);
   });
 });

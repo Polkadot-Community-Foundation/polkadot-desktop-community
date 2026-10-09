@@ -4,36 +4,6 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { foldersUseCase } = vi.hoisted(() => ({
-  foldersUseCase: {
-    removeItemFromFolder: vi.fn(),
-    reorderFolderItems: vi.fn(),
-  },
-}));
-
-vi.mock('@/domains/application', () => ({
-  foldersUseCase,
-  dashboardLayoutService: {
-    getFavoritesDisplay: (itemCount: number, cap: number) =>
-      itemCount <= cap ? { visibleCount: itemCount, hasViewMore: false } : { visibleCount: cap - 1, hasViewMore: true },
-  },
-}));
-
-vi.mock('@/domains/product', () => ({
-  dotNsService: {
-    toShortLabel: (value: string) => value,
-  },
-  usePersistedProducts: () => ({ data: [] }),
-}));
-
-vi.mock('../../hooks/useOpenProductSurface', () => ({
-  useOpenProductSurface: () => vi.fn(),
-}));
-
-vi.mock('../../productIcons', () => ({
-  getProductIcon: () => null,
-}));
-
 // Stands in for the grid's drag interaction: clicking the button plays back the
 // order dnd-kit would have produced, so the test pins the wiring, not the library.
 const REORDERED_IDS = ['b', 'c', 'a'];
@@ -49,32 +19,55 @@ vi.mock('../folder/FolderGrid', () => ({
 }));
 
 import { TranslationProvider } from '@/shared/translation';
+import { foldersUseCase as realFoldersUseCase } from '@/domains/application';
+import { openAddToFavoritesSideEffect } from '../../di';
 
 import { FolderCardContent } from './FolderCardContent';
 
-const renderCard = (onBrowseApps?: VoidFunction) =>
+// The two folder writes are spied in place; `dashboardLayoutService` stays real:
+// `getFavoritesDisplay` is the overflow rule this file asserts, and a copy of it here
+// would pass after the real one changed.
+const foldersUseCase = {
+  removeItemFromFolder: vi.spyOn(realFoldersUseCase, 'removeItemFromFolder'),
+  reorderFolderItems: vi.spyOn(realFoldersUseCase, 'reorderFolderItems'),
+};
+
+const renderCard = () =>
   render(
     <TranslationProvider>
-      <FolderCardContent cardId="folder-1" items={[]} isActivePage maxVisibleItems={6} onBrowseApps={onBrowseApps} />
+      <FolderCardContent cardId="folder-1" items={[]} isActivePage maxVisibleItems={6} iconSize="44" />
     </TranslationProvider>,
   );
 
 const renderPopulatedCard = (isActivePage: boolean) =>
   render(
     <TranslationProvider>
-      <FolderCardContent cardId="folder-1" items={['a', 'b', 'c']} isActivePage={isActivePage} maxVisibleItems={6} />
+      <FolderCardContent
+        cardId="folder-1"
+        items={['a', 'b', 'c']}
+        isActivePage={isActivePage}
+        maxVisibleItems={6}
+        iconSize="44"
+      />
     </TranslationProvider>,
   );
 
 describe('FolderCardContent placeholders', () => {
-  it('renders favorites empty placeholder and opens add-widget flow on action click', async () => {
+  it('renders favorites empty placeholder and opens the Add-to-Favorites flow on action click', async () => {
     const user = userEvent.setup();
-    const onBrowseApps = vi.fn();
-    renderCard(onBrowseApps);
+    const openAddToFavorites = vi.fn();
+    const handler = { available: () => true, body: openAddToFavorites };
+    openAddToFavoritesSideEffect.registerHandler(handler);
 
-    expect(screen.getByText('Save your favorite apps for quick access')).toBeTruthy();
-    await user.click(screen.getByText('Browse Apps'));
-    expect(onBrowseApps).toHaveBeenCalledOnce();
+    try {
+      renderCard();
+
+      expect(screen.getByText('Save your favorite apps for quick access')).toBeTruthy();
+      await user.click(screen.getByText('Browse Apps'));
+      expect(openAddToFavorites).toHaveBeenCalledOnce();
+    } finally {
+      openAddToFavoritesSideEffect.removeHandler(handler);
+    }
   });
 });
 

@@ -26,7 +26,6 @@
  *     session — depends on in-session messaging working first.
  */
 
-import { type IdentitySource } from '@novasamatech/host-chat';
 import { type Encryption, type StatementStoreAdapter, createEncryption } from '@novasamatech/statement-store';
 import { AccountId as AccountIdCodec } from '@polkadot-api/substrate-bindings';
 import { nanoid } from 'nanoid';
@@ -71,7 +70,6 @@ import { type P2PChatManager, type P2PChatRequest, type SearchResult } from './t
 
 export type P2PChatManagerV2Params = {
   statementStore: StatementStoreAdapter;
-  identity: IdentitySource;
   userId: string;
   device: DeviceIdentity;
   userIdentity: UserIdentity;
@@ -160,7 +158,7 @@ const usablePeerDevices = (contact: Contact, peerSs58: string): Device[] =>
   });
 
 export const createP2PChatManagerV2 = async (params: P2PChatManagerV2Params): Promise<P2PChatManager> => {
-  const { statementStore, identity, userId, device, userIdentity } = params;
+  const { statementStore, userId, device, userIdentity } = params;
   const contactRepository = params.contactRepository ?? defaultContactRepository;
 
   /**
@@ -259,7 +257,7 @@ export const createP2PChatManagerV2 = async (params: P2PChatManagerV2Params): Pr
   };
 
   const { backendUrl, iosBundleId } = await environmentUseCase.getActive();
-  const resolver = peerGateway.createPeerResolver(identity, backendUrl);
+  const resolver = peerGateway.createPeerResolver(backendUrl);
   const seenMessageIds = new Set<string>();
   const seenRequestIds = new Set<string>();
   const activeSessions = new Map<string, V2ChatPeerSession>();

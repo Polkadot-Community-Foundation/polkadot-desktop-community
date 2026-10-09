@@ -1,18 +1,10 @@
 import { ResultAsync } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../dashboard-layout/repository', () => ({
-  dashboardLayoutDb: {
-    getMain: vi.fn(),
-    getMainPages: vi.fn(),
-    saveMainPages: vi.fn(),
-  },
-}));
-
 import { FAVORITES_FOLDER_ID } from '../dashboard-layout/constants';
-import { type MainDashboardLayoutSnapshot, dashboardLayoutDb } from '../dashboard-layout/repository';
+import { dashboardLayoutDb } from '../dashboard-layout/repository';
 import { dashboardLayoutService } from '../dashboard-layout/service';
-import { type DashboardCard, type DashboardLayout } from '../dashboard-layout/types';
+import { type DashboardCard, type DashboardLayout, type MainDashboardLayoutSnapshot } from '../dashboard-layout/types';
 
 import { foldersUseCase } from './folders';
 
@@ -59,8 +51,13 @@ const okMain = (pages: MainDashboardLayoutSnapshot['pages'] | null) =>
     Promise.resolve(pages === null ? null : { pages, activePageIndex: 0 }),
   );
 
+// The repository is a plain object, so its reads and writes are spied in place:
+// nothing reaches Dexie, and the use case is the only real code on the path.
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.spyOn(dashboardLayoutDb, 'getMain');
+  vi.spyOn(dashboardLayoutDb, 'getMainPages');
+  vi.spyOn(dashboardLayoutDb, 'saveMainPages');
   vi.mocked(dashboardLayoutDb.saveMainPages).mockReturnValue(okSaveMainPages());
 });
 
@@ -96,7 +93,7 @@ describe('foldersUseCase.addToFavorites', () => {
 
     expect(result.ok).toBe(true);
     const savedPages = vi.mocked(dashboardLayoutDb.saveMainPages).mock.calls[0]?.[0];
-    expect(savedPages?.flat().some(item => item.i === 'browse.dot' && item.payload.kind === 'product:widget')).toBe(true);
+    expect(savedPages?.flat().find(item => item.i === 'browse.dot')?.payload.kind).toBe('product:widget');
     const folder = savedPages?.flat().find(item => item.i === FAVORITES_FOLDER_ID);
     expect(dashboardLayoutService.asFolder(folder!)?.items).toEqual(['browse.dot']);
   });
@@ -108,7 +105,7 @@ describe('foldersUseCase.addToFavorites', () => {
 
     expect(result.ok).toBe(true);
     const savedPages = vi.mocked(dashboardLayoutDb.saveMainPages).mock.calls[0]?.[0];
-    expect(savedPages?.flat().some(item => item.i === 'browse.dot' && item.payload.kind === 'product:widget')).toBe(true);
+    expect(savedPages?.flat().find(item => item.i === 'browse.dot')?.payload.kind).toBe('product:widget');
     const folder = savedPages?.flat().find(item => item.i === FAVORITES_FOLDER_ID);
     expect(dashboardLayoutService.asFolder(folder!)?.items).toEqual(['a', 'browse.dot']);
   });
@@ -148,7 +145,7 @@ describe('foldersUseCase.removeItemFromFolder', () => {
 
     expect(removed).toBe(true);
     const savedPages = vi.mocked(dashboardLayoutDb.saveMainPages).mock.calls[0]?.[0];
-    expect(savedPages?.[0]?.some(item => item.i === 'chat' && item.payload.kind === 'native:chat')).toBe(true);
+    expect(savedPages?.[0]?.find(item => item.i === 'chat')?.payload.kind).toBe('native:chat');
     const folder = savedPages?.[0]?.find(item => item.i === FAVORITES_FOLDER_ID);
     expect(dashboardLayoutService.asFolder(folder!)).toMatchObject({ items: [] });
   });

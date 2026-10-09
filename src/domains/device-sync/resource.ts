@@ -5,7 +5,7 @@
  * timestamp, and derives the semantic {@link DeviceSyncStatus} for the UI.
  */
 
-import { type Observable, BehaviorSubject, from, interval, map, merge, startWith, switchMap } from 'rxjs';
+import { type Observable, BehaviorSubject, from, interval, map, merge, of, startWith, switchMap } from 'rxjs';
 
 import { createStreamResource } from '@/shared/resource';
 
@@ -60,6 +60,7 @@ export const deviceSyncStatusResource = createStreamResource<object>({
       ),
     ).pipe(switchMap(() => readStatus$())),
   )
+  .mock(() => of<DeviceSyncStatus>('inactive'))
   .cache<DeviceSyncStatus>({
     initial: 'inactive',
     map: (_cache, status) => status,

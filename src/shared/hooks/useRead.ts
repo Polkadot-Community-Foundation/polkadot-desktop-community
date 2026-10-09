@@ -63,10 +63,17 @@ export type ReadHookValue<D> = {
   data: D;
   pending: boolean;
   error: unknown;
+  /**
+   * A read for the current params has settled and `data` holds its result. False while
+   * idle, while a read is starting or in flight, after an error, and once a resource
+   * entry the hook was projecting leaves the cache (an `invalidate` nobody re-read).
+   * Unlike `!pending`, this never reads a result that is not there as "settled with nothing".
+   */
+  fulfilled: boolean;
   refresh: () => void;
 };
 
-type Snapshot<V> = { data: V | undefined; pending: boolean; error: unknown };
+type Snapshot<V> = { data: V | undefined; pending: boolean; error: unknown; fulfilled: boolean };
 
 const paramsKey = (params: unknown): string => {
   try {
@@ -167,6 +174,7 @@ export function useRead<P>(
     // and mistake it for "settled with nothing".
     pending: params != null,
     error: null,
+    fulfilled: false,
   }));
   const refreshRef = useRef<() => void>(() => {});
   // The key `start()` last ran for. The effect below is the only thing that
@@ -186,7 +194,7 @@ export function useRead<P>(
 
   useEffect(() => {
     if (params == null) {
-      setSnapshot({ data: defaultValue, pending: false, error: null });
+      setSnapshot({ data: defaultValue, pending: false, error: null, fulfilled: false });
       refreshRef.current = () => {};
       startedKeyRef.current = null;
       return;
@@ -197,29 +205,38 @@ export function useRead<P>(
     let dataSub: { unsubscribe: () => void } | null = null;
 
     const start = () => {
-      setSnapshot(s => ({ ...s, pending: true, error: null }));
+      setSnapshot(s => ({ ...s, pending: true, error: null, fulfilled: false }));
       const src = getSource();
       const mapFn = getMap();
+      const onError = (error: unknown) => setSnapshot(s => ({ ...s, pending: false, error, fulfilled: false }));
 
       if (isResource(src)) {
         if (mapFn) {
+          // Whether `map` has found this read's entry. Its value going back to
+          // `undefined` afterwards means the entry left the cache (an `invalidate`), and
+          // the result the hook holds no longer stands behind `data`.
+          let projected = false;
           dataSub = src.cache$.subscribe({
             next: cache => {
               const value = mapFn(cache, params);
               if (value !== undefined) {
+                projected = true;
                 setSnapshot(s => ({ ...s, data: value, error: null }));
+              } else if (projected) {
+                projected = false;
+                setSnapshot(s => ({ ...s, fulfilled: false }));
               }
             },
-            error: (error: unknown) => setSnapshot(s => ({ ...s, pending: false, error })),
+            error: onError,
           });
           triggerSub = src.read$(params).subscribe({
-            next: () => setSnapshot(s => ({ ...s, pending: false })),
-            error: (error: unknown) => setSnapshot(s => ({ ...s, pending: false, error })),
+            next: () => setSnapshot(s => ({ ...s, pending: false, fulfilled: true })),
+            error: onError,
           });
         } else {
           triggerSub = src.read$(params).subscribe({
-            next: (data: unknown) => setSnapshot({ data, pending: false, error: null }),
-            error: (error: unknown) => setSnapshot(s => ({ ...s, pending: false, error })),
+            next: (data: unknown) => setSnapshot({ data, pending: false, error: null, fulfilled: true }),
+            error: onError,
           });
         }
       } else {
@@ -235,13 +252,15 @@ export function useRead<P>(
             // (mapped) value is defined, so a filtering `map` keeps the default
             // without leaving the read stuck pending.
             setSnapshot(s =>
-              data === undefined ? { ...s, pending: false, error: null } : { data, pending: false, error: null },
+              data === undefined
+                ? { ...s, pending: false, error: null, fulfilled: true }
+                : { data, pending: false, error: null, fulfilled: true },
             );
           },
-          error: (error: unknown) => setSnapshot(s => ({ ...s, pending: false, error })),
+          error: onError,
           // An Observable factory that completes without ever emitting must
           // still settle `pending`.
-          complete: () => setSnapshot(s => ({ ...s, pending: false })),
+          complete: () => setSnapshot(s => (s.error === null ? { ...s, pending: false, fulfilled: true } : s)),
         });
       }
     };
@@ -277,8 +296,9 @@ export function useRead<P>(
   // commit, which consumers correctly read as "settled with nothing".
   const awaitingStart = key !== null && startedKeyRef.current !== key;
   const pending = awaitingStart || snapshot.pending;
+  const fulfilled = !awaitingStart && snapshot.fulfilled;
 
   useDebugValue(`${pending ? 'Pending' : snapshot.error ? 'Errored' : 'Idle'} read (key: ${key})`);
 
-  return { ...snapshot, pending, refresh };
+  return { ...snapshot, pending, fulfilled, refresh };
 }

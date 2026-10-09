@@ -1,67 +1,41 @@
 // @vitest-environment happy-dom
 
 import { fireEvent, render, screen } from '@testing-library/react';
+import { of } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 
 import { TEST_IDS } from '@/shared/test-ids';
-
-const { usePinProductMock, useDisplayedProductMock } = vi.hoisted(() => ({
-  usePinProductMock: vi.fn(),
-  useDisplayedProductMock: vi.fn(),
-}));
-
-vi.mock('@/domains/product', () => ({
-  usePinProduct: () => usePinProductMock(),
-  useDisplayedProduct: () => useDisplayedProductMock(),
-  useProductIcon: () => ({ data: null, pending: false, error: null }),
-}));
-
-vi.mock('@/widgets/ProductHeader', () => ({
-  useProductHeaderProps: ({ product }: { product: { displayName?: string } | null }) => ({
-    name: product?.displayName ?? '',
-    description: undefined,
-    iconSrc: undefined,
-  }),
-}));
-
-vi.mock('@/shared/translation', () => ({ useTranslation: () => ({ t: (k: string) => k }) }));
-
-vi.mock('@novasamatech/tr-ui', () => ({
-  ProductHeader: ({ name }: { name: string }) => <div>{name}</div>,
-  Button: ({ children, onClick, ...rest }: { children: React.ReactNode; onClick?: () => void; [k: string]: unknown }) => (
-    <button onClick={onClick} {...rest}>
-      {children}
-    </button>
-  ),
-  Dialog: Object.assign(({ children }: { children: React.ReactNode }) => <div>{children}</div>, {
-    Content: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-    Footer: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  }),
-  toastError: vi.fn(),
-  toastSuccess: vi.fn(),
-}));
+import { TranslationProvider } from '@/shared/translation';
+import { type PersistedProduct, commitmentUseCase, productsResource } from '@/domains/product';
 
 import { EnableOfflineDialog } from './EnableOfflineDialog';
 
+// The pin write is a use-case method on a plain object, spied in place: `usePinProduct`
+// is a `useAction` over it, so the real hook runs and the spy sees the call.
+const pinProduct = vi.spyOn(commitmentUseCase, 'pinProduct').mockResolvedValue(null);
+
 describe('EnableOfflineDialog', () => {
-  it('calls usePinProduct.run(productId) on confirm', () => {
-    const runMock = vi.fn().mockReturnValue({ subscribe: vi.fn() });
-    usePinProductMock.mockReturnValue({ run: runMock, pending: false });
-    useDisplayedProductMock.mockReturnValue({
-      data: {
-        baseName: 'a.dot',
-        displayName: 'A',
-        description: '',
-        icon: { cid: '', format: 'png' },
-        executables: {},
-      },
-      pending: false,
-      error: null,
-    });
+  it('pins the product on confirm', async () => {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- test fixture, not production code
+    const record = {
+      baseName: 'a.dot',
+      displayName: 'A',
+      description: '',
+      icon: { cid: '', format: 'png' },
+      executables: {},
+      pinned: false,
+      createdAt: 1000,
+      updatedAt: 1000,
+    } as unknown as PersistedProduct;
+    productsResource.instead(() => of([record]));
 
-    render(<EnableOfflineDialog productId="a.dot" onClose={() => {}} />);
-    fireEvent.click(screen.getByTestId(TEST_IDS.offlineAccessEnableConfirm));
+    render(
+      <TranslationProvider>
+        <EnableOfflineDialog productId="a.dot" onClose={() => {}} />
+      </TranslationProvider>,
+    );
+    fireEvent.click(await screen.findByTestId(TEST_IDS.offlineAccessEnableConfirm));
 
-    expect(runMock).toHaveBeenCalledWith('a.dot');
+    expect(pinProduct).toHaveBeenCalledWith('a.dot');
   });
 });

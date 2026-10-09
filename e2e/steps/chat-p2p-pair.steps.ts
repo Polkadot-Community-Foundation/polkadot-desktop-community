@@ -24,8 +24,8 @@ Given(
   'Alice and Bob are both authenticated',
   // eslint-disable-next-line @typescript-eslint/require-await -- assertions only; Given must return Promise
   async ({ alice, bob }) => {
-    expect(alice.botUsername).toBeTruthy();
-    expect(bob.botUsername).toBeTruthy();
+    expect(alice.liteUsername).toBeTruthy();
+    expect(bob.liteUsername).toBeTruthy();
   },
 );
 
@@ -43,11 +43,25 @@ When('Alice opens the contact search', async ({ alice }) => {
   await searchPage(alice.app.window).openFromFullscreen();
 });
 
-// Search and select by the FULL registered lite username ("testbot….15"), not
-// the bare bot username: the backend can hold more than one registration of
-// the same base name (each attest submission that lands appends a new numeric
+// Search and select by the FULL registered lite username ("truapitest….15"), not
+// the bare base name: the backend can hold more than one registration of the
+// same base name (each attest submission that lands appends a new numeric
 // index), and a bare-name substring match then resolves to several results.
 When("Alice types Bob's username into the contact search", async ({ alice, bob }) => {
+  // Contact search resolves a peer through the identity registry, so an identity the
+  // registry does not hold can never appear in a result list — retrying only spends the
+  // timeout. This happens when `truapi-host` attests the account but its dotNS claim never
+  // lands (`dotNS username did not appear on Asset Hub after attestation`), which is an
+  // upstream condition this suite cannot repair.
+  //
+  // Only an explicit `false` skips. `null` means the registry could not answer, and a run
+  // with no registry configured MUST still exercise this scenario on the fallback name.
+  const unregistered = [alice, bob].filter(peer => peer.registrationConfirmed === false).map(peer => peer.liteUsername);
+  chatPairTest.skip(
+    unregistered.length > 0,
+    `identity registry holds no registration for ${unregistered.join(' and ')} — contact search cannot resolve the peer`,
+  );
+
   await searchPage(alice.app.window).typeQuery(bob.liteUsername);
 });
 
@@ -108,8 +122,8 @@ When('Bob opens the new requests list', async ({ bob }) => {
 When('Bob accepts the incoming request', async ({ bob }) => {
   // `.first()` defends against `submitRequest`'s retry loop occasionally
   // posting a duplicate statement on slow UI confirmation — cross-scenario
-  // pollution is already prevented by handing each test a fresh identity pair
-  // from the pool (see `chatPair.ts:pairAssignment`).
+  // pollution is already limited by cycling each test onto a different identity
+  // pair (see `chatPair.ts:pairHosts`).
   // Accept now lives in the opened request conversation (banner), so open the
   // request item first, then accept from the banner.
   const requestItem = bob.app.window.getByTestId(TEST_IDS.chatRequestItem).first();

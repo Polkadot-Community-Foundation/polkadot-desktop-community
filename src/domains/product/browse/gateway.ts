@@ -10,7 +10,7 @@ async function listPublishedByModality(genesisHash: string, modality: Modality):
   }
 
   const network = selectNetwork(genesisHash);
-  const rpcUrl = network.rpcs[0];
+  const rpcUrl = network.ASSETHUB_RPCS[0];
   if (!rpcUrl) {
     return [];
   }

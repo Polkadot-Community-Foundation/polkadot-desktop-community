@@ -5,7 +5,7 @@ description: Use BEFORE writing or changing any non-trivial code in `src/` — n
 
 # Architecture
 
-The mandatory first step for any decision-driven code change, and the orchestrator of the **full lifecycle** from a freeform prompt: frame → size → place → (brainstorm → approve → plan → plan-review) → implement → review → fix. You do NOT generate a file path, pick a layer, or open the authoritative flow docs yourself — this skill routes you through the right sub-skills in the right order. Skipping it is how code lands in the wrong layer and how non-canonical files (`changes.ts`, `manager.ts`, `helpers.ts`) get invented.
+The mandatory first step for any decision-driven code change, and the orchestrator of the **full lifecycle** from a freeform prompt: frame → size → place → (brainstorm → refine → approve → plan → refine → plan-review) → implement → review → fix. You do NOT generate a file path, pick a layer, or open the authoritative flow docs yourself — this skill routes you through the right sub-skills in the right order. Skipping it is how code lands in the wrong layer and how non-canonical files (`changes.ts`, `manager.ts`, `helpers.ts`) get invented.
 
 **Letter vs spirit:** entering this skill and then free-handing the decision anyway is a violation. Run the steps.
 
@@ -31,6 +31,8 @@ flowchart TD
     Brainstorm["Delegate to superpowers:brainstorming<br/>(+ project context) → design in docs/_plans/"]
     Approve{"User approves the design?<br/>(brainstorming HARD-GATE)"}
     Plan["Delegate to superpowers:writing-plans<br/>(+ project context) → docs/_plans/&lt;topic&gt;-plan.md"]
+    DocReviewDesign["Invoke document-review<br/>on &lt;topic&gt;-design.md"]
+    DocReviewPlan["Invoke document-review<br/>on &lt;topic&gt;-plan.md"]
     PlanReview["Step 5 — plan review pass<br/>(fresh context, one at a time)"]
     PlanGate{"Gaps found?"}
     CapGate{"4 passes already run?"}
@@ -66,10 +68,12 @@ flowchart TD
     Gate{"Non-trivial?"}
     Gate -- "no (trivial)" --> Write
     Gate -- yes --> Brainstorm
-    Brainstorm --> Approve
+    Brainstorm --> DocReviewDesign
+    DocReviewDesign --> Approve
     Approve -- "no, revise" --> Brainstorm
     Approve -- yes --> Plan
-    Plan --> PlanReview
+    Plan --> DocReviewPlan
+    DocReviewPlan --> PlanReview
     PlanReview --> PlanGate
     PlanGate -- yes --> CapGate
     CapGate -- "no" --> PlanFix
@@ -100,8 +104,8 @@ This is the **full lifecycle from a single freeform prompt**: frame → size →
    - `src/features/` or a route hosting a feature → `feature-development` skill.
    - aggregate / widget / shared → the matching section of `docs/code/project-structure.md` (no dedicated skill).
    - Touching components/hooks/rendering → also invoke `react-best-practices`.
-4. **Brainstorm, plan, and get approval — BEFORE any implementation** (non-trivial changes; see "Non-trivial changes" below). This is **delegated to superpowers**. A **trivial** in-place edit leaves the flow here: write the edit directly, no plan, no review/fix tail.
-5. **Review the plan — until one pass comes back clean, capped at four.** Before handing it downstream, run a fresh-context pass over `docs/_plans/<topic>-plan.md`; findings → fix → next pass, one at a time (see "Reviewing the plan — from an empty session"). A plan that's clear on the first pass is good to go.
+4. **Brainstorm, refine, plan, and get approval — BEFORE any implementation** (non-trivial changes; see "Non-trivial changes" below). This is **delegated to superpowers**. A **trivial** in-place edit leaves the flow here: write the edit directly, no plan, no review/fix tail.
+5. **Review the plan — until one pass comes back clean, capped at four.** The plan arrives here already refined by `document-review` (step 4). Before handing it downstream, run a fresh-context pass over `docs/_plans/<topic>-plan.md`; findings → fix → next pass, one at a time (see "Reviewing the plan — from an empty session"). A plan that's clear on the first pass is good to go.
 6. **Implement.** Only after the design is approved, the plan exists, and the plan review cleared. Delegate to `superpowers:subagent-driven-development` (current branch), carrying the project context. If a discovery invalidates the plan mid-flight → **hard stop and amend** (see "Implementing — handling plan deviations").
 7. **Review.** When implementation completes, automatically invoke the project `reviewer` skill — mandatory (see "Reviewing and fixing"). Not optional, not the generic superpowers final review.
 8. **Fix loop.** Blocking/major findings → amend the plan, re-approve, re-implement, re-review until mergeable. Minor findings → surface, let the user decide. Finishing (merge/PR) is a separate manual step.
@@ -110,9 +114,9 @@ This is the **full lifecycle from a single freeform prompt**: frame → size →
 
 For a non-trivial change (per the glossary), **the plan precedes the implementation — it is not a write-up produced afterward.** Do not write implementation code until the user has approved a design. The generic clarify → design → approval → plan process is **owned by superpowers** (a declared project dependency — see `.claude/settings.json` `enabledPlugins`). This skill does not re-implement it; it injects the project frame and delegates:
 
-**1. Invoke `superpowers:brainstorming`.** It clarifies requirements one question at a time, proposes approaches, presents a design, and **gates on user approval before any implementation** (its HARD-GATE — this is what satisfies the always-stop-for-approval rule). Override its default artifact location: write the design to **`docs/_plans/<topic>-design.md`**, not `docs/superpowers/specs/`.
+**1. Invoke `superpowers:brainstorming`.** It clarifies requirements one question at a time, proposes approaches, presents a design, and **gates on user approval before any implementation** (its HARD-GATE — this is what satisfies the always-stop-for-approval rule). Override its default artifact location: write the design to **`docs/_plans/<topic>-design.md`**, not `docs/superpowers/specs/`. Then **invoke `document-review` on that design** before presenting it at the approval gate — the design is the one artifact with no downstream gate of its own (step 5 reviews the plan, `reviewer` reviews the code), so a design that is vague, carries hypothetical features, or leaves a decision unmade propagates into everything built from it. Present the refined design for approval.
 
-**2. Invoke `superpowers:writing-plans`.** It turns the approved design into the implementation plan. Override its default artifact location: write the plan to **`docs/_plans/<topic>-plan.md`**, not `docs/superpowers/plans/` — this is the path `reviewer` diffs the implementation against.
+**2. Invoke `superpowers:writing-plans`.** It turns the approved design into the implementation plan. Override its default artifact location: write the plan to **`docs/_plans/<topic>-plan.md`**, not `docs/superpowers/plans/` — this is the path `reviewer` diffs the implementation against. Then **invoke `document-review` on the plan** before step 5. This is the author-side pass — it cuts vague language and dead weight while you still have the context that produced them; the step-5 fresh-context gate that follows is what checks the plan against the real repo. Two passes, two questions, in that order — see the comparison table in `document-review`.
 
 **3. Carry this project context INTO both delegated skills** (this is the part superpowers cannot know — without it, it makes generically-reasonable but architecturally-wrong decisions):
 
@@ -203,6 +207,8 @@ When the user corrects you during planning or implementation in a way that **gen
 - **Improvising around a plan-invalidating discovery mid-implementation** → hard stop, present 2-3 options, amend the plan, re-approve. Silently deviating from an approved plan is the exact failure the gate exists to prevent.
 - **A plan that quietly solves a different problem than the approved design** → criterion 7. Light steering (a constraint the design didn't know about): justify it in the plan and continue. Anything that changes what gets built: hard stop and ask the user.
 - **Polishing the plan through pass 5, 6, 7…** → the cap is four. Past it, hand the remaining findings to the user instead of looping.
+- **Running `document-review` as a step-5 pass, or a step-5 pass as document refinement** → they are not interchangeable. `document-review` edits the document from inside the authoring context; a step-5 pass is a fresh session verifying the plan against the real repo. A clean `document-review` does not clear the step-5 gate.
+- **Presenting a design for approval straight out of brainstorming** → run `document-review` on `<topic>-design.md` first. The approval gate is a user decision, not a quality check, and the design has no other gate.
 - **Finishing implementation without running the project `reviewer`** → review is the mandatory step-7 gate, not an optional follow-up. The generic superpowers final review does not substitute for it.
 - **Looping on review fixes without re-approving the amended plan** → blocking/major findings amend the plan, and every plan change re-passes approval. The fix loop is not autonomous.
 - **Treating the one-sentence frame as an estimate** → the sentence describes the concern; the cost is the braid it sits in. Step 1.5 measures the radius with `findReferences` before brainstorming spends effort on it. "It's a one-liner in `dotns`" is a frame, not a size.
@@ -223,4 +229,5 @@ When the user corrects you during planning or implementation in a way that **gen
 - `docs/code/architecture.md` — how artifacts interact at runtime.
 - `docs/code/rule-extraction.md` — turning a correction into a durable rule.
 - `docs/RFC/2119.md` — MUST / SHOULD / MAY, the requirement-level vocabulary plans are written in.
+- `document-review` skill — the author-side refinement pass over a design/plan document (clarity, YAGNI, unstated assumptions); runs before the step-5 gate, not instead of it.
 - `reviewer` skill — audits the implementation against the plan and the checklists.

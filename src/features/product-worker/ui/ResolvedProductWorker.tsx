@@ -14,7 +14,7 @@ export const ResolvedProductWorker = memo(({ productId }: Props) => {
 
   if (!product?.executables.worker) return null;
 
-  return <ProductWorker product={product} />;
+  return <ProductWorker productId={productId} />;
 });
 
 ResolvedProductWorker.displayName = 'ResolvedProductWorker';

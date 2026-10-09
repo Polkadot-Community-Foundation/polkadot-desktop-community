@@ -1,28 +1,35 @@
-import { type Container, createContainer, createWebviewProvider } from '@novasamatech/host-container';
-import { useSession } from '@novasamatech/host-papp-react-ui';
-import { type DidFailLoadEvent, type DidNavigateInPageEvent, type WebviewTag, type WillNavigateEvent } from 'electron';
+import {
+  type DidFailLoadEvent,
+  type DidNavigateInPageEvent,
+  type IpcMessageEvent,
+  type WebviewTag,
+  type WillNavigateEvent,
+} from 'electron';
 import { type ReactNode, memo, useEffect, useMemo, useRef, useState } from 'react';
 import { type Observable } from 'rxjs';
+import * as v from 'valibot';
 
 import { useLooseRef, usePrevious } from '@/shared/hooks';
 import { useTranslation } from '@/shared/translation';
+import { createWebviewProvider, pipeProviders } from '@/shared/truapi';
 import { cnTw, nonNullable } from '@/shared/utils';
 import {
   type DotNsUrl,
   type ExecutableKind,
+  clearTransientDevicePermissionGrants,
   dotNsService,
   isLocalhostUrl,
+  manifestService,
   normalizeLocalhostUrl,
-  permissionsService,
   useDisplayedProduct,
   useDotNsTld,
   useExecutableArchive,
 } from '@/domains/product';
 import { useFindInPageExecutor } from '@/aggregates/find-in-page';
 import { productLoading } from '@/aggregates/product-loading';
+import { type TrUApiProductProvider, truapiRuntimeUseCase, useTruapiAuthState } from '@/aggregates/truapi-runtime';
 import { useWebviewCrash, useWebviewHealth, useWebviewUnresponsive, webviewRegistry } from '@/aggregates/webview-registry';
 import { useWebviewZoomExecutor } from '@/aggregates/webview-zoom';
-import { ProductContainerBinding } from '@/widgets/ProductContainerBinding';
 
 import { decideDidNavigate, decideDidNavigateInPage, decideWillNavigate } from './navigation';
 import { CrashOverlay } from './ui/CrashOverlay';
@@ -46,6 +53,15 @@ function buildSandboxPartition(identifier: string, kind: ExecutableKind): string
   const slot = kind === 'widget' ? 'widget' : 'app';
   return `sandbox-${slot}-${encodeURIComponent(identifier)}`;
 }
+
+// The payload crosses from the guest preload; a non-finite delta would poison the gesture's arithmetic.
+const guestWheelSchema = v.object({
+  deltaX: v.pipe(v.number(), v.finite()),
+  deltaY: v.pipe(v.number(), v.finite()),
+  consumed: v.boolean(),
+});
+
+type GuestWheel = v.InferOutput<typeof guestWheelSchema>;
 
 type Props = {
   identifier: string;
@@ -76,26 +92,45 @@ type Props = {
    * Drives the visibility beacon so the health monitor can gate heartbeat checks.
    */
   visible: boolean;
+  /**
+   * Trackpad wheel input over this webview's guest page, in DOM `WheelEvent` sign; `consumed` is true when the page
+   * scrolled or cancelled it. Omit it and the webview does not listen.
+   */
+  onGuestWheel?: (wheel: GuestWheel) => void;
 };
 
 /**
  * Special sandbox component that can run product modality inside.
  */
 export const Webview = memo(
-  ({ identifier, kind, pathname, loader, reloadTrigger$, onPathnameChange, onCrossProductLink, visible }: Props) => {
+  ({
+    identifier,
+    kind,
+    pathname,
+    loader,
+    reloadTrigger$,
+    onPathnameChange,
+    onCrossProductLink,
+    onGuestWheel,
+    visible,
+  }: Props) => {
     const { t } = useTranslation();
     const onPathnameChangeRef = useLooseRef(onPathnameChange);
     const onCrossProductLinkRef = useLooseRef(onCrossProductLink);
+    const onGuestWheelRef = useLooseRef(onGuestWheel);
+    const listensToGuestWheel = onGuestWheel !== undefined;
     // Read through a ref: the navigation listeners below are registered once per
     // webview, so a TLD captured at first render would freeze at the fallback.
     // Null while unsettled because these handlers must answer synchronously — a
     // `preventDefault` cannot wait for a read.
     const tld = useDotNsTld();
-    const tldRef = useLooseRef(tld.pending || tld.error !== null ? null : tld.data);
+    // Null while unsettled or failed. Named because the console listener below is
+    // attached conditionally on it, so it has to be a dependency of that effect
+    // rather than only a ref read inside it.
+    const resolvedTld = tld.pending || tld.error !== null ? null : tld.data;
+    const tldRef = useLooseRef(resolvedTld);
 
     const localhost = isLocalhostUrl(identifier);
-    // Single chokepoint for the kind → modality rule (worker enforces against 'app').
-    const modality = permissionsService.modalityForKind(kind);
 
     // The archive's on-chain location is product-specific (`app.<base>` for a
     // manifest product, the bare base for a legacy product), so resolve the product
@@ -119,6 +154,10 @@ export const Webview = memo(
     const cannotResolve = nonNullable(productError) || nonNullable(archiveError) || productMissing || archiveMissing;
 
     const navIdentifier = localhost ? identifier : (content?.archive.domain ?? identifier);
+    // The navigation listeners are registered once per webview element, but `navIdentifier`
+    // moves when the archive resolves. Read it through a ref so a change never has to re-run
+    // (and therefore re-pipe) the transport effect below.
+    const navIdentifierRef = useLooseRef(navIdentifier);
 
     // wasReady keeps the <webview> mounted across transient ready→pending dips so a
     // session reload doesn't tear down the guest webContents. It must reset on
@@ -152,11 +191,15 @@ export const Webview = memo(
     const health = useWebviewHealth(identifier);
     const degraded = !crash && !unresponsive && health?.state === 'degraded';
 
-    const { session } = useSession();
-    const prevSession = usePrevious(session);
+    // Reload the guest on a sign-in or sign-out so it picks up the new session.
+    // Keyed on the auth tag rather than the session object: the core re-emits
+    // `Connected` on reconnects with an equal session, and reloading every product
+    // for that would be gratuitous.
+    const authTag = useTruapiAuthState()?.tag ?? null;
+    const prevAuthTag = usePrevious(authTag);
 
-    const [container, setContainer] = useState<Container | null>(null);
     const [webviewRef, setWebviewRef] = useState<WebviewTag | null>(null);
+    const [coreProvider, setCoreProvider] = useState<TrUApiProductProvider | null>(null);
     const lastWebviewPathnameRef = useRef<string | null>(null);
 
     // Drive native Cmd+F find on this tab's guest content. `identifier` is the tab id.
@@ -287,28 +330,97 @@ export const Webview = memo(
     }, [webviewRef, visible]);
 
     useEffect(() => {
-      if (!webviewRef || !ready) return;
-      if (prevSession === session) return;
+      if (!webviewRef || !listensToGuestWheel) return;
 
-      // A localhost product is `ready` synchronously (no archive to resolve), so this effect
-      // can fire on the initial null→restored session transition before the guest webview has
-      // attached / emitted dom-ready — at which point reload() throws. Swallow that: the guest
-      // is still doing its first load and will pick up the current session on its own. Genuine
-      // post-load session changes (login/logout while open) reload normally, after dom-ready.
+      const onIpcMessage = (event: IpcMessageEvent) => {
+        if (event.channel !== 'host:wheel') return;
+        const wheel = v.safeParse(guestWheelSchema, event.args[0]);
+        if (wheel.success) onGuestWheelRef()?.(wheel.output);
+      };
+
+      webviewRef.addEventListener('ipc-message', onIpcMessage);
+      return () => {
+        webviewRef.removeEventListener('ipc-message', onIpcMessage);
+      };
+    }, [webviewRef, listensToGuestWheel]);
+
+    useEffect(() => {
+      if (!webviewRef || !ready) return;
+      if (prevAuthTag === authTag) return;
+      // `null` is "the core has not answered yet", not a session. The first report after boot
+      // is the core catching up with the session the guest is already loading against, and
+      // reloading there wipes a product that finished loading first (a restored tab, or any
+      // product whose archive is cached) along with whatever it was doing.
+      if (prevAuthTag === null) return;
+
+      // A session change can still land before the guest has attached / emitted dom-ready (a
+      // localhost product is `ready` synchronously), at which point reload() throws. Swallow
+      // that: the in-flight first load already carries the current session.
       try {
         webviewRef.reload();
       } catch {
         /* webview not attached yet — its in-flight load already carries the current session */
       }
-    }, [webviewRef, ready, prevSession, session]);
+    }, [webviewRef, ready, prevAuthTag, authTag]);
 
+    // The core provider is the product's authenticated wire into the runtime, and its
+    // lifetime is the product's — not the webview element's. Keyed on identifier (never on
+    // `webviewRef` or a transient `ready` dip) so a reload or re-render cannot dispose it
+    // mid-request: the core answers a disposed provider by aborting the in-flight dispatch
+    // and dropping the response frame, which is what stranded product-account requests as a
+    // silent dead end. Disposed once, when the product changes or the widget unmounts.
     useEffect(() => {
-      if (!webviewRef || !ready) return;
+      let created: TrUApiProductProvider | null = null;
+      let cancelled = false;
+
+      void truapiRuntimeUseCase
+        .createProvider({ productId: identifier, executionKind: manifestService.executionKindOf(kind) })
+        .then(provider => {
+          if (cancelled) {
+            provider.dispose();
+
+            return;
+          }
+          created = provider;
+          setCoreProvider(provider);
+        })
+        .catch((error: unknown) => {
+          console.error('[truapi] failed to open a core provider for', identifier, error);
+        });
+
+      return () => {
+        cancelled = true;
+        setCoreProvider(null);
+        created?.dispose();
+        // A one-shot device answer lives as long as this provider: a reload keeps it,
+        // closing or leaving the product ends it.
+        clearTransientDevicePermissionGrants({ productId: identifier, executionKind: manifestService.executionKindOf(kind) });
+      };
+    }, [identifier, kind]);
+
+    // Joins the product's webview transport to its core provider. Only the transport is tied to
+    // this effect; the core provider outlives a re-pipe (a webview remount), so tearing down here
+    // disposes the transport but never the core, and an in-flight request survives the swap. The
+    // byte-pipe shape dotli uses (`packages/ui/src/bridge.ts:432`).
+    useEffect(() => {
+      if (!webviewRef || !coreProvider) return;
 
       const provider = createWebviewProvider({ webview: webviewRef, openDevTools: false });
-      const container = createContainer(provider);
+      const unpipe = pipeProviders(provider, coreProvider);
 
-      setContainer(container);
+      return () => {
+        // Tears down only this transport. The core provider is owned by the effect above and
+        // must outlive the swap, so `unpipe` stops forwarding frames before the transport closes.
+        unpipe();
+        provider.dispose();
+      };
+    }, [webviewRef, coreProvider]);
+
+    // Console forwarding and navigation policy attach to the webview element itself, so they
+    // depend only on the element — never on the core provider. Keeping them off the pipe means
+    // navigation is governed from the moment the guest mounts, before TrUAPI is even open.
+    useEffect(() => {
+      if (!webviewRef) return;
 
       let onConsoleMessage: ((e: Electron.ConsoleMessageEvent) => void) | null = null;
       const consoleTld = tldRef();
@@ -334,7 +446,7 @@ export const Webview = memo(
       };
 
       const onWillNavigate = (e: WillNavigateEvent) => {
-        const decision = decideWillNavigate({ url: e.url, identifier: navIdentifier, localhost, tld: tldRef() });
+        const decision = decideWillNavigate({ url: e.url, identifier: navIdentifierRef(), localhost, tld: tldRef() });
         switch (decision.type) {
           case 'allow':
             return;
@@ -360,7 +472,7 @@ export const Webview = memo(
       const onDidNavigateInPage = (e: DidNavigateInPageEvent) => {
         const decision = decideDidNavigateInPage({
           url: e.url,
-          identifier: navIdentifier,
+          identifier: navIdentifierRef(),
           localhost,
           isMainFrame: e.isMainFrame,
           tld: tldRef(),
@@ -382,7 +494,7 @@ export const Webview = memo(
       };
 
       const onDidNavigate = (e: { url: string }) => {
-        const decision = decideDidNavigate({ url: e.url, identifier: navIdentifier, tld: tldRef() });
+        const decision = decideDidNavigate({ url: e.url, identifier: navIdentifierRef(), tld: tldRef() });
 
         if (decision.type === 'revert-to-desired') revertToDesired();
       };
@@ -395,10 +507,13 @@ export const Webview = memo(
         if (onConsoleMessage) {
           webviewRef.removeEventListener('console-message', onConsoleMessage);
         }
-        container.dispose();
-        setContainer(null);
       };
-    }, [identifier, webviewRef, ready]);
+      // `resolvedTld` is a dependency because the console listener above is attached
+      // only when the identifier is a dotNS one, and that decision is made here, once.
+      // The read settles after the element mounts, so without this the listener would
+      // never attach for a `.dot` product. The navigation handlers are unaffected:
+      // they call `tldRef()` at event time.
+    }, [webviewRef, identifier, localhost, resolvedTld]);
 
     const desiredSrc = useMemo(() => {
       const path = `/${stripLeadingSlash(pathname ?? '')}`;
@@ -408,29 +523,43 @@ export const Webview = memo(
     const desiredSrcRef = useRef(desiredSrc);
     desiredSrcRef.current = desiredSrc;
 
+    // Seeds the guest's first load only. Electron rewrites the `src` attribute itself on
+    // every guest-driven navigation, so after the first in-product hop this state no longer
+    // describes where the guest is — every later navigation goes through loadURL below.
     const [src, setSrc] = useState('');
-    // Read via ref so reloadTrigger$ always picks up the current src instead of
-    // re-subscribing on every src change (which races with concurrent reloads).
-    const srcRef = useRef(src);
-    srcRef.current = src;
 
     useEffect(() => {
       if (!desiredSrc) return;
-      if (lastWebviewPathnameRef.current === stripLeadingSlash(pathname ?? '')) return;
-      setSrc(desiredSrc);
+      const nextPathname = stripLeadingSlash(pathname ?? '');
+      if (lastWebviewPathnameRef.current === nextPathname) return;
+      // The host is moving the guest, so it lands here as surely as if it had navigated itself.
+      lastWebviewPathnameRef.current = nextPathname;
       setLoadError(null);
-    }, [desiredSrc, pathname]);
+      if (!src || !webviewRef) {
+        setSrc(desiredSrc);
+        return;
+      }
+      try {
+        webviewRef.loadURL(desiredSrc);
+      } catch {
+        /* guest not attached yet — its in-flight first load already targets desiredSrc */
+      }
+    }, [desiredSrc, pathname, src, webviewRef]);
 
     useEffect(() => {
       if (!reloadTrigger$ || !webviewRef || !ready) return;
-      const sub = reloadTrigger$.subscribe(() => webviewRef.loadURL(srcRef.current));
+      // desiredSrc, not src: the guest may have navigated itself since the initial load.
+      const sub = reloadTrigger$.subscribe(() => webviewRef.loadURL(desiredSrcRef.current));
       return () => sub.unsubscribe();
     }, [reloadTrigger$, webviewRef, ready]);
 
     return (
       <div className="h-full w-full overflow-hidden select-none">
         <div className="relative flex h-full w-full flex-col overflow-hidden bg-bg-surface-nested">
-          {(ready || wasReady) && src ? (
+          {/* The guest takes its channel on its own `dom-ready`, so it mounts only once its core
+              provider is open — which waits for the stored session. A guest loaded first (a
+              cached archive beats the restore) runs with no wire, and its calls go nowhere. */}
+          {(ready || wasReady) && src && coreProvider ? (
             <webview
               className={cnTw(
                 'relative h-full w-full grow overflow-hidden transition-[filter] duration-200',
@@ -492,8 +621,6 @@ export const Webview = memo(
             <div className="absolute inset-0">{loader}</div>
           )}
         </div>
-
-        {container ? <ProductContainerBinding container={container} identifier={identifier} modality={modality} /> : null}
       </div>
     );
   },

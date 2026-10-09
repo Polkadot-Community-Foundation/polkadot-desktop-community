@@ -1,13 +1,9 @@
 // @vitest-environment happy-dom
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { MAX_ZOOM_LEVEL, MIN_ZOOM_LEVEL, levelToPercent, webviewZoom } from './levels';
 
 const PRODUCT = 'app.dot';
-
-beforeEach(() => {
-  webviewZoom.levels$.set({});
-});
 
 describe('webviewZoom state', () => {
   it('starts with no levels', () => {

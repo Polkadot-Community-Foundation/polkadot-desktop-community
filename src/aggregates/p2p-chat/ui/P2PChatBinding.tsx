@@ -1,44 +1,52 @@
-import { type PappAdapter } from '@novasamatech/host-papp';
-import { useSession } from '@novasamatech/host-papp-react-ui';
 import { AccountId } from '@polkadot-api/substrate-bindings';
 import { useLocation, useNavigate } from '@tanstack/react-router';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 
 import { useNotificationService } from '@/domains/chat';
+import { useDeviceIdentity } from '@/domains/device';
+import { useTruapiAuthState } from '@/aggregates/truapi-runtime';
 import { p2pChatUseCase } from '../p2pChatUseCase';
 
 /**
  * Headless binding that drives the P2P chat manager's lifecycle from the React
  * tree (the aggregate's one allowed UI carve-out — it renders nothing).
  *
- * The manager is created when the user is authenticated and disposed on logout;
- * the binding also wires OS notifications, which need React-only inputs (the
- * router-derived active chat id + navigation) that can't live in the use case.
+ * `initialize` runs on every transition into `Connected` rather than once on mount:
+ * the core reports the session about a second after this mounts, so a mount-once
+ * call finds no identity, returns, and is never asked again. `initialize` is
+ * idempotent against an existing manager and an in-flight call, so re-running on a
+ * later transition is free. `dispose` stays on unmount.
+ *
+ * It also wires OS notifications, which need React-only inputs (the router-derived
+ * active chat id + navigation) that cannot live in the use case.
  */
-export const P2PChatBinding = ({ pappProvider }: { pappProvider: PappAdapter | null }): null => {
-  const { session } = useSession();
-  const initRef = useRef(false);
+export const P2PChatBinding = (): null => {
+  const device = useDeviceIdentity();
+  const authState = useTruapiAuthState();
+  const authTag = authState?.tag;
 
   useEffect(() => {
-    if (!session || !pappProvider || initRef.current) return;
-    initRef.current = true;
+    if (authTag !== 'Connected') return;
 
     void p2pChatUseCase.initialize();
+  }, [authTag]);
 
+  useEffect(() => {
     return () => {
       p2pChatUseCase.dispose();
-      initRef.current = false;
     };
-  }, [session, pappProvider]);
+  }, []);
 
   const location = useLocation();
   const navigate = useNavigate();
 
+  // Must equal the P2P rooms' `userId` — SS58 of this device's statement account —
+  // or notifications resolve against a room set nothing else writes.
   const notificationUserId = useMemo(() => {
-    if (!session) return null;
+    if (!device) return null;
 
-    return AccountId().dec(session.localAccount.accountId);
-  }, [session]);
+    return AccountId().dec(device.statementAccountPublicKey);
+  }, [device]);
 
   const getActiveChatId = useCallback(() => {
     const match = location.pathname.match(/^\/chat\/(.+)/);
