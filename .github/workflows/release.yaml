@@ -2,7 +2,7 @@ name: Release (Paseo / DEV)
 
 # Builds Polkadot Desktop installers for the public DEV distribution — a single network
 # channel that targets the public DEVNET (its catalog id "paseo" is incidental) — and
-# publishes them on a v* tag. The network wiring is
+# publishes them from the `devnet` branch. The network wiring is
 # delivered at runtime from Firebase Remote Config (chains_v2 / dot_ns_config /
 # ipfs_gateway_url / identity_backend_url) — this workflow only bakes the env-only values
 # and the public Firebase client ids, then packages per-OS via electron-builder.
@@ -12,7 +12,7 @@ name: Release (Paseo / DEV)
 # below, because config/index.js now reads it from process.env and refuses to package
 # without it (`assertPackagingIdentity`).
 #
-# NOTE — this workflow is the ONLY release path in this fork, and it owns the v* tag.
+# NOTE — this workflow is the ONLY devnet release path in this fork.
 # Upstream ships two more that also end in a published GitHub Release; both are deleted
 # here rather than carried:
 #
@@ -34,30 +34,20 @@ name: Release (Paseo / DEV)
 #     new v* tag every weekday and publish a GitHub Release off it unattended, and then
 #     `gh workflow run release-pipeline.yml` on top.
 #
-# Versioned releases in this fork are cut by pushing a v* tag by hand. A tag with a semver
-# pre-release suffix (v0.1.4-rc.1) publishes a pre-release that never becomes Latest. If
-# upstream's pipeline is ever wanted here, reconcile the two paths deliberately — do not
+# If upstream's pipeline is ever wanted here, reconcile the paths deliberately — do not
 # restore the files.
 #
-# WEEKLY TRACK — this workflow does carry a schedule of its own (Thursday 18:00 UTC), and
-# it is deliberately NOT the thing deleted above. The differences are the whole point:
-#   - it publishes a dated `dev-weekly-YYYY-MM-DD` PRE-release, not a v* version tag, so
-#     the version line stays hand-cut and `latest` never moves on a cron;
-#   - it reuses this one guarded build path (single-channel validation, packaging identity
-#     assertion), rather than dispatching upstream's unguarded pipeline;
-#   - it ships to GitHub Releases only — no Telegram, no S3.
-# ⚠️ It is only safe while the auto-update feed stays off. `AUTO_UPDATE_URL` /
-# `UPDATE_REPO_*` are currently unset, so nothing pulls these builds into installed
-# clients. If the feed is ever enabled, confirm electron-updater is not configured with
-# `allowPrerelease` before leaving this cron armed — otherwise every Thursday ships itself
-# to every install unattended, which is exactly the failure mode create-release-tag.yml
-# was deleted for.
+# Lanes: a dispatch on the `devnet` branch is a release. It builds in the `devnet`
+# environment, tags the built commit `devnet/<YYYY-MM-DD>.<n>`, and publishes a GitHub
+# Release under that tag behind `tester-distribution`. The release name carries the
+# package.json version; a version with a semver pre-release suffix (0.1.4-rc.1) publishes a
+# pre-release that never becomes Latest. A dispatch on any other branch only uploads the
+# installers as run artifacts: no tag, no release.
+# ⚠️ Keep the auto-update feed off (`AUTO_UPDATE_URL` / `UPDATE_REPO_*` unset): with it on,
+# every devnet release that becomes Latest reaches every install.
 #
-# Cron is UTC and does NOT follow DST: 18:00 UTC is 20:00 CEST in summer, 19:00 CET in
-# winter. GitHub only runs schedules on the DEFAULT BRANCH, and suspends them after 60
-# days of repository inactivity.
-#
-# CONFIG SOURCE — repo Variables & Secrets, NOT a committed file. No .env* is ever
+# CONFIG SOURCE — Variables & Secrets of the `devnet` environment (repository level is the
+# fallback), NOT a committed file. No .env* is ever
 # committed to this repo (.gitignore blocks it). The runner writes an ephemeral .env
 # from the values below, then `scripts/validate-release-env.mjs` fails the build if the
 # result would ship more than one network channel (which would expose the network
@@ -96,16 +86,10 @@ name: Release (Paseo / DEV)
 #   SENTRY_DSN (optional crash reporting)
 
 on:
-  push:
-    tags: ['v*']
   workflow_dispatch:
-  schedule:
-    # Weekly devnet build — Thursday 18:00 UTC (20:00 CEST / 19:00 CET; cron has no DST).
-    # Publishes a dated pre-release, never a v* tag. See the WEEKLY TRACK note above.
-    - cron: '0 18 * * 4'
 
 permissions:
-  contents: write
+  contents: read
 
 # Never let two releases for the same ref race on the GitHub Release / uploaded assets.
 # Do NOT cancel an in-progress run — a half-published release should finish, not abort.
@@ -120,6 +104,7 @@ jobs:
   # (unsigned builds get the Gatekeeper quarantine workaround).
   prepare:
     runs-on: ubuntu-latest
+    environment: devnet
     outputs:
       signed: ${{ steps.detect.outputs.signed }}
     steps:
@@ -136,6 +121,7 @@ jobs:
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    environment: devnet
     env:
       # ── Packaged application identity ────────────────────────────────────────────
       # Distinct electron identity for the public DEV distribution:
@@ -354,20 +340,51 @@ jobs:
   # Publish once, after ALL platforms have built. `needs: build` gates on every matrix
   # leg succeeding, so a failed platform skips the release instead of shipping a partial
   # set — and a single publisher avoids three matrix legs racing on the same Release.
-  release:
-    needs: [prepare, build]
-    # A v* tag push publishes a version release; the weekly cron publishes a dated
-    # pre-release. A plain workflow_dispatch stays build-only — it uploads artifacts and
-    # publishes nothing, so a manual smoke build can never mint a release by accident.
-    if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'schedule' }}
+  # ---- Tag — devnet branch only -----------------------------------------------------------
+  # The build creates the tag: every devnet release tags the commit it built, before the
+  # approval gate below, so a rejected publish still records what was built.
+  tag:
+    needs: build
+    if: github.ref == 'refs/heads/devnet'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Tag the built commit
+        id: tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          DATE=$(date -u +%Y-%m-%d)
+          LAST=$(git ls-remote --tags origin "refs/tags/devnet/${DATE}.*" \
+            | sed -n "s#.*refs/tags/devnet/${DATE}\.\([0-9]*\)\$#\1#p" | sort -n | tail -1)
+          TAG="devnet/${DATE}.$(( ${LAST:-0} + 1 ))"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" "$GITHUB_SHA" -m "Desktop devnet build ${GITHUB_RUN_NUMBER} (run ${GITHUB_RUN_ID})"
+          git push origin "refs/tags/$TAG"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "### Tagged \`$TAG\` at ${GITHUB_SHA:0:8}" >> "$GITHUB_STEP_SUMMARY"
+
+  release:
+    needs: [prepare, build, tag]
+    # Only a devnet-branch run publishes. A dispatch on any other branch stays build-only —
+    # it uploads artifacts and publishes nothing.
+    if: github.ref == 'refs/heads/devnet'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
     # MANUAL APPROVAL GATE. `tester-distribution` is a protected environment with a required
     # reviewer, so this job PAUSES here — after every platform has built and uploaded its
     # installers as artifacts — until a reviewer approves it in the Actions UI. Nothing is
-    # published (no GitHub Release, no `latest`, no weekly pre-release) without that click;
-    # rejecting simply leaves the artifacts on the run. The gate lives in the environment's
-    # protection rules, not in this file: if the environment is ever deleted GitHub recreates
-    # it UNPROTECTED on first use and the cron ships unattended again.
+    # published (no GitHub Release, no `latest`) without that click; rejecting simply leaves
+    # the artifacts on the run. The gate lives in the environment's protection rules, not in
+    # this file: if the environment is ever deleted GitHub recreates it UNPROTECTED on first
+    # use.
     environment:
       name: tester-distribution
       url: ${{ github.server_url }}/${{ github.repository }}/releases
@@ -398,36 +415,26 @@ jobs:
           fi
           sha256sum "${files[@]}" | tee SHA256SUMS.txt
 
-      # A tag run publishes under its own v* tag: a full release, or a PRE-release when the
-      # tag carries a semver pre-release suffix (v0.1.4-rc.1). A scheduled run has no tag, so
-      # mint a dated one and mark it a PRE-release — that is what keeps the weekly cadence off
-      # the version line. A pre-release is never Latest, which is what the auto-updater's
-      # stable channel installs.
+      # Published under the devnet tag; the name carries the package.json version. A semver
+      # pre-release suffix (0.1.4-rc.1) makes it a PRE-release, which is never Latest — what
+      # the auto-updater's stable channel installs.
       - name: Resolve release channel
         id: channel
         shell: bash
+        env:
+          TAG: ${{ needs.tag.outputs.tag }}
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "schedule" ]; then
-            DATE=$(date -u +%Y-%m-%d)
-            {
-              echo "tag=dev-weekly-${DATE}"
-              echo "name=Weekly devnet build ${DATE} (Desktop)"
-              echo "prerelease=true"
-              echo "weekly=true"
-            } >> "$GITHUB_OUTPUT"
-          else
-            PRERELEASE=false
-            if [[ "${GITHUB_REF_NAME}" == v*-* ]]; then
-              PRERELEASE=true
-            fi
-            {
-              echo "tag=${GITHUB_REF_NAME}"
-              echo "name=${GITHUB_REF_NAME}"
-              echo "prerelease=${PRERELEASE}"
-              echo "weekly=false"
-            } >> "$GITHUB_OUTPUT"
+          VERSION=$(node -p "require('./package.json').version")
+          PRERELEASE=false
+          if [[ "$VERSION" == *-* ]]; then
+            PRERELEASE=true
           fi
+          {
+            echo "tag=${TAG}"
+            echo "name=v${VERSION} (${TAG})"
+            echo "prerelease=${PRERELEASE}"
+          } >> "$GITHUB_OUTPUT"
 
       # When the mac build is NOT signed+notarized, Gatekeeper blocks it ("Apple could not
       # verify … is free of malware"). Prepend the quarantine workaround (a committed
@@ -436,16 +443,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          : > NOTES.md
-          if [ "${{ steps.channel.outputs.weekly }}" = "true" ]; then
-            {
-              echo "Weekly Polkadot Desktop devnet build — commit \`${GITHUB_SHA:0:8}\`, run ${GITHUB_RUN_NUMBER}."
-              echo
-              echo "This is a **devnet** build for testing only; state may be wiped. Found a"
-              echo "problem? [Report it](https://github.com/Polkadot-Community-Foundation/products-devnet-issues/issues/new/choose)."
-              echo
-            } >> NOTES.md
-          fi
+          {
+            echo "Polkadot Desktop devnet build — commit \`${GITHUB_SHA:0:8}\`, run ${GITHUB_RUN_NUMBER}."
+            echo
+            echo "This is a **devnet** build for testing only; state may be wiped. Found a"
+            echo "problem? [Report it](https://github.com/Polkadot-Community-Foundation/products-devnet-issues/issues/new/choose)."
+            echo
+          } > NOTES.md
           if [ "${{ needs.prepare.outputs.signed }}" != "true" ]; then
             cat .github/release-notes-macos-unsigned.md >> NOTES.md
           fi
