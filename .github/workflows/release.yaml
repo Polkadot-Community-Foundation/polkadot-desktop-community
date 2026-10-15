@@ -26,7 +26,7 @@ name: Release (Paseo / DEV)
 #     (:222 — gated on isProductionBuild() ALONE, so scripts/validate-release-env.mjs's
 #     single-channel guard does not cover it) in a published installer. It also never
 #     invokes that guard at all, and it reads the Firebase/TURN/sandbox config from
-#     `secrets.*` while this repository holds them as repo *Variables*.
+#     `secrets.*` where this workflow reads *Variables*.
 #
 #   .github/workflows/create-release-tag.yml — `schedule: cron '0 16 * * 1-5'`. This
 #     repository is a standalone repo, not a GitHub fork (`"fork": false`), so GitHub does
@@ -46,14 +46,13 @@ name: Release (Paseo / DEV)
 # ⚠️ Keep the auto-update feed off (`AUTO_UPDATE_URL` / `UPDATE_REPO_*` unset): with it on,
 # every devnet release that becomes Latest reaches every install.
 #
-# CONFIG SOURCE — Variables & Secrets of the `devnet` environment (repository level is the
-# fallback), NOT a committed file. No .env* is ever
-# committed to this repo (.gitignore blocks it). The runner writes an ephemeral .env
-# from the values below, then `scripts/validate-release-env.mjs` fails the build if the
+# CONFIG — no .env* is ever committed to this repo (.gitignore blocks it). The runner
+# writes an ephemeral .env from the variables below, then `scripts/validate-release-env.mjs`
+# fails the build if the
 # result would ship more than one network channel (which would expose the network
 # chooser to end users) or is missing the Firebase ids Remote Config needs.
 #
-# Required repo VARIABLES (non-secret — network + public web-app config):
+# Required VARIABLES (network + public web-app config):
 #   VITE_ENVIRONMENTS               single-channel Paseo catalog JSON (default+shared+
 #                                   channels:{paseo}); >1 channel FAILS the guard
 #   VITE_FIREBASE_API_KEY, VITE_FIREBASE_PROJECT_ID, VITE_FIREBASE_APP_ID
@@ -62,7 +61,7 @@ name: Release (Paseo / DEV)
 #                                        main/ — kept for parity with the web config)
 #   VITE_WEBRTC_TURN_HOST, VITE_WEBRTC_TURN_TTL
 #   SANDBOX_IPFS_ALLOWLIST, SANDBOX_RELAY_ALLOWLIST
-# Optional repo VARIABLES (all have a working fallback in the `env:` block below):
+# Optional VARIABLES (all have a working fallback in the `env:` block below):
 #   BUILD_TYPE (dev|production)
 #   APP_ID, PRODUCT_NAME, APP_NAME                 base packaging identity
 #   APP_ID_DEVELOP, PRODUCT_NAME_DEVELOP, APP_NAME_DEVELOP   BUILD_TYPE=dev identity
@@ -70,20 +69,6 @@ name: Release (Paseo / DEV)
 #   AUTO_UPDATE_URL                 switch the feed to a plain static (S3) feed instead
 #                                   of GitHub Releases. BUILD_SOURCE was REMOVED upstream
 #                                   (replaced by the feed shape above) and is now a no-op.
-# Required SECRETS:
-#   VITE_WEBRTC_TURN_SECRET         TURN static-auth-secret (NOTE: baked into the
-#                                   renderer bundle → present in the shipped binary;
-#                                   held as a secret to keep it out of git, not truly
-#                                   confidential once a build ships)
-# Optional SECRETS:
-#   macOS SIGNING (Developer ID cert): CERTIFICATE_OSX_APPLICATION (base64 .p12),
-#     CERTIFICATE_PASSWORD
-#   macOS NOTARIZATION (App Store Connect API key / notarytool):
-#     APPLE_API_KEY_P8_BASE64 (base64 of the AuthKey_*.p8), APPLE_API_KEY_ID,
-#     APPLE_API_ISSUER, APPLE_TEAM_ID
-#     (CERTIFICATE_OSX_APPLICATION present → signed+notarized dmg; unset → unsigned
-#      build, Tier A handout, with the Gatekeeper quarantine workaround in the notes)
-#   SENTRY_DSN (optional crash reporting)
 
 on:
   workflow_dispatch:
