@@ -1,27 +1,10 @@
 /**
- * Release env guard — fails the build BEFORE packaging if the generated `.env` would
- * produce an unsafe or misconfigured desktop installer.
- *
- * The public DEV distribution must ship EXACTLY ONE network channel. If more than one
- * channel is present the app renders a network chooser (OnboardingScreen + Settings →
- * Development), which must never reach end users. This guard is the deterministic
- * backstop for that: it does not rely on `--mode production` alone.
- *
- * It reads the ephemeral `.env` the release workflow writes on the runner (never a
- * committed file), overlaid with `process.env` — Vite resolves process-env variables
- * ahead of the `.env` file, so that is the value the build actually compiles. Reading the
- * file alone would silently pass a near-empty `.env` while the build compiled a
- * different, unvalidated catalog injected through a step-level `env:` block (which is how
- * upstream's `release-pipeline.yml` feeds its build — it writes no `.env` at all).
- *
- * It asserts:
- *   - VITE_ENVIRONMENTS is present, valid JSON, and defines EXACTLY ONE channel
- *   - that channel is the declared default channel
- *   - the Firebase web ids required to bootstrap Remote Config are non-empty
- *
- * The channel id is NOT enforced by default: the single public DEV channel targets the
- * devnet and its catalog id ("paseo") is incidental. Pass an expected id (arg 2 or
- * EXPECTED_CHANNEL) only if you want to pin it.
+ * Fails the build before packaging when the release `.env` would ship a misconfigured installer:
+ *   - VITE_ENVIRONMENTS must be valid JSON with exactly one channel, the declared default
+ *     (more than one renders the network chooser)
+ *   - the Firebase web ids Remote Config needs must be set
+ * Values in `process.env` take precedence over the file, as they do for Vite. Pass an expected
+ * channel id (arg 2 or EXPECTED_CHANNEL) to pin it.
  *
  * Usage:
  *   node scripts/validate-release-env.mjs [envPath=.env] [expectedChannel]
@@ -32,14 +15,7 @@ import { readFileSync } from 'node:fs';
 const envPath = process.argv[2] ?? '.env';
 const expectedChannel = process.argv[3] ?? process.env.EXPECTED_CHANNEL ?? '';
 
-// Firebase web ids the app needs to bootstrap Remote Config (which delivers the live
-// Paseo chain wiring). A build missing these boots into a broken state.
-//
-// These are exactly the three `src/bootstrap.ts` reads. VITE_FIREBASE_AUTH_DOMAIN used to
-// be asserted here too and is deliberately gone: it is read by nothing in `src/` or
-// `main/` on either side of the sync, so requiring it could only ever produce a false
-// release failure. VITE_FIREBASE_STORAGE_BUCKET and VITE_FIREBASE_MESSAGING_SENDER_ID are
-// equally unread and equally not required.
+// The Firebase web ids src/bootstrap.ts reads to bootstrap Remote Config.
 const REQUIRED_KEYS = ['VITE_FIREBASE_API_KEY', 'VITE_FIREBASE_PROJECT_ID', 'VITE_FIREBASE_APP_ID'];
 
 function fail(msg) {
@@ -65,12 +41,7 @@ function parseDotenv(text) {
   return out;
 }
 
-/**
- * Resolve a key the way the build will: `process.env` first (Vite gives it precedence
- * over the `.env` file), then the file. A missing file is not fatal on its own — a
- * pipeline that injects everything through a step `env:` writes none — but a run where
- * NEITHER source carries the catalog still fails below on VITE_ENVIRONMENTS.
- */
+/** `process.env` first, as Vite does, then the file. A missing file alone is not fatal. */
 let fileEnv = {};
 let fileError = null;
 try {
