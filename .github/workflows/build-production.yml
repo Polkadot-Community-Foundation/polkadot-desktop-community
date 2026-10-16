@@ -95,12 +95,10 @@ on:
         default: none
       ref:
         type: string
-        description: Git ref to build (branch, tag or SHA). Defaults to the ref this workflow was dispatched on.
+        description: Empty = the dispatched commit. Otherwise a production/* tag, to rebuild a frozen baseline.
         required: false
 
-# Read-only. A production build reads the repository and writes artifacts; it has no
-# business creating a release, a tag, a comment or a deployment status, and this is the
-# mechanical proof that it cannot.
+# Read-only by default. Only `tag` writes, after a signed build.
 permissions:
   contents: read
 
@@ -117,6 +115,47 @@ env:
   CLOUDSDK_STORAGE_PARALLEL_COMPOSITE_UPLOAD_ENABLED: "False"
 
 jobs:
+  # Production builds come only from the production branch or a production/* tag.
+  resolve:
+    name: Require a production ref
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.trusted.outputs.sha }}
+    steps:
+      - name: Resolve the commit to build
+        id: trusted
+        shell: bash
+        env:
+          INPUT_REF: ${{ inputs.ref }}
+        run: |
+          set -euo pipefail
+          case "$GITHUB_REF" in
+            refs/heads/production | refs/tags/production/*) ;;
+            *)
+              echo "::error::production builds run only when dispatched on the production branch or a production/* tag"
+              exit 1
+              ;;
+          esac
+          if [ -z "$INPUT_REF" ]; then
+            echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            echo "building the dispatched commit $GITHUB_SHA ($GITHUB_REF)"
+            exit 0
+          fi
+          if [[ ! "$INPUT_REF" =~ ^production/[A-Za-z0-9._-]+$ ]]; then
+            echo "::error::ref must be empty or a production/* tag; branches and SHAs are refused"
+            exit 1
+          fi
+          # Annotated tags resolve through their peeled ^{} line.
+          refs=$(git ls-remote --tags "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" \
+            "refs/tags/$INPUT_REF" "refs/tags/$INPUT_REF^{}")
+          sha=$(awk -v t="refs/tags/$INPUT_REF" '$2 == t "^{}" {p = $1} $2 == t {d = $1} END {print (p != "" ? p : d)}' <<< "$refs")
+          if [[ ! "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::tag $INPUT_REF does not exist"
+            exit 1
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "building tag $INPUT_REF at $sha"
+
   # Production CONFIGURATION, read once and handed to the build as job outputs. Every value here
   # ships inside the installer and is public, so passing it through outputs leaks nothing — and it
   # is what lets the build job declare the GATED environment when it signs (a job has exactly one
@@ -213,7 +252,7 @@ jobs:
 
   build:
     name: Build (${{ matrix.os }})
-    needs: config
+    needs: [config, resolve]
     strategy:
       fail-fast: false
       matrix:
@@ -263,7 +302,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ needs.resolve.outputs.sha }}
 
       # The configuration arrives as job outputs, so assert it survived the hand-off rather than
       # discovering an empty application id inside electron-builder.
@@ -550,3 +589,32 @@ jobs:
             for f in "${files[@]}"; do echo "gs://${BUILD_BUCKET}/${PREFIX}/$(basename "$f")"; done
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # A signed build tags the commit it built. Rebuilds of a production/* tag are already tagged.
+  tag:
+    name: Tag the signed commit
+    needs: [resolve, build]
+    if: ${{ inputs.signing == 'production' && inputs.ref == '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+
+      - name: Tag the built commit
+        shell: bash
+        env:
+          SHA: ${{ needs.resolve.outputs.sha }}
+        run: |
+          set -euo pipefail
+          DATE=$(date -u +%Y-%m-%d)
+          LAST=$(git ls-remote --tags origin "refs/tags/production/${DATE}.*" \
+            | sed -n "s#.*refs/tags/production/${DATE}\.\([0-9]*\)\$#\1#p" | sort -n | tail -1)
+          TAG="production/${DATE}.$(( ${LAST:-0} + 1 ))"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" "$SHA" -m "Desktop production build ${GITHUB_RUN_NUMBER} (run ${GITHUB_RUN_ID}), signed"
+          git push origin "refs/tags/$TAG"
+          echo "### Tagged \`$TAG\` at ${SHA:0:8}" >> "$GITHUB_STEP_SUMMARY"
