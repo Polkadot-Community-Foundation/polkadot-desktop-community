@@ -39,12 +39,7 @@ const config: UserConfigFn = async ({ mode, command }) => {
       // remapped (staging -> production) for Vite, so import.meta.env.MODE cannot
       // distinguish a staging build from a production one — this define can.
       'process.env.BUILD_MODE': JSON.stringify(mode),
-      // Which distribution this build is, independent of `mode`. The develop
-      // distribution is compiled with `npm run build` — production mode — so the
-      // renderer cannot infer it from MODE, and without this define anything that
-      // should look different in the shipped DEV build (the favicon, for one) would
-      // take the production answer. Read through `isDevelopRelease()` in
-      // src/shared/env.
+      // The distribution, independent of `mode`; read through `isDevelopRelease()`.
       'process.env.BUILD_TYPE': JSON.stringify(process.env['BUILD_TYPE'] ?? ''),
       'process.env.PRODUCT_NAME': JSON.stringify(title),
       'process.env.VERSION': JSON.stringify(version),
@@ -149,11 +144,7 @@ const config: UserConfigFn = async ({ mode, command }) => {
         },
       }),
       favicons(
-        // Same switch the app icon and the bundle id are chosen with, and for the
-        // same reason: `mode` alone reports the develop distribution as production
-        // and would hand it the production favicons. Unset resolves to develop, so
-        // the generated icons in a build nobody configured say "test network"
-        // rather than claiming to be the real app.
+        // Chosen by the same flag as the app icon and the bundle id, not by `mode`.
         isProductionRelease ? resolve(folders.rendererRoot, 'favicon.png') : resolve(folders.rendererRoot, 'favicon.dev.png'),
         {
           appName: 'Polkadot Desktop',

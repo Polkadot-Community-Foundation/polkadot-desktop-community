@@ -17,40 +17,19 @@ import signWindowsWithCloudKms from './scripts/sign-windows-kms.js';
 // also the moment a missing one has to stop the build.
 assertPackagingIdentity();
 
-// `BUILD_TYPE` is a two-value switch — `.github/actions/build-app/action.yml` declares it as a
-// `choice` of dev|production — but config/index.js reads it as "production, or else develop", so a
-// misspelling resolves to a perfectly coherent develop build instead of failing. That is fine for
-// an unset value, which is how a fork building with no repository variables at all arrives here,
-// and not fine for a typo in a release pipeline that meant to say `production`.
+// config/index.js treats anything but `production` as develop, so reject a misspelt BUILD_TYPE.
 const buildType = (process.env.BUILD_TYPE ?? '').trim();
 if (buildType !== '' && buildType !== 'dev' && buildType !== 'production') {
   throw new Error(`Unrecognised BUILD_TYPE "${buildType}". Expected "production", "dev", or unset (which means dev).`);
 }
 
-// Which artwork the build ships, per the icon design language: the tile says which network — black
-// for real Polkadot, white for a test network — and a three-letter label says which build channel,
-// production being the only unlabelled one. The develop distribution installs beside production
-// under its own bundle id and display name, so giving it the production icon leaves the two
-// indistinguishable once installed; that is the question every devnet bug report has to answer
-// first.
-//
-// Keyed off the same `isProductionRelease` that chooses the bundle id, so icon and identity cannot
-// drift apart — and inheriting that flag's default is the point rather than an accident. BUILD_TYPE
-// unset means develop, so an unconfigured build ships the white DEV tile. The failure worth
-// engineering against is a build that quietly looks like the real Polkadot app; one that visibly
-// looks like a test build announces its own mistake.
-//
-// macOS takes separate production art because upstream's `icon.png` is a hard square and macOS
-// wants a rounded tile. It needs no separate develop art: the generated devnet icon already carries
-// the design language's 22.5% corner radius, within two pixels of `icon-mac.png`'s own (first
-// opaque pixel on the top row at x=223 vs x=221, both 1024px), so the one file serves both targets.
+// Production ships the unlabelled black tile and every other build the white DEV tile, chosen by
+// the same flag as the bundle id. The dev icon is already rounded, so macOS needs no separate art.
 const icons = isProductionRelease
   ? { linux: 'icon.png', mac: 'icon-mac.png', win: 'icon.ico' }
   : { linux: 'icon.dev.png', mac: 'icon.dev.png', win: 'icon.dev.ico' };
 
-// An icon path that does not resolve is not an error to electron-builder — it warns and falls back
-// to the stock Electron artwork. A build that ships the wrong icon while reporting success is the
-// whole failure mode above, so resolve every path through here and refuse to package without it.
+// electron-builder falls back to the stock Electron icon when a path is missing, so fail instead.
 const iconPath = target => {
   const path = `${folders.resources}/icons/${icons[target]}`;
 
@@ -119,9 +98,7 @@ export default {
   win: {
     icon: iconPath('win'),
     target: ['nsis'],
-    // Signing is configured only when the lane supplied a Cloud KMS key ring, so an unsigned build
-    // is unaffected. sha256 only: the dual sha1/sha256 default would call the hook twice and sha1
-    // Authenticode signatures are no longer accepted by Windows.
+    // Signs only when a Cloud KMS key ring is supplied. sha256 only: Windows rejects sha1 signatures.
     signtoolOptions: process.env.WINDOWS_CODESIGN_KEYSTORE
       ? { sign: signWindowsWithCloudKms, signingHashAlgorithms: ['sha256'] }
       : undefined,

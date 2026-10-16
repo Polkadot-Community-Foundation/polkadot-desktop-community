@@ -175,9 +175,7 @@ runs:
         allure-token: ${{ env.ALLURE_TOKEN }}
         allure-project-id: ${{ env.ALLURE_PROJECT_ID }}
 
-    # The PCF build of truapi-host carries the `devnet` network preset. It is unpacked
-    # outside the installer layout and run with updates off, so the self-updater never
-    # swaps it for an upstream release that lacks the preset.
+    # This truapi-host build carries the `devnet` preset; updates are off so it is not replaced.
     - name: Install truapi-host
       if: inputs.signer-backed == 'true'
       shell: bash

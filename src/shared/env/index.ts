@@ -40,16 +40,9 @@ export const isDev = () => {
   return import.meta.env.MODE === 'development';
 };
 
-// True for anything that is not the production distribution — the public DEV build,
-// and local development. Reads the BUILD_TYPE define (see vite.config.renderer.ts),
-// which mirrors `isProductionRelease` in config/index.js, the flag the bundle id and
-// the app icon are already chosen with.
-//
-// It is NOT interchangeable with isDev() or isProductionBuild(), both of which
-// describe the Vite mode: the DEV installers are compiled with `npm run build`, so by
-// mode alone they are production builds and would take the production artwork. Unset
-// answers develop, deliberately — a build that has not said which distribution it is
-// has not earned the production mark.
+// True for every build except the production distribution, unset BUILD_TYPE included. Unlike
+// isDev() and isProductionBuild() it does not read the Vite mode: DEV installers are built in
+// production mode.
 export const isDevelopRelease = () => {
   return process.env['BUILD_TYPE'] !== 'production';
 };
