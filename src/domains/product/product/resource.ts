@@ -43,19 +43,9 @@ function legacyRoot(baseName: string): RootManifest {
 // synthesized app executable's identifier IS the base name (not `app.<base>`
 // like the manifest branch).
 //
-// Follows the registry first, then falls back to the global content resolver —
-// the same order `readFreshExecutable` already uses. DotNS keeps the resolver
-// PER NAME, so reading one globally configured contract cannot see a name bound
-// elsewhere. That is not hypothetical: a 2026-09-04 audit of the products devnet
-// found 14 of 23 names pointing at the reverse resolver, which is why
-// Collectibles and docs never rendered on the mobile clients — they read the
-// configured resolver directly and reported "not registered or has no content".
-//
-// The fallback is load-bearing rather than defensive: for those mis-bound names
-// the registry points at a contract holding no contenthash while the record
-// still sits on the content resolver. Registry-first-then-fallback keeps every
-// name that resolves today resolving, and additionally reaches names a direct
-// read cannot see.
+// Reads the name's own resolver from the registry first, then falls back to the global content
+// resolver, as `readFreshExecutable` does: DotNS binds resolvers per name, and some names keep
+// their record on the content resolver while the registry points elsewhere.
 async function resolveLegacy(env: Environment, baseName: string): Promise<Product | null> {
   const node = namehash(baseName);
   const resolver = await dotNsGateway.readResolver(env, node);

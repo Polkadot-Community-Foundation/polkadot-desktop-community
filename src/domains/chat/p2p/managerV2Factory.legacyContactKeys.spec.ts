@@ -1,21 +1,7 @@
 /**
- * Regression guard for the P-256 → X25519 migration.
- *
- * The `contact` IndexedDB is at version 3 on both sides of that change with an identical
- * version ladder, so no Dexie upgrade callback runs and rows written by a P-256-era build
- * survive verbatim — carrying a 65-byte uncompressed SEC1 key (`0x04 || X || Y`) in
- * `identityChatPublicKey` and in `devices[].encryptionPublicKey`.
- *
- * `x25519.getSharedSecret` throws on anything but 32 bytes. Every read of those fields
- * happens inside `manager.initialize()`, and `p2pChatUseCase` swallows that rejection with
- * a bare `console.error`, so the failure is invisible: the chat list is empty forever, with
- * no error UI and nothing telling the user to reset.
- *
- * These tests assert the legacy row is rejected at the READ, before it can reach key
- * agreement. The `createIdentityChannel` mock below deliberately performs the same
- * `computeSharedSecret` call the real implementation does (identityChannel.ts), against the
- * REAL `p2pService`, so a regression in the guard reproduces the production failure here
- * rather than passing silently.
+ * Contact rows written before the X25519 change carry 65-byte P-256 keys. They must be rejected
+ * at the read, before key agreement. The `createIdentityChannel` mock makes the same
+ * `computeSharedSecret` call as identityChannel.ts against the real `p2pService`.
  */
 import 'fake-indexeddb/auto';
 

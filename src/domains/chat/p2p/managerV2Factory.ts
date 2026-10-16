@@ -102,21 +102,9 @@ async function listShippableSiblings(
 /**
  * Decode a persisted hex key, or `undefined` if it is not a usable X25519 public key.
  *
- * The `contact` IndexedDB sits at version 3 with an identical version ladder on both
- * sides of the P-256 → X25519 change, so no Dexie upgrade callback ever runs on it and
- * rows written by an earlier build survive verbatim — carrying a 65-byte uncompressed
- * SEC1 P-256 key (`0x04 || X || Y`, 132 hex chars) where a 32-byte X25519 key is now
- * expected. `x25519.getSharedSecret` throws on the length ("uCoordinate" expected
- * Uint8Array of length 32), and every read below happens inside `manager.initialize()`,
- * whose rejection is swallowed by a bare `console.error` in `p2pChatUseCase`. The result
- * is a permanently empty chat list with no error UI — worse than a visible failure,
- * because nothing tells the user to reset.
- *
- * Persisted contact rows cross the same trust boundary as the device-sync rows this
- * module already purges (`orchestrator.ts`) and the Dexie rows `resource.ts` already
- * filters; `contact` was the one store left unguarded. Skip and warn rather than throw:
- * the rest of initialization completes, and a re-pair or an inbound request rewrites the
- * row through `upsertContactWithDevice`, which validates before persisting.
+ * Rows written before the X25519 change can hold a 65-byte P-256 key, which
+ * `x25519.getSharedSecret` rejects inside `manager.initialize()`, leaving the chat list empty.
+ * Skip and warn instead of throwing: a re-pair or an inbound request rewrites the row.
  */
 const readEncryptionKey = (hex: string | undefined): Uint8Array | undefined => {
   if (!hex) return undefined;
@@ -933,17 +921,13 @@ export const createP2PChatManagerV2 = async (params: P2PChatManagerV2Params): Pr
       if (!storedContact) {
         throw new Error(`[p2p-managerV2] cannot start session: contact ${peerId} not in roster yet`);
       }
-      // Sanitize at the read, not at each use: a device row an earlier build wrote holds a
-      // 65-byte P-256 key, and one of those in the roster breaks every outgoing
-      // MultiRequest to this contact. Dropping them here makes such a contact look
-      // device-less, which routes it into the self-heal path below.
+      // Drop legacy device keys here: one in the roster breaks every outgoing MultiRequest, and a
+      // device-less contact takes the self-heal path below.
       let contact: Contact = { ...storedContact, devices: usablePeerDevices(storedContact, peerId) };
       if (!contact.identityChatPublicKey) {
         throw new Error(`[p2p-managerV2] cannot start session: contact ${peerId} has no identityChatPublicKey`);
       }
-      // Throws rather than skips: `startSession` already signals every other unusable
-      // roster state this way, and its callers all catch. Skipping would instead build a
-      // session against a key `computeSharedSecret` is about to reject.
+      // Throws, like every other unusable roster state in `startSession`; its callers catch.
       const peerIdentityChatPubKey = peerIdentityChatKey(contact, peerId);
       if (!peerIdentityChatPubKey) {
         throw new Error(
