@@ -5,7 +5,7 @@
  *
  * The catalog's channel keys are `nightly` (display "Paseo Next V2") and `unstable`
  * (display "PreviewNet"); the networks they map to are `paseo-next-v2` and `previewnet`.
- * The PCF catalog has a single channel, `paseo`, which is the PCF devnet (`devnet`).
+ * This fork's catalog has a single channel, `paseo`, which maps to the `devnet` network.
  */
 
 export type E2eEnvironmentId = 'nightly' | 'unstable' | 'paseo';

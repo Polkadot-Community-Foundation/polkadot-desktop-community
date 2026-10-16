@@ -1,84 +1,13 @@
 name: Build (Production)
 
-# Builds a PRODUCTION-CONFIGURED Polkadot Desktop installer and PUBLISHES NOTHING.
+# Builds production-configured desktop installers on dispatch and publishes nothing: no release,
+# no update feed, no Actions artifact (they are public in this repository). Installers go to a
+# private Cloud Storage bucket.
 #
-# This is PCF-232 / PCF-239. It exists beside `release.yaml` (the DEV/devnet lane) rather
-# than inside it, because that lane is load-bearing today and a shared file is a shared
-# blast radius. The two lanes must be runnable AT THE SAME TIME, so everything that could
-# collide is different here: the concurrency group, the output location, and the packaged
-# application identity.
-#
-# ── Private output ───────────────────────────────────────────────────────────────────
-# This repository is public, and its Actions artifacts can be downloaded by any signed-in
-# GitHub user, so this lane uploads NO Actions artifact. Installers go to a private Cloud
-# Storage bucket (`vars.BUILD_BUCKET`, prefix `desktop/<run>/<os>/`) through a keyless
-# sign-in (GitHub OIDC -> Workload Identity Federation) that is only issued to this
-# repository's production environments and can only create and read under `desktop/`.
-# `build-app` is called with `upload_build_output: 'false'` so the compiled bundle is not
-# uploaded either.
-#
-# ── What this workflow does NOT do ───────────────────────────────────────────────────
-#   - no GitHub Release (there is no `softprops/action-gh-release` step, and
-#     `permissions: contents: read` means the job COULD not create one if it tried);
-#   - no auto-update feed publication — every electron-builder invocation passes
-#     `-p never`, ENABLE_AUTO_UPDATE is left false, and the generated `latest*.yml`
-#     update metadata is deliberately NOT uploaded (see "Upload installers" below);
-#   - no store, TestFlight, Firebase App Distribution, R2 or S3 upload of any kind;
-#   - no `push`, `schedule` or `pull_request` trigger. `workflow_dispatch` only, which is
-#     the single strongest guarantee that nothing ships by accident.
-#
-# ── The two-environment model (PCF-239) ──────────────────────────────────────────────
-# `production`              UNGATED. Holds production *configuration* — application ids,
-#                           product names, the channel catalog, Firebase web ids, the
-#                           update-feed owner. All of it ships inside the artifact and is
-#                           public. Declared by the `config` job below, which exports it as
-#                           job outputs.
-# `production-distribution` GATED (required reviewers). Holds the signing material — the
-#                           Cloud KMS key ring and alias, the certificate chain, the signing
-#                           service account. Declared by the `build` job, but ONLY when it
-#                           is dispatched with `signing: production`.
-#
-# Signing has to happen INSIDE the build: electron-builder signs the application executable
-# before NSIS wraps it, so an installer signed afterwards would carry an unsigned program.
-# A job declares exactly one environment, so the build cannot read configuration from
-# `production` and signing material from `production-distribution` at the same time. The
-# configuration is public by definition — every value ships inside the installer — so it
-# travels as job outputs from the ungated `config` job, and the build switches its own
-# environment to the gated one when, and only when, it signs. An unsigned production build
-# still needs no approval click.
-#
-# Windows signs through Cloud HSM (jsign + Cloud KMS, see scripts/sign-windows-kms.js): the
-# private key is generated in hardware and cannot be exported, so the runner holds nothing
-# but a one-hour token. macOS stays unsigned until PCF holds an Apple Developer ID (PCF-29),
-# Linux until a GPG signing key exists; both say so in the run summary.
-#
-# ── Lane isolation, verifiable ───────────────────────────────────────────────────────
-# GitHub resolves `vars.X` as ENVIRONMENT, then repository, then organisation. `release.yaml`
-# declares no environment on its `build` job, so it keeps reading the repository-level
-# variables it reads today; this job declares `environment: production` and reads the
-# production ones. NOTHING production-shaped may ever be set at repository level — the live
-# trap is `release.yaml:163`, `BUILD_TYPE: ${{ vars.BUILD_TYPE || 'dev' }}`, where a
-# repo-level `BUILD_TYPE=production` would silently flip the DEVNET lane to production
-# packaging.
-#
-#   concurrency group   build-production-<ref>        (devnet lane: release-<ref>)
-#   installers          polkadot-desktop-production-* (devnet lane: polkadot-desktop-dev-*)
-#   compiled bundle     not uploaded                  (build-pr lane: build-output-<OS>)
-#   application id      vars.APP_ID                   (devnet lane: APP_ID_DEVELOP,
-#                                                      com.polkadot.desktop.dev)
-#
-# ── Configuration source ─────────────────────────────────────────────────────────────
-# Everything comes from `production` environment Variables. Unlike `release.yaml` this
-# workflow writes NO `.env`: `.github/actions/build-app` injects every value through a step
-# `env:` block, and `scripts/validate-release-env.mjs` reads `process.env` overlaid on the
-# file — which is the case its own docstring calls out — so the guard validates exactly the
-# values the compiler will see. There is deliberately NO fallback for the identity or the
-# catalog: a production build that guessed a bundle id would install beside the application
-# it meant to replace, silently. The preflight step below fails by name instead.
-#
-# See guides/production/builds/desktop.md in Polkadot-Community-Foundation/summit-deployer-skills
-# for the variable list, the `gh` commands that create the two environments, and the
-# auto-update position.
+# The ungated `config` job reads the production configuration, which ships inside the installer
+# anyway, and passes it on as outputs. Signing happens inside electron-builder, so with
+# `signing: production` the build runs in the gated `production-distribution` environment.
+# Windows signs through Cloud KMS; macOS and Linux are unsigned for now.
 
 on:
   workflow_dispatch:
@@ -86,41 +15,75 @@ on:
       signing:
         type: choice
         description: >-
-          none = unsigned artifacts (the only thing possible today).
-          production = require real signing material from the gated
-          production-distribution environment; fails by name until PCF-29 lands.
+          none = unsigned artifacts.
+          production = sign the Windows installer with the key in the gated
+          production-distribution environment.
         options:
           - none
           - production
         default: none
       ref:
         type: string
-        description: Git ref to build (branch, tag or SHA). Defaults to the ref this workflow was dispatched on.
+        description: Empty = the dispatched commit. Otherwise a production/* tag, to rebuild a frozen baseline.
         required: false
 
-# Read-only. A production build reads the repository and writes artifacts; it has no
-# business creating a release, a tag, a comment or a deployment status, and this is the
-# mechanical proof that it cannot.
+# Read-only by default. Only `tag` writes, after a signed build.
 permissions:
   contents: read
 
-# Distinct from the devnet lane's `release-${{ github.ref }}`, so a production run can
-# never cancel or queue behind a devnet run. Not cancel-in-progress: a long packaging run
-# should finish rather than be aborted by a second dispatch.
+# Separate from the devnet lane, and never cancels a running build.
 concurrency:
   group: build-production-${{ inputs.ref || github.ref }}
   cancel-in-progress: false
 
 env:
-  # Uploads to the private bucket must not use parallel composite uploads: their temporary parts live outside
-  # this repository's prefix and need delete to clean up, which the build identity deliberately lacks.
+  # Composite uploads delete their temporary parts, and the build identity cannot delete.
   CLOUDSDK_STORAGE_PARALLEL_COMPOSITE_UPLOAD_ENABLED: "False"
 
 jobs:
-  # Production CONFIGURATION, read once and handed to the build as job outputs. Every value here
-  # ships inside the installer and is public, so passing it through outputs leaks nothing — and it
-  # is what lets the build job declare the GATED environment when it signs (a job has exactly one
-  # `environment:`, and the signing material and the configuration live in different ones).
+  # Production builds come only from the production branch or a production/* tag.
+  resolve:
+    name: Require a production ref
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.trusted.outputs.sha }}
+    steps:
+      - name: Resolve the commit to build
+        id: trusted
+        shell: bash
+        env:
+          INPUT_REF: ${{ inputs.ref }}
+        run: |
+          set -euo pipefail
+          case "$GITHUB_REF" in
+            refs/heads/production | refs/tags/production/*) ;;
+            *)
+              echo "::error::production builds run only when dispatched on the production branch or a production/* tag"
+              exit 1
+              ;;
+          esac
+          if [ -z "$INPUT_REF" ]; then
+            echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            echo "building the dispatched commit $GITHUB_SHA ($GITHUB_REF)"
+            exit 0
+          fi
+          if [[ ! "$INPUT_REF" =~ ^production/[A-Za-z0-9._-]+$ ]]; then
+            echo "::error::ref must be empty or a production/* tag; branches and SHAs are refused"
+            exit 1
+          fi
+          # Annotated tags resolve through their peeled ^{} line.
+          refs=$(git ls-remote --tags "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" \
+            "refs/tags/$INPUT_REF" "refs/tags/$INPUT_REF^{}")
+          sha=$(awk -v t="refs/tags/$INPUT_REF" '$2 == t "^{}" {p = $1} $2 == t {d = $1} END {print (p != "" ? p : d)}' <<< "$refs")
+          if [[ ! "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::tag $INPUT_REF does not exist"
+            exit 1
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "building tag $INPUT_REF at $sha"
+
+  # Reads the production configuration once and passes it to `build` as outputs, so the build can
+  # run in the gated environment when it signs.
   config:
     name: Production configuration
     runs-on: ubuntu-latest
@@ -182,9 +145,6 @@ jobs:
               echo "### ❌ the \`production\` environment is missing configuration"
               echo
               for name in "${missing[@]}"; do echo "- \`${name}\`"; done
-              echo
-              echo "These are environment Variables, never repository Variables — a repo-level"
-              echo "value would leak into the devnet lane in \`release.yaml\`."
             } | tee -a "$GITHUB_STEP_SUMMARY" >&2
             exit 1
           fi
@@ -213,23 +173,20 @@ jobs:
 
   build:
     name: Build (${{ matrix.os }})
-    needs: config
+    needs: [config, resolve]
     strategy:
       fail-fast: false
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
-    # GATED only when it signs. `signing: none` runs in the ungated `production` environment and
-    # needs no approval; `signing: production` runs in `production-distribution`, so a reviewer
-    # approves before the build can reach any signing key. Configuration comes from `needs.config`
-    # either way, so the gated run is not missing anything the ungated one had.
+    # Gated only for `signing: production`; the configuration comes from `needs.config` either way.
     environment: ${{ inputs.signing == 'production' && 'production-distribution' || 'production' }}
     permissions:
       contents: read
       id-token: write
     env:
-      # ── Packaged application identity. No fallbacks: see the header. ─────────────
+      # ── Packaged application identity (no fallbacks) ────────────────────────────
       APP_ID: ${{ needs.config.outputs.app_id }}
       PRODUCT_NAME: ${{ needs.config.outputs.product_name }}
       APP_NAME: ${{ needs.config.outputs.app_name }}
@@ -239,9 +196,7 @@ jobs:
       VITE_FIREBASE_API_KEY: ${{ needs.config.outputs.firebase_api_key }}
       VITE_FIREBASE_PROJECT_ID: ${{ needs.config.outputs.firebase_project_id }}
       VITE_FIREBASE_APP_ID: ${{ needs.config.outputs.firebase_app_id }}
-      # The channel id the guard pins the catalog to. A production build must ship exactly
-      # one channel AND it must be the production one — a catalog that validly contains a
-      # single *devnet* channel would otherwise sail through.
+      # A production build must ship exactly one channel, and it must be the production one.
       EXPECTED_CHANNEL: ${{ needs.config.outputs.expected_channel }}
     steps:
       # Installers go to a private bucket. Refuse to build without one.
@@ -263,7 +218,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ needs.resolve.outputs.sha }}
 
       # The configuration arrives as job outputs, so assert it survived the hand-off rather than
       # discovering an empty application id inside electron-builder.
@@ -282,9 +237,7 @@ jobs:
           fi
           echo "Production configuration present."
 
-      # What `signing: production` can actually sign today. Windows signs through Cloud HSM;
-      # macOS needs an Apple Developer ID (PCF-29) and Linux a detached GPG signature, neither of
-      # which exists yet, so those two stay unsigned and say so rather than failing the build.
+      # Windows signs through Cloud KMS; macOS and Linux have no signing identity yet.
       - name: Signing material preflight
         if: ${{ inputs.signing == 'production' }}
         shell: bash
@@ -296,7 +249,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${RUNNER_OS}" != "Windows" ]; then
-            echo "::warning::${RUNNER_OS} artifacts are UNSIGNED — no Apple Developer ID (PCF-29), no Linux GPG key yet"
+            echo "::warning::${RUNNER_OS} artifacts are UNSIGNED: no signing identity for this platform yet"
             exit 0
           fi
           missing=()
@@ -321,56 +274,30 @@ jobs:
       - name: Node
         uses: ./.github/actions/setup-node
 
-      # The deterministic backstop, run BEFORE the build rather than after: exactly one
-      # network channel (more than one renders the network chooser to end users), that
-      # channel is the declared default AND is the expected production channel, and the
-      # three Firebase web ids Remote Config bootstraps from are non-empty.
-      #
-      # No `.env` exists in this lane, which the guard handles: it overlays `process.env`
-      # on the file and a missing file is only fatal when the environment carries no
-      # catalog either. `.env` is passed as the path purely to keep the call identical to
-      # the devnet lane's.
+      # Exactly one network channel, the default and expected production one, and the Firebase
+      # web ids. This lane writes no `.env`; the guard reads `process.env`.
       - name: Validate release config
         shell: bash
         run: node scripts/validate-release-env.mjs .env "${EXPECTED_CHANNEL}"
 
-      # Compile the production bundles through the repository's own composite action:
-      # `build_type: production` takes the `npm run r clean:build clean:prod build postbuild`
-      # path (vite --mode production), which is what sets isProductionBuild() and so closes
-      # the onboarding network chooser and the Skip button, and what makes
-      # electron-builder.js pick the production icon rather than the white DEV tile.
-      #
-      # `include_dist_artifacts` is deliberately FALSE — packaging is done in the explicit
-      # steps below rather than through the action's `npm run dist`, for two reasons the
-      # devnet lane already learned the hard way:
-      #   1. the unsigned macOS path needs `-c.mac.notarize=false`, which is a CLI-only
-      #      override `npm run dist` cannot express (electron-builder.js hardcodes
-      #      `notarize: true`);
-      #   2. `npm run dist` goes through cross-env, which on the Windows runner exits 0
-      #      WITHOUT packaging — the silent no-op `release.yaml:324-328` documents.
-      # `npm run dist` does pass `-p never` itself, so nothing is lost on the publishing side.
+      # `build_type: production` compiles in production mode, which hides the onboarding network
+      # chooser and selects the production icon. Packaging runs in the steps below rather than
+      # `npm run dist`: macOS needs the CLI-only `-c.mac.notarize=false`, and on Windows cross-env
+      # exits 0 without packaging.
       - name: Build application (production configuration)
         uses: ./.github/actions/build-app
         with:
           build_type: production
-          # Auto-update stays OFF. There is no production release for a feed to point at
-          # yet, and the desktop's updater gate is `ENABLE_AUTO_UPDATE === 'true'` AND a
-          # configured feed — so an installed build from this lane honestly reports that it
-          # cannot self-update instead of polling a feed that does not exist.
+          # Auto-update stays off: there is no production feed yet.
           enable_auto_update: 'false'
-          # config/index.js defaults the GitHub update feed to paritytech/polkadot-desktop-
-          # community. Even with the updater off, the feed owner is baked into the packaged
-          # config, so pin it to PCF's repository: a build that ever has auto-update turned
-          # on must not offer Parity's releases to PCF's users.
+          # Unset, config/index.js points the update feed at Parity's repository.
           update_repo_owner: ${{ needs.config.outputs.update_repo_owner }}
           update_repo_name: ${{ needs.config.outputs.update_repo_name }}
           app_id: ${{ needs.config.outputs.app_id }}
           product_name: ${{ needs.config.outputs.product_name }}
           app_name: ${{ needs.config.outputs.app_name }}
           app_author: ${{ needs.config.outputs.app_author }}
-          # The `_DEVELOP` identity is left empty on purpose. BUILD_TYPE=production never
-          # reads it, and passing it would invite a future edit to make this lane packageable
-          # as dev.
+          # The `_DEVELOP` identity stays empty: BUILD_TYPE=production never reads it.
           environments: ${{ needs.config.outputs.environments }}
           firebase_api_key: ${{ needs.config.outputs.firebase_api_key }}
           firebase_project_id: ${{ needs.config.outputs.firebase_project_id }}
@@ -388,8 +315,8 @@ jobs:
           artifact_suffix: production-${{ runner.os }}
 
       # ── Windows signing material. Windows runner, `signing: production` only. ───
-      # The private key never leaves Cloud HSM; what is acquired here is a certificate chain
-      # (public), a jar, and an access token that expires in an hour.
+      # The key never leaves Cloud HSM: only the public certificate chain, the jar and a one-hour
+      # token come here.
       - name: Java (jsign runtime)
         if: ${{ inputs.signing == 'production' && matrix.os == 'windows-latest' }}
         uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
@@ -420,10 +347,8 @@ jobs:
           Set-Content -Path $file -Value $env:CERT_CHAIN -Encoding ascii
           "WINDOWS_CODESIGN_CERT_FILE=$file" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
-      # A second, separate identity: this one may sign with the key and do nothing else, and its
-      # federation binding accepts only this repository running in `production-distribution`.
-      # The upload identity is acquired later and overwrites these credentials, which is fine —
-      # jsign uses the token captured here.
+      # A signing-only identity, bound to this repository in `production-distribution`. The later
+      # upload identity replaces these credentials; jsign keeps the token captured here.
       - name: Authenticate as the signing identity
         id: signer-auth
         if: ${{ inputs.signing == 'production' && matrix.os == 'windows-latest' }}
@@ -434,10 +359,8 @@ jobs:
           token_format: access_token
 
       # ── Package. Every invocation carries `-p never`. ────────────────────────────
-      # macOS, unsigned — the only macOS path that exists today (PCF-29). Identical to the
-      # devnet lane's Tier A path: CSC_IDENTITY_AUTO_DISCOVERY=false stops electron-builder
-      # picking up whatever identity happens to be in the runner keychain, and
-      # `-c.mac.notarize=false` overrides the hardcoded `notarize: true`.
+      # macOS, unsigned: CSC_IDENTITY_AUTO_DISCOVERY=false ignores any keychain identity, and
+      # `-c.mac.notarize=false` overrides `notarize: true`.
       - name: Package (macOS, unsigned)
         if: ${{ matrix.os == 'macos-latest' }}
         env:
@@ -451,9 +374,8 @@ jobs:
           NODE_ENV: production
         run: npx electron-builder --config electron-builder.js -p never
 
-      # Windows invokes the electron-builder CLI directly via node: the `npx` indirection
-      # returns exit 0 WITHOUT packaging on the windows runner, so the assertion below is
-      # what stops a green job that produced no installer.
+      # Windows runs the electron-builder CLI through node: `npx` exits 0 without packaging there,
+      # hence the assertion below.
       - name: Package (Windows)
         if: ${{ matrix.os == 'windows-latest' }}
         shell: pwsh
@@ -472,9 +394,7 @@ jobs:
           if (-not $exe) { Write-Error "electron-builder produced no .exe in release/dist"; exit 1 }
           Get-ChildItem release\dist | Format-Table Name,Length
 
-      # Trust the operating system's own verdict rather than jsign's exit code: an installer that
-      # packaged cleanly but carries an unverifiable signature is exactly the artifact worth
-      # stopping here.
+      # Trust the operating system's verification rather than jsign's exit code.
       - name: Verify the Authenticode signature
         if: ${{ inputs.signing == 'production' && matrix.os == 'windows-latest' }}
         shell: pwsh
@@ -487,14 +407,11 @@ jobs:
           }
           if ($failed) { Write-Error "at least one installer is not validly signed"; exit 1 }
 
-      # Say loudly, in the run summary, what this artifact actually is. An unsigned build
-      # that looks finished is the failure mode worth engineering against.
+      # Report in the run summary what this artifact is.
       - name: Report what was built
         shell: bash
         env:
-          # Only Windows can be signed today, so report per platform rather than echoing the input:
-          # a run dispatched with `signing: production` still produces unsigned macOS and Linux
-          # artifacts, and the summary has to say which is which.
+          # Per platform: only Windows can be signed.
           SIGNED: ${{ (inputs.signing == 'production' && matrix.os == 'windows-latest') && 'Cloud HSM (Authenticode)' || 'none' }}
         run: |
           set -euo pipefail
@@ -518,10 +435,7 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
-      # `latest*.yml` is electron-updater FEED METADATA. electron-builder writes it because
-      # electron-builder.js always carries a `publish` block, but this lane publishes no
-      # feed and auto-update is off, so it is deliberately not uploaded: an upload is not a
-      # feed, and the surest way to keep it from becoming one is not to hand anyone the file.
+      # `latest*.yml` is update-feed metadata; this lane publishes no feed, so it is not uploaded.
       - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
         with:
           workload_identity_provider: ${{ needs.config.outputs.wif_provider }}
@@ -550,3 +464,32 @@ jobs:
             for f in "${files[@]}"; do echo "gs://${BUILD_BUCKET}/${PREFIX}/$(basename "$f")"; done
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # A signed build tags the commit it built. Rebuilds of a production/* tag are already tagged.
+  tag:
+    name: Tag the signed commit
+    needs: [resolve, build]
+    if: ${{ inputs.signing == 'production' && inputs.ref == '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+
+      - name: Tag the built commit
+        shell: bash
+        env:
+          SHA: ${{ needs.resolve.outputs.sha }}
+        run: |
+          set -euo pipefail
+          DATE=$(date -u +%Y-%m-%d)
+          LAST=$(git ls-remote --tags origin "refs/tags/production/${DATE}.*" \
+            | sed -n "s#.*refs/tags/production/${DATE}\.\([0-9]*\)\$#\1#p" | sort -n | tail -1)
+          TAG="production/${DATE}.$(( ${LAST:-0} + 1 ))"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" "$SHA" -m "Desktop production build ${GITHUB_RUN_NUMBER} (run ${GITHUB_RUN_ID}), signed"
+          git push origin "refs/tags/$TAG"
+          echo "### Tagged \`$TAG\` at ${SHA:0:8}" >> "$GITHUB_STEP_SUMMARY"

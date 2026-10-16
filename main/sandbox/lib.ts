@@ -204,9 +204,7 @@ export function resolveArchiveContent(archive: ProductArchive, url: URL): Archiv
   let content: Uint8Array | string | undefined = archive.files[cleanPath];
 
   if (!content && !hasExtension(originalPath)) {
-    // Archive keys are always forward-slash relative paths. path.join uses the OS
-    // separator, so on Windows it would produce `foo\index.html` and miss the
-    // `foo/index.html` key — use path.posix.join to stay platform-independent.
+    // Archive keys use forward slashes on every OS.
     cleanPath = path.posix.join(originalPath, 'index.html');
     content = archive.files[cleanPath];
 

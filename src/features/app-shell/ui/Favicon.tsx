@@ -64,8 +64,7 @@ export const Favicon = () => {
     const link = getFaviconLink();
     if (!link) return;
 
-    // Not isDev(): that reads the Vite mode, and the shipped DEV build is compiled in
-    // production mode, so it would take the production favicon here.
+    // Not isDev(): the shipped DEV build is compiled in production mode.
     const faviconSrc = isDevelopRelease()
       ? browserTheme === 'dark'
         ? faviconDevDark

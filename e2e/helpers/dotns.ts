@@ -34,8 +34,7 @@ const ENV_TO_DOTNS_TLD: Record<E2eEnvironmentId, string> = {
   // PreviewNet predates the per-network TLD and answers with empty data, so the
   // app falls back.
   unstable: FALLBACK_TLD,
-  // `DotnsProtocolRegistry.tld()` on the PCF devnet (registry
-  // 0xdDF3D3838Ff056F15602fC5a65927f185679C36F) answers ".dot".
+  // `DotnsProtocolRegistry.tld()` on the devnet answers ".dot".
   paseo: '.dot',
 };
 
