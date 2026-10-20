@@ -1,5 +1,16 @@
 import { nanoid } from 'nanoid';
-import { type Observable, concatMap, distinctUntilChanged, from, lastValueFrom, map, merge, mergeMap, pairwise } from 'rxjs';
+import {
+  type Observable,
+  concatMap,
+  distinct,
+  distinctUntilChanged,
+  from,
+  lastValueFrom,
+  map,
+  merge,
+  mergeMap,
+  pairwise,
+} from 'rxjs';
 
 import { type AccountId } from '@/domains/network';
 import { commitmentUseCase, productsResource } from '@/domains/product';
@@ -75,26 +86,29 @@ function messagePeerId(message: ChatMessage): string {
  * message would replay as new on subscribe. And only `outgoing` messages qualify —
  * the product's own replies persist as `incoming`, so relaying those would feed a
  * product its own output and loop.
+ *
+ * Third: one subscription per room. The rooms list re-emits on every rooms-table write
+ * (a user-input change, a new room), and the message stream replays its last list, so
+ * resubscribing per emission would deliver each message once per re-emit. A deleted
+ * room's subscription stays open until the whole stream is unsubscribed — accepted.
  */
 function watchOutgoingMessages(params: { productId: string; userId: AccountId }): Observable<OutgoingProductMessage> {
   return watchProductRooms(params).pipe(
-    mergeMap(rooms =>
-      merge(
-        ...rooms.map(room =>
-          messagesResource.read$({ sessionId: room.sessionId }).pipe(
-            pairwise(),
-            concatMap(([previous, next]) => {
-              const seen = new Set(previous.map(message => message.messageId));
+    mergeMap(rooms => rooms),
+    distinct(room => room.sessionId),
+    mergeMap(room =>
+      messagesResource.read$({ sessionId: room.sessionId }).pipe(
+        pairwise(),
+        concatMap(([previous, next]) => {
+          const seen = new Set(previous.map(message => message.messageId));
 
-              return next.filter(message => !seen.has(message.messageId) && message.status.direction === 'outgoing');
-            }),
-            map((message): OutgoingProductMessage => ({
-              roomId: room.roomId,
-              peerId: messagePeerId(message),
-              content: message.content,
-            })),
-          ),
-        ),
+          return next.filter(message => !seen.has(message.messageId) && message.status.direction === 'outgoing');
+        }),
+        map((message): OutgoingProductMessage => ({
+          roomId: room.roomId,
+          peerId: messagePeerId(message),
+          content: message.content,
+        })),
       ),
     ),
   );

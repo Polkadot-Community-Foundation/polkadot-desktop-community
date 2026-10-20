@@ -15,7 +15,7 @@ import { coreStorageUseCase, productStorageUseCase } from '@/domains/product';
 import { createCoreStorageCallbacks, createProductStorageCallbacks } from './storageCallbacks';
 
 // Both storage use cases end in Dexie; spied in place over two maps so the callbacks'
-// scoping and encoding are what these cases observe.
+// encoding is what these cases observe.
 vi.spyOn(productStorageUseCase, 'readEntry').mockImplementation(key => Promise.resolve(productEntries.get(key)));
 vi.spyOn(productStorageUseCase, 'writeEntry').mockImplementation((key, value) => {
   productEntries.set(key, value);

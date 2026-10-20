@@ -92,6 +92,82 @@ describe('watchProductRooms', () => {
   });
 });
 
+describe('watchOutgoingMessages', () => {
+  let messageSubjects: Map<string, Subject<ChatMessage[]>>;
+
+  function subjectFor(sessionId: string) {
+    let subject = messageSubjects.get(sessionId);
+    if (!subject) {
+      subject = new Subject<ChatMessage[]>();
+      messageSubjects.set(sessionId, subject);
+    }
+
+    return subject;
+  }
+
+  const room2: ProductChatRoom = { ...room, roomId: 'room-2', sessionId: 'product:coinflip:room-2:0xuser' };
+  const outgoing: ChatMessage = {
+    messageId: 'm1',
+    sessionId: room.sessionId,
+    peer,
+    content: { type: 'text', text: 'Hi' },
+    timestamp: 1,
+    status: { direction: 'outgoing', state: 'sent' },
+  };
+
+  beforeEach(() => {
+    seedResources();
+    messageSubjects = new Map();
+    messagesResource.instead(({ sessionId }) => subjectFor(sessionId));
+  });
+
+  it('delivers a message once after the room list re-emits', () => {
+    const collected: unknown[] = [];
+    const subscription = productRoomUseCase
+      .watchOutgoingMessages({ productId: room.productId, userId })
+      .subscribe(message => collected.push(message));
+
+    roomsSubject.next([room]);
+    subjectFor(room.sessionId).next([]);
+    roomsSubject.next([{ ...room, userInput: 'none' }]);
+    roomsSubject.next([{ ...room, userInput: 'text' }]);
+    subjectFor(room.sessionId).next([outgoing]);
+    subscription.unsubscribe();
+
+    expect(collected).toHaveLength(1);
+  });
+
+  it('delivers a message once after another room is added', () => {
+    const collected: unknown[] = [];
+    const subscription = productRoomUseCase
+      .watchOutgoingMessages({ productId: room.productId, userId })
+      .subscribe(message => collected.push(message));
+
+    roomsSubject.next([room]);
+    subjectFor(room.sessionId).next([]);
+    roomsSubject.next([room, room2]);
+    subjectFor(room.sessionId).next([outgoing]);
+    subscription.unsubscribe();
+
+    expect(collected).toHaveLength(1);
+  });
+
+  it('still picks up a room added after subscribe', () => {
+    const collected: unknown[] = [];
+    const subscription = productRoomUseCase
+      .watchOutgoingMessages({ productId: room.productId, userId })
+      .subscribe(message => collected.push(message));
+
+    roomsSubject.next([]);
+    roomsSubject.next([room]);
+    subjectFor(room.sessionId).next([]);
+    subjectFor(room.sessionId).next([outgoing]);
+    subscription.unsubscribe();
+
+    expect(collected).toHaveLength(1);
+  });
+});
+
 describe('createProductChatSession', () => {
   beforeEach(() => {
     seedResources();
