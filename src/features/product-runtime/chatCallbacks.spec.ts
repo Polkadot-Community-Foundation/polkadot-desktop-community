@@ -14,6 +14,7 @@ import { createChatCallbacks } from './chatCallbacks';
 // function over the product chat table, so it runs for real on the fake IndexedDB
 // imported above and the row is read back where it landed.
 const createProductRoomMock = vi.spyOn(productRoomUseCase, 'createProductRoom');
+const setUserInputMock = vi.spyOn(productRoomUseCase, 'setProductRoomUserInput');
 const watchProductRoomsMock = vi.spyOn(productRoomUseCase, 'watchProductRooms');
 
 const USER: `0x${string}` = `0x${'11'.repeat(32)}`;
@@ -82,6 +83,62 @@ describe('createChatCallbacks', () => {
         status: { direction: 'incoming', state: 'new' },
       }),
     );
+  });
+
+  it('stores alt with a posted custom message', async () => {
+    connect();
+
+    const result = { current: createChatCallbacks() };
+    const response = await result.current.chat.postChatMessage(product, {
+      roomId: 'r1',
+      payload: { tag: 'Custom', value: { messageType: 'flip', payload: '0x01' } },
+      alt: 'Coin flip result',
+    });
+
+    const row = await chatDatabase.messages.get(response.messageId);
+    expect(row?.content).toMatchObject({ type: 'custom', alt: 'Coin flip result' });
+  });
+
+  it('maps an Empty footer to user input none', async () => {
+    connect();
+    setUserInputMock.mockResolvedValue('Applied');
+
+    const result = { current: createChatCallbacks() };
+
+    await expect(result.current.chat.setChatRoomFooter(product, { roomId: 'r1', footer: 'Empty' })).resolves.toBeUndefined();
+    expect(setUserInputMock).toHaveBeenCalledWith({ productId: 'demo.dot', roomId: 'r1', userId: USER, userInput: 'none' });
+  });
+
+  it('maps a TextInput footer to user input text', async () => {
+    connect();
+    setUserInputMock.mockResolvedValue('Applied');
+
+    const result = { current: createChatCallbacks() };
+
+    await expect(result.current.chat.setChatRoomFooter(product, { roomId: 'r1', footer: 'TextInput' })).resolves.toBeUndefined();
+    expect(setUserInputMock).toHaveBeenCalledWith({ productId: 'demo.dot', roomId: 'r1', userId: USER, userInput: 'text' });
+  });
+
+  it('rejects setChatRoomFooter with UnknownRoom when the room does not exist', async () => {
+    connect();
+    setUserInputMock.mockResolvedValue('UnknownRoom');
+
+    const result = { current: createChatCallbacks() };
+
+    await expect(result.current.chat.setChatRoomFooter(product, { roomId: 'r1', footer: 'Empty' })).rejects.toEqual({
+      tag: 'UnknownRoom',
+    });
+  });
+
+  it('rejects setChatRoomFooter with Unknown when auth settles disconnected', async () => {
+    truapiRuntimeUseCase.publishAuthState({ tag: 'Disconnected' });
+
+    const result = { current: createChatCallbacks() };
+
+    await expect(result.current.chat.setChatRoomFooter(product, { roomId: 'r1', footer: 'Empty' })).rejects.toMatchObject({
+      tag: 'Unknown',
+    });
+    expect(setUserInputMock).not.toHaveBeenCalled();
   });
 
   it('rejects postChatMessage with Unknown when auth settles disconnected', async () => {

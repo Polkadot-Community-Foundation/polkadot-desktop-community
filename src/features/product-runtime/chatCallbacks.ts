@@ -21,7 +21,7 @@ async function resolveUserId() {
  * The core's Chat capability, served from the host.
  *
  * One binding serves every product: each method takes a `ProductContext`, so there is
- * no per-worker registration. The core's `has_chat` is all-or-nothing across the four
+ * no per-worker registration. The core's `has_chat` is all-or-nothing across the
  * methods, which is why this is a typed `ChatPlatform` rather than a loose object —
  * a missing method must fail at compile time, not as a silent `Unsupported` at runtime.
  */
@@ -71,7 +71,7 @@ export function createChatCallbacks(): ChatCallbacks {
             messageId,
             sessionId: productChatService.getSessionId(product.productId, request.roomId, userId),
             timestamp: Date.now(),
-            content: productRuntimeService.toChatMessageContent(request.payload),
+            content: productRuntimeService.toChatMessageContent(request.payload, request.alt),
             // The chat domain resolves a product's display name live when it builds a
             // session, so a copy stored here would only go stale.
             peer: { type: 'product', productId: product.productId, name: product.productId, icon: '' },
@@ -84,6 +84,27 @@ export function createChatCallbacks(): ChatCallbacks {
         }
 
         return { messageId };
+      },
+
+      // `UnknownRoom` is thrown outside the `try` for the same reason as `PermissionDenied`
+      // above: the catch must not re-wrap it as `Unknown`.
+      setChatRoomFooter: async (product, request) => {
+        const userId = await resolveUserId().catch(() => null);
+        if (!userId) throw { tag: 'Unknown', value: { reason: 'No connected session' } };
+
+        let result: 'Applied' | 'UnknownRoom';
+        try {
+          result = await productRoomUseCase.setProductRoomUserInput({
+            productId: product.productId,
+            roomId: request.roomId,
+            userId,
+            userInput: request.footer === 'TextInput' ? 'text' : 'none',
+          });
+        } catch (reason) {
+          throw { tag: 'Unknown', value: { reason: String(reason) } };
+        }
+
+        if (result === 'UnknownRoom') throw { tag: 'UnknownRoom' };
       },
 
       subscribeChatRooms: product => subscribeRooms(product.productId),

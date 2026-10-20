@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import { type Observable, concatMap, from, lastValueFrom, map, merge, mergeMap, pairwise } from 'rxjs';
+import { type Observable, concatMap, distinctUntilChanged, from, lastValueFrom, map, merge, mergeMap, pairwise } from 'rxjs';
 
 import { type AccountId } from '@/domains/network';
 import { commitmentUseCase, productsResource } from '@/domains/product';
@@ -15,7 +15,7 @@ import {
 import { productChatService } from '../product/service';
 import { type ProductChatRoom } from '../product/types';
 import { chatMessageService } from '../session/service';
-import { type ChatMessage, type ChatSession, type MessageContent, type UserPeer } from '../session/types';
+import { type ChatMessage, type ChatSession, type MessageContent, type RoomUserInput, type UserPeer } from '../session/types';
 
 type CreateRoomParams = {
   roomId: string;
@@ -129,6 +129,12 @@ function createProductChatSession(peer: UserPeer, room: ProductChatRoom): ChatSe
     ),
   );
 
+  // Read from the stored row, not the snapshot: the product changes it while the session lives.
+  const userInput = roomsResource.read$({ accountId: room.userId }).pipe(
+    map((rooms): RoomUserInput => rooms.find(r => r.sessionId === room.sessionId)?.userInput ?? 'text'),
+    distinctUntilChanged(),
+  );
+
   return {
     sessionId: room.sessionId,
     roomId: room.roomId,
@@ -137,6 +143,7 @@ function createProductChatSession(peer: UserPeer, room: ProductChatRoom): ChatSe
     messages,
     lastMessage,
     unreadCount,
+    userInput,
 
     async sendMessage(content: MessageContent) {
       const messageId = nanoid(32);
@@ -169,7 +176,32 @@ function createProductChatSession(peer: UserPeer, room: ProductChatRoom): ChatSe
   };
 }
 
+type SetUserInputParams = {
+  productId: string;
+  roomId: string;
+  userId: AccountId;
+  userInput: RoomUserInput;
+};
+
+async function setProductRoomUserInput(params: SetUserInputParams): Promise<'Applied' | 'UnknownRoom'> {
+  const { productId, roomId, userId, userInput } = params;
+  const sessionId = productChatService.getSessionId(productId, roomId, userId);
+
+  return chatDatabase.rooms.db.transaction('rw', chatDatabase.rooms, async () => {
+    const stored = await chatDatabase.rooms.get(sessionId);
+    if (!stored) return 'UnknownRoom';
+
+    // Every rooms write re-emits `roomsResource` and rebuilds the product sessions, so a repeat must not write.
+    if ((stored.userInput ?? 'text') !== userInput) {
+      await chatDatabase.rooms.update(sessionId, { userInput });
+    }
+
+    return 'Applied';
+  });
+}
+
 export const productRoomUseCase = {
+  setProductRoomUserInput,
   createProductRoom,
   watchOutgoingMessages,
   createProductChatSession,

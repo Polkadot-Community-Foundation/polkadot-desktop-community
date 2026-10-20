@@ -81,6 +81,7 @@ export type CustomContent = {
   type: 'custom';
   messageType: string;
   payload: Uint8Array;
+  alt?: string;
 };
 
 export type ReactionContent = {
@@ -237,6 +238,9 @@ export type ChatMessage = {
   lastUpdate?: number;
 };
 
+/** Whether the user writes messages into a room: `'text'` — yes; `'none'` — the product drives it. */
+export type RoomUserInput = 'text' | 'none';
+
 export type ChatSession = {
   readonly sessionId: string;
   readonly roomId: string;
@@ -248,6 +252,8 @@ export type ChatSession = {
   // Only sessions that support per-peer blocking expose this pair (currently P2P).
   // UI gates the block menu on `setBlocked` being present.
   readonly isBlocked?: Observable<boolean>;
+  // Only product rooms expose this; absent means the user may write.
+  readonly userInput?: Observable<RoomUserInput>;
 
   sendMessage(content: MessageContent): Promise<{ messageId: string }>;
   markAsRead(): Promise<void>;
