@@ -3,7 +3,7 @@ import { test as setup } from '@playwright/test';
 import { CHATPAIR_POOL_SIZE } from '../fixtures/chatPair';
 import { envToNetwork } from '../helpers/environment';
 import { errorMessage } from '../helpers/errors';
-import { slotPath, slotWillRestore, warmSlot } from '../helpers/signing-host';
+import { slotHasIdentity, slotPath, warmSlot } from '../helpers/signing-host';
 
 /**
  * Creates and attests any signer identity the invoked projects need that the cached
@@ -130,7 +130,7 @@ setup('warm signer slots', async () => {
       // A slot whose identity cannot be restored will attest a fresh one. Report it before
       // paying for it — on a tree that should be warm this most often means the cache
       // restore was partial.
-      if (!(await slotWillRestore(basePath, network))) {
+      if (!(await slotHasIdentity(basePath, network))) {
         console.info(`[setup] ${basePath}: no restorable identity, will provision`);
       }
       await warmSlot({ basePath, network });
