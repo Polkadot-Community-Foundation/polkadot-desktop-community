@@ -48,6 +48,9 @@ export const QuickChat = memo(({ open, onOpenChange, children }: QuickChatProps)
   const chatListEntries = useSortedChatList(sessions, outgoingRequests, pendingRequests);
   const requesterNames = useMemo(() => chatService.formatRequesterNames(pendingRequests), [pendingRequests]);
 
+  const userInputStream = useMemo(() => selectedSession?.userInput ?? of('text'), [selectedSession]);
+  const acceptsText = useObservable(userInputStream, 'text') === 'text';
+
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const showList = !selectedSession;
@@ -143,15 +146,15 @@ export const QuickChat = memo(({ open, onOpenChange, children }: QuickChatProps)
               />
 
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                <MessageFlow session={selectedSession} onReply={() => {}} onEdit={() => {}} />
+                <MessageFlow session={selectedSession} />
               </div>
 
-              {selectedSession && (
+              {selectedSession && acceptsText ? (
                 <div className="shrink-0 border-t border-stroke-primary p-1">
                   {sendError && <p className="px-1 pb-1 text-xs text-fg-error">{sendError}</p>}
                   <MessageInput ref={inputRef} submitAction={handleSendMessage} />
                 </div>
-              )}
+              ) : null}
             </div>
           )}
         </div>

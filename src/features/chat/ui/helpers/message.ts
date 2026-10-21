@@ -42,7 +42,7 @@ export function getMessagePreview(message: ChatMessage) {
     case 'edit':
       return message.content.newContent.text ?? '';
     case 'custom':
-      return 'Message';
+      return message.content.alt ?? 'Message';
     case 'transfer':
       return message.status.direction === 'outgoing' ? 'Sent funds' : 'Received funds';
     case 'callSignal':

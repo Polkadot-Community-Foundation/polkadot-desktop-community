@@ -5,7 +5,7 @@ those bytes get on the device, how the product runs in a sandbox, and what it is
 
 Within this codebase, a _product_ is an application (or set of applications) addressable through a
 [dotNS](https://docs.polkadot.cloud/dotns/) name and shipped as an IPFS bundle. Once resolved, a product can run in a sandbox,
-hold its own per-product key, talk to its own per-product storage, and request scoped device or remote permissions.
+hold its own per-product key, talk to its own storage, and request scoped device or remote permissions.
 
 ## Vocabulary
 
@@ -123,7 +123,7 @@ hex-encodes it for the string-keyed table and never interprets either key or val
 > **Why a use case over a bare repository.** There is no cache or identity here to justify a `resource.ts` — the core addresses
 > slots on demand — but `local-rules/enforce-import-restrictions` forbids putting a `repository.ts` on the domain barrel, and it
 > is right to: a repository on the public surface is reachable by symbol from any layer. A use case owning the read/write is the
-> resolution. `productStorageUseCase` (`$usecase/productStorage.ts`) exists for the same reason and covers a product's own
+> resolution. `productStorageUseCase` (`$usecase/productStorage.ts`) exists for the same reason and covers product
 > key/value entries; `productLocalStorageRepository` stays module-internal behind it.
 
 ### Sandbox
@@ -245,7 +245,7 @@ it can ask which slots exist. Every _status_ is read back from the core.
     **derivation index**. Avoid "derivation path" except for a display string.
   - Consequence worth keeping in mind when reading a review: the path is **not reproducible in `polkadot-js` or `subkey`**,
     which can only express string/number path segments.
-- **Product storage** — Per-product, IndexedDB-backed key/value store of `Uint8Array` values, scoped by `productId`.
+- **Product storage** — IndexedDB-backed key/value store of `Uint8Array` values: one row per core-namespaced key; the core owns which product a key belongs to.
 - **Allowance** — an on-chain grant letting a product's slot account store data (Bulletin `TransactionStorage.Authorizations`) or
   statements (People `Resources.StatementStoreAllowances`, one slot per daily period). The slot account key is issued by mobile
   over SSO and cached by host-papp; this domain only _reads_ allowance state (sufficiency pre-check) — granting stays on mobile.
@@ -322,8 +322,9 @@ the persisted/displayed surfaces refresh with no manual cache poke.
 - **Forget** (`productManagementUseCase.forgetProduct`, an **aggregate** use case, → Uncommitted). Detaches from the dashboard
   (`removeIconFromFolder` else `removeCardFromLayout`), then delegates the product-internal teardown to
   `lifecycleUseCase.purgeProduct`: evict the executable-archive caches, then `Promise.all`(delete permissions, `productDb.delete`,
-  evict persisted offline archives via `offlineCacheUseCase.evictArchives`, best-effort local-storage wipe), clear the Electron
+  evict persisted offline archives via `offlineCacheUseCase.evictArchives`), clear the Electron
   sandbox (which also drops the on-disk archives), and — only on a successful delete — fire `onProductForgottenSideEffect`.
+  Product storage is not swept: the host cannot tell a key's owner without a decoder from `@parity/truapi-host`.
   Dashboard detachment lives in the aggregate because it is cross-domain; the domain owns only the purge.
 - **Reconcile** (`reconcileUnpinnedProducts`). The **explicit, owned** refresh of unpinned metadata, run on a defined trigger (app
   launch), never as a side effect of viewing a product. For each unpinned row it re-resolves from chain and, if `productDiffers`,
@@ -361,7 +362,7 @@ on-disk archive store in the main process holds the bytes, and `productExecutabl
 disk store is authoritative, the index is reconciled to it at launch. Two manual cache ops sit outside the resolution flow and
 touch neither the row, the pin state, nor the persisted offline archive: `lifecycleUseCase.refreshProduct(id)` (browser reload —
 evicts the in-memory archive caches so the next load re-fetches) and `lifecycleUseCase.clearProductCache(id)` (product-settings
-"Clear cache" — wipes sandbox session + product local storage). Neither deletes a pinned product's offline bytes; only unpin /
+"Clear cache" — wipes the sandbox session; product storage is not swept, because the host cannot tell a key's owner without a decoder from `@parity/truapi-host`). Neither deletes a pinned product's offline bytes; only unpin /
 forget / reset do.
 
 ### What `pinned` actually changes
@@ -408,7 +409,7 @@ This domain owns:
 - **Permissions broker** — device and remote-URL grants, pattern matching, dedup of in-flight prompts, persistence.
 - **Per-product cryptographic identity** — product accounts on the RFC-0022 path `//product//{productId}/{index}`, with the
   hard part fetched from the paired device and only the soft leaf derived here.
-- **Per-product persistent storage**.
+- **Product persistent storage** — one row per core-namespaced key.
 - **Alias-permission persistence** — decisions for cross-app alias access, raised now as a core review rather than by the retired product container.
 
 **Why one domain, not several.** Some of these areas have self-contained vocabulary — the sandbox runtime (`worker/`),
