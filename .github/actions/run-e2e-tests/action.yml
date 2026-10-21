@@ -180,8 +180,8 @@ runs:
       if: inputs.signer-backed == 'true'
       shell: bash
       env:
-        TRUAPI_HOST_VERSION: 0.23.0-pcf.1
-        TRUAPI_HOST_SHA256: deb6a9eb7262430d5eb51a4df1a96f8866e92908735f0442d36ad7e31b942caa
+        TRUAPI_HOST_VERSION: 0.25.0-pcf.1
+        TRUAPI_HOST_SHA256: 947b39fd49a9fc6bebcb2ce03e06e82b8dca015957a3c75ea757817b9bf49122
       run: |
         set -euo pipefail
         archive="truapi-host-${TRUAPI_HOST_VERSION}-x86_64-unknown-linux-musl.tar.gz"
