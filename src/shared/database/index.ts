@@ -9,8 +9,8 @@ export {
   type DeviceIdentityRow,
   type ProductExecutableCacheRow,
   type ProductExecutableRow,
-  type ProductLocalStorageRow,
   type ProductPermissionsRow,
   type ProductRow,
+  type ProductStorageRow,
   type ThemeSettingsRow,
 } from './types';

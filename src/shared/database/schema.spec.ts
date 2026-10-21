@@ -4,13 +4,14 @@ import Dexie from 'dexie';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { appDatabase, database } from './index';
+import { migrateProductStorageToV12 } from './migrations';
 import { migrateProductPermissionsToV2 } from './schema';
 import { type ProductPermissionsRow } from './types';
 
 const TABLE_NAMES = [
   'products',
   'dashboardLayouts',
-  'productLocalStorage',
+  'productStorage',
   'productExecutableCache',
   'declinedUpdates',
   'coreStorage',
@@ -29,16 +30,17 @@ describe('unified database', () => {
     await Dexie.delete(MIGRATION_DB_NAME);
   });
 
-  it('opens at version 11 with all 9 tables', async () => {
+  it('opens at version 12 with all 9 tables', async () => {
     await appDatabase.open();
-    expect(appDatabase.verno).toBe(11);
+    expect(appDatabase.verno).toBe(12);
     expect(appDatabase.tables.map(t => t.name).sort()).toEqual([...TABLE_NAMES].sort());
   });
 
   it('round-trips a row through a registry table', async () => {
-    await database.productLocalStorage.put({ productId: 'p1', data: { k: new Uint8Array([1, 2, 3]) } });
-    const row = await database.productLocalStorage.get('p1');
-    expect(row?.data['k']).toEqual(new Uint8Array([1, 2, 3]));
+    const value = new Uint8Array([1, 2, 3]);
+    await database.productStorage.put({ key: 'k', value });
+    const row = await database.productStorage.get('k');
+    expect(row?.value).toEqual(value);
   });
 
   it('exposes the productExecutableCache table', async () => {
@@ -152,5 +154,42 @@ describe('unified database', () => {
     expect(migrated.get('x')?.devicePermissions).toEqual([
       { payload: { name: 'Camera' }, modality: 'widget', status: 'granted' },
     ]);
+  });
+
+  // The store map `schema.ts` yields at v11, mirrored to seed a pre-v12 database.
+  const SCHEMA_V11 = {
+    products: 'baseName, pinned, createdAt',
+    dashboardLayouts: 'id, updatedAt',
+    productLocalStorage: 'productId',
+    productExecutableCache: 'key, baseName',
+    declinedUpdates: 'key, baseName',
+    coreStorage: 'key, slotTag, productId, [slotTag+productId]',
+    deviceIdentity: 'id',
+    themeSettings: 'id',
+    lightClientDatabases: 'genesisHash',
+  };
+
+  it('v12 moves every truapi entry to its own row and drops the old store', async () => {
+    const v11 = new Dexie(MIGRATION_DB_NAME);
+    v11.version(11).stores(SCHEMA_V11);
+    await v11.open();
+    await v11.table('productLocalStorage').bulkAdd([
+      { productId: 'truapi', data: { ka: new Uint8Array([1, 2]), kb: new Uint8Array() } },
+      { productId: 'legacy.dot', data: { old: new Uint8Array([9]) } },
+    ]);
+    v11.close();
+
+    const v12 = new Dexie(MIGRATION_DB_NAME);
+    v12.version(11).stores(SCHEMA_V11);
+    v12.version(12).stores({ productStorage: 'key', productLocalStorage: null }).upgrade(migrateProductStorageToV12);
+    await v12.open();
+
+    const rows = await v12.table<{ key: string; value: Uint8Array }>('productStorage').toArray();
+    expect(rows.map(row => [row.key, [...row.value]]).sort()).toEqual([
+      ['ka', [1, 2]],
+      ['kb', []],
+    ]);
+    expect(v12.tables.map(t => t.name)).not.toContain('productLocalStorage');
+    v12.close();
   });
 });

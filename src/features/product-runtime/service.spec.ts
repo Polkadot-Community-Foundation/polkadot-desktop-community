@@ -145,6 +145,31 @@ describe('productRuntimeService.toChatMessageContent', () => {
     expect(result).toEqual({ type: 'custom', messageType: 'vote', payload: new Uint8Array([1, 2]) });
   });
 
+  it('carries alt onto a custom message', () => {
+    const result = productRuntimeService.toChatMessageContent(
+      { tag: 'Custom', value: { messageType: 'vote', payload: '0x0102' } },
+      'Coin flip result',
+    );
+
+    expect(result).toMatchObject({ type: 'custom', alt: 'Coin flip result' });
+  });
+
+  it('drops alt for every other kind', () => {
+    expect(productRuntimeService.toChatMessageContent({ tag: 'Text', value: { text: 'hi' } }, 'x')).toEqual({
+      type: 'text',
+      text: 'hi',
+    });
+  });
+
+  it('leaves alt absent on a custom message sent without one', () => {
+    const result = productRuntimeService.toChatMessageContent({
+      tag: 'Custom',
+      value: { messageType: 'vote', payload: '0x0102' },
+    });
+
+    expect('alt' in result).toBe(false);
+  });
+
   it('falls back for an actions payload', () => {
     expect(productRuntimeService.toChatMessageContent({ tag: 'Actions', value: { actions: [], layout: 'Column' } })).toEqual({
       type: 'text',

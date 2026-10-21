@@ -177,10 +177,10 @@ pairing and then stays up to sign for the rest of the test.
 | `<project>-w<parallelIndex>/` | the worker-scoped `signingHost` fixture in `e2e/fixtures/base.ts` |
 | `chatpair-w<slot><a\|b>/`     | the two-client chat pair in `e2e/fixtures/chatPair.ts`            |
 
-`--session` is deliberately unused: a session name is _provisional_, and the CLI promotes it to the resolved Lite
-username, so reusing one mints a fresh attested identity on every run
-([#807](https://github.com/paritytech/host-rust-core/issues/807)). A directory is a thing this harness owns
-outright. The `chatpair` namespace is separate because `e2e/fixtures/authenticated.ts` also runs under the `chat`
+`--session` never selects an identity. It is passed only when the slot holds none yet (`slotHasIdentity` — a
+`<name>_signing_host/accounts.json` other than `default`, the CLI's own rule), to name the new identity's base. On a
+provisioned slot it is omitted and the CLI restores the session on disk; a base no local session matches would make
+it create another identity every run. A directory is a thing this harness owns outright. The `chatpair` namespace is separate because `e2e/fixtures/authenticated.ts` also runs under the `chat`
 project and already claims `chat-w<index>`.
 
 **The tree is a secret.** Every slot directory holds a plaintext 0600 mnemonic for an attested on-chain identity.
@@ -190,7 +190,8 @@ project and already claims `chat-w<index>`.
 through `restore-keys` to the **newest** matching entry, so a run that provisioned nothing — cancelled early, or
 dead before the first slot warmed — would otherwise write an empty entry that shadows the last good one, and every
 run after it re-mints the whole tree. `.github/actions/run-e2e-tests/action.yml` gates the save on at least one
-`session.json` existing under `.truapi-host`, and warns in the job summary when it skips.
+provisioned session (`accounts.json`, the marker `slotHasIdentity` reads) existing under `.truapi-host`, and warns
+in the job summary when it skips.
 
 **Warming.** `setup-signers` starts `--serve` against each slot and stops once the host reports ready — starting
 the host is the only thing that provisions, so a warm-up built on `exec '/session'` would report success and warm
@@ -200,15 +201,15 @@ chain-side attestation failure would otherwise block every test in the project; 
 and annotated, and that slot provisions inside the first test that claims it (which may exceed that test's
 timeout).
 
-**A username base is spent, not shared.** `--lite-username-prefix` takes a _base_, and a base is a finite
+**A username base is spent, not shared.** `--session` on a fresh slot takes a _base_ (truapi-host 0.25 removed
+`--lite-username-prefix`, and with no `--session` a fresh slot provisions under the CLI's shared `headless` base), and a base is a finite
 chain-level pool rather than a namespace: the identity backend answers `EXHAUSTED` once its 99 discriminators
 (`<base>.01`…`.99`) are owned, and equally once the bare name is owned or its reservation queue (capacity 10) is
 full. `truapi-host` turns any answer but `AVAILABLE` into `lite username "<base>" is taken` and refuses to
 provision — so an exhausted base does not degrade, it stops every identity the suite has yet to mint. One fixed
 base for the whole suite reached that state on 2026-09-17 and failed all four signer-backed projects at once.
 `freshLiteUsernameBase()` therefore mints `truapitest` + 10 random letters per invocation, so no two identities
-ever draw on one pool; the stem keeps the harness's registrations recognisable. The CLI reads the base only when
-it _creates_ an account, so a slot restoring from disk ignores it.
+ever draw on one pool; the stem keeps the harness's registrations recognisable.
 
 **Never interrupt a cold start.** The username registration is POSTed within the first seconds of startup and
 nothing local records that it happened, so any kill mid-provision leaves an attested identity on chain that the
@@ -261,8 +262,8 @@ opts in (`signer-backed` / `identity-cache`, both default `false`) — the same 
 and the macOS/Windows `smoke` rows, and the CLI publishes no Windows or Intel-Mac binary. The identity cache is
 keyed per project **and** per run: entries are immutable, so a fixed key would never pick up identities attested
 after the first save, and `github.run_id` alone collides across matrix shards. A partial cache restore is the
-dangerous case — a dropped `signing-host/current-session` pointer silently provisions a fresh identity — so
-`setup-signers` logs every slot that lacks a restorable identity.
+dangerous case — a slot that lost its account store provisions a fresh identity — so `setup-signers` logs every
+slot that lacks a restorable identity.
 
 ## Recording Tests
 

@@ -15,35 +15,31 @@ import { coreStorageUseCase, productStorageUseCase } from '@/domains/product';
 import { createCoreStorageCallbacks, createProductStorageCallbacks } from './storageCallbacks';
 
 // Both storage use cases end in Dexie; spied in place over two maps so the callbacks'
-// scoping and encoding are what these cases observe.
-vi.spyOn(productStorageUseCase, 'readEntry').mockImplementation((productId, key) =>
-  Promise.resolve(productEntries.get(`${productId}:${key}`)),
-);
-vi.spyOn(productStorageUseCase, 'writeEntry').mockImplementation((productId, key, value) => {
-  productEntries.set(`${productId}:${key}`, value);
+// encoding is what these cases observe.
+vi.spyOn(productStorageUseCase, 'readEntry').mockImplementation(key => Promise.resolve(productEntries.get(key)));
+vi.spyOn(productStorageUseCase, 'writeEntry').mockImplementation((key, value) => {
+  productEntries.set(key, value);
 
   return Promise.resolve();
 });
-vi.spyOn(productStorageUseCase, 'clearEntry').mockImplementation((productId, key) => {
-  productEntries.delete(`${productId}:${key}`);
+vi.spyOn(productStorageUseCase, 'clearEntry').mockImplementation(key => {
+  productEntries.delete(key);
 
   return Promise.resolve();
 });
 const entryStreams = new Map<string, Subject<Uint8Array | undefined>>();
 
-const streamFor = (productId: string, key: string) => {
-  const existing = entryStreams.get(`${productId}:${key}`);
+const streamFor = (key: string) => {
+  const existing = entryStreams.get(key);
   if (existing) return existing;
 
   const created = new Subject<Uint8Array | undefined>();
-  entryStreams.set(`${productId}:${key}`, created);
+  entryStreams.set(key, created);
 
   return created;
 };
 
-vi.spyOn(productStorageUseCase, 'watchEntry').mockImplementation((productId, key): Observable<Uint8Array | undefined> =>
-  streamFor(productId, key),
-);
+vi.spyOn(productStorageUseCase, 'watchEntry').mockImplementation((key): Observable<Uint8Array | undefined> => streamFor(key));
 vi.spyOn(coreStorageUseCase, 'readSlot').mockImplementation(encodedKey => Promise.resolve(coreSlots.get(toKey(encodedKey))));
 vi.spyOn(coreStorageUseCase, 'writeSlot').mockImplementation((...args) => {
   mocks.writeSlot(...args);
@@ -64,13 +60,13 @@ describe('createProductStorageCallbacks', () => {
   });
 
   it('resolves undefined for a key that was never written', async () => {
-    const result = { current: createProductStorageCallbacks('demo.dot') };
+    const result = { current: createProductStorageCallbacks() };
 
     await expect(result.current.productStorage.read('absent')).resolves.toBeUndefined();
   });
 
   it('round-trips a written value', async () => {
-    const result = { current: createProductStorageCallbacks('demo.dot') };
+    const result = { current: createProductStorageCallbacks() };
 
     await result.current.productStorage.write('k', new Uint8Array([7]));
 
@@ -78,7 +74,7 @@ describe('createProductStorageCallbacks', () => {
   });
 
   it('clears a value', async () => {
-    const result = { current: createProductStorageCallbacks('demo.dot') };
+    const result = { current: createProductStorageCallbacks() };
 
     await result.current.productStorage.write('k', new Uint8Array([7]));
     await result.current.productStorage.clear('k');
@@ -86,20 +82,9 @@ describe('createProductStorageCallbacks', () => {
     await expect(result.current.productStorage.read('k')).resolves.toBeUndefined();
   });
 
-  // The core namespaces keys per product before calling, but the host scopes by
-  // productId too — two products must never read each other's slots.
-  it('scopes entries per product', async () => {
-    const { result: first } = { result: { current: createProductStorageCallbacks('a.dot') } };
-    const { result: second } = { result: { current: createProductStorageCallbacks('b.dot') } };
-
-    await first.current.productStorage.write('k', new Uint8Array([1]));
-
-    await expect(second.current.productStorage.read('k')).resolves.toBeUndefined();
-  });
-
   // The core takes hex on the wire, not bytes, and `None` means the key was cleared.
   it('emits each change as hex, and a cleared key as undefined', async () => {
-    const { productStorage } = createProductStorageCallbacks('demo.dot');
+    const { productStorage } = createProductStorageCallbacks();
     const items: (string | undefined)[] = [];
 
     const pump = (async () => {
@@ -109,8 +94,8 @@ describe('createProductStorageCallbacks', () => {
       }
     })();
 
-    streamFor('demo.dot', 'k').next(new Uint8Array([1, 2]));
-    streamFor('demo.dot', 'k').next(undefined);
+    streamFor('k').next(new Uint8Array([1, 2]));
+    streamFor('k').next(undefined);
     await pump;
 
     expect(items).toEqual(['0x0102', undefined]);
@@ -118,7 +103,7 @@ describe('createProductStorageCallbacks', () => {
 
   // Upstream: "A write that leaves the stored bytes unchanged emits nothing."
   it('drops a write that did not change the bytes', async () => {
-    const { productStorage } = createProductStorageCallbacks('demo.dot');
+    const { productStorage } = createProductStorageCallbacks();
     const items: (string | undefined)[] = [];
 
     const pump = (async () => {
@@ -128,9 +113,9 @@ describe('createProductStorageCallbacks', () => {
       }
     })();
 
-    streamFor('demo.dot', 'k').next(new Uint8Array([1]));
-    streamFor('demo.dot', 'k').next(new Uint8Array([1]));
-    streamFor('demo.dot', 'k').next(new Uint8Array([2]));
+    streamFor('k').next(new Uint8Array([1]));
+    streamFor('k').next(new Uint8Array([1]));
+    streamFor('k').next(new Uint8Array([2]));
     await pump;
 
     expect(items).toEqual(['0x01', '0x02']);
