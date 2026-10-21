@@ -10,22 +10,22 @@ type ProductStorageCallbacks = Pick<RequiredHostCallbacks, 'productStorage'>;
 type CoreStorageCallbacks = Pick<RequiredHostCallbacks, 'coreStorage'>;
 
 /**
- * Product-scoped key/value storage. The core namespaces keys before calling, so
- * `key` is opaque here; the host scopes by `productId` on top of that, which is
- * what keeps one product out of another's entries.
+ * Product key/value storage. Keys arrive core-namespaced and may belong to another
+ * product on a read the core granted, which is why the host looks up by key alone
+ * and leaves ownership to the core.
  */
-export function createProductStorageCallbacks(productId: string): ProductStorageCallbacks {
+export function createProductStorageCallbacks(): ProductStorageCallbacks {
   return {
     productStorage: {
-      read: key => productStorageUseCase.readEntry(productId, key),
-      write: (key, value) => productStorageUseCase.writeEntry(productId, key, value),
-      clear: key => productStorageUseCase.clearEntry(productId, key),
+      read: key => productStorageUseCase.readEntry(key),
+      write: (key, value) => productStorageUseCase.writeEntry(key, value),
+      clear: key => productStorageUseCase.clearEntry(key),
       // The wire carries hex, not bytes, so the conversion happens here and the
       // domain stream stays in `Uint8Array`. Comparing the converted string is also
       // what makes the "unchanged write emits nothing" rule a plain `===`.
       subscribeStorage: key =>
         observableToAsyncIterable(
-          productStorageUseCase.watchEntry(productId, key).pipe(
+          productStorageUseCase.watchEntry(key).pipe(
             map(value => (value === undefined ? undefined : scale.bytesToHex(value))),
             distinctUntilChanged(),
             map(value => ok({ value })),

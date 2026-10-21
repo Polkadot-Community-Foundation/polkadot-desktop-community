@@ -1,5 +1,6 @@
 import Dexie, { type Table, type Transaction } from 'dexie';
 
+import { migrateProductStorageToV12 } from './migrations';
 import {
   type CoreStorageRow,
   type DashboardLayoutRow,
@@ -7,15 +8,15 @@ import {
   type DeviceIdentityRow,
   type LightClientDatabaseRow,
   type ProductExecutableCacheRow,
-  type ProductLocalStorageRow,
   type ProductPermissionsRow,
   type ProductRow,
+  type ProductStorageRow,
   type ThemeSettingsRow,
 } from './types';
 
 export const APP_DB_NAME = 'polkadot-desktop-app-v1';
 
-// Full schema at v1. Future bumps append `version(N).stores(SCHEMA_VN).upgrade(fn)`.
+// Full schema at v1. Later bumps append `version(N).stores(<delta>)`, with `.upgrade(fn)` when rows move.
 const SCHEMA_V1 = {
   products: 'baseName, pinned, createdAt',
   dashboardLayouts: 'id, updatedAt',
@@ -97,13 +98,18 @@ dexie.version(10).stores({ productPermissions: null, aliasPermissions: null });
 // store needs no `.upgrade()` — there is nothing to migrate. The rows are disposable
 // smoldot state: dropping one costs a resync of that chain, never correctness.
 dexie.version(11).stores({ lightClientDatabases: 'genesisHash' });
+// v12: product storage becomes one row per key, replacing the single legacy row that
+// held every entry. A write is then one atomic put and never re-saves other data; only
+// the one row the host used was ever read by the core, so only it is carried over. The
+// old store is read inside this upgrade and deleted after it.
+dexie.version(12).stores({ productStorage: 'key', productLocalStorage: null }).upgrade(migrateProductStorageToV12);
 
 export const appDatabase = dexie;
 
 export const database = {
   products: dexie.table<ProductRow, string>('products'),
   dashboardLayouts: dexie.table<DashboardLayoutRow, string>('dashboardLayouts'),
-  productLocalStorage: dexie.table<ProductLocalStorageRow, string>('productLocalStorage'),
+  productStorage: dexie.table<ProductStorageRow, string>('productStorage'),
   productExecutableCache: dexie.table<ProductExecutableCacheRow, string>('productExecutableCache'),
   declinedUpdates: dexie.table<DeclinedUpdateRow, string>('declinedUpdates'),
   coreStorage: dexie.table<CoreStorageRow, string>('coreStorage'),

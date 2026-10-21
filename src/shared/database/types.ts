@@ -63,9 +63,9 @@ export type ProductPermissionsRow = {
   remotePermissions: { payload: Record<string, unknown>; modality?: string; status: string }[];
 };
 
-export type ProductLocalStorageRow = {
-  productId: string;
-  data: Record<string, Uint8Array>;
+export type ProductStorageRow = {
+  key: string; // the core-namespaced key, opaque to the host
+  value: Uint8Array;
 };
 
 export type CoreStorageRow = {
@@ -127,7 +127,7 @@ export type LightClientDatabaseRow = {
 export type AppTableName =
   | 'products'
   | 'dashboardLayouts'
-  | 'productLocalStorage'
+  | 'productStorage'
   | 'productExecutableCache'
   | 'declinedUpdates'
   | 'coreStorage'

@@ -20,7 +20,7 @@ One unified migration flow for `polkadot-desktop-app-v1`.
    ```
 
 2. Re-export it from `index.ts`.
-3. In `../schema.ts`, add `SCHEMA_V<N>` (the full store map after the change) and
-   append `dexie.version(<N>).stores(SCHEMA_V<N>).upgrade(migrateThing)`.
+3. In `../schema.ts`, append `dexie.version(<N>).stores(<delta>)` — only the stores that
+   change, `null` deleting one — with `.upgrade(migrateThing)` when rows move.
 
 Keep migrations idempotent. Index-only changes need no upgrade callback.

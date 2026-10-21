@@ -103,7 +103,7 @@ function toModalProps(review: UserConfirmationReview): ReviewModalProps {
  * a text placeholder rather than being dropped, so a product that sends one still
  * produces a visible message.
  */
-function toChatMessageContent(payload: ChatMessageContent): MessageContent {
+function toChatMessageContent(payload: ChatMessageContent, alt?: string): MessageContent {
   switch (payload.tag) {
     case 'Text':
       return { type: 'text', text: payload.value.text };
@@ -114,7 +114,12 @@ function toChatMessageContent(payload: ChatMessageContent): MessageContent {
     case 'ReactionRemoved':
       return { type: 'reactionRemoved', messageId: payload.value.messageId, emoji: payload.value.emoji };
     case 'Custom':
-      return { type: 'custom', messageType: payload.value.messageType, payload: fromHex(payload.value.payload) };
+      return {
+        type: 'custom',
+        messageType: payload.value.messageType,
+        payload: fromHex(payload.value.payload),
+        ...(alt === undefined ? {} : { alt }),
+      };
     default:
       return { type: 'text', text: 'Unsupported message format' };
   }

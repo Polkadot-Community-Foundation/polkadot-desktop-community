@@ -44,7 +44,7 @@ import { DEFAULT_TIMEOUT, VERY_LONG_TIMEOUT } from './timeouts';
 // persists the worker's auth session there (`domains/product/core-storage/`).
 // Adding it here would log every worker out on the first soft-reset and force a
 // full re-sign-in per test. The session is no longer localStorage-only.
-const APP_DB_STORES_TO_CLEAR = ['products', 'dashboardLayouts', 'productLocalStorage', 'productExecutableCache'] as const;
+const APP_DB_STORES_TO_CLEAR = ['products', 'dashboardLayouts', 'productStorage', 'productExecutableCache'] as const;
 
 // The chat domain keeps its own standalone Dexie DBs. Every object store in
 // these holds per-test chat state — wipe all of them.

@@ -15,8 +15,8 @@ type MessageContextMenuProps = {
   position: { x: number; y: number };
   isEdited?: boolean;
   onClose: () => void;
-  onReply: (message: ChatMessage) => void;
-  onEdit: (message: ChatMessage) => void;
+  onReply?: (message: ChatMessage) => void;
+  onEdit?: (message: ChatMessage) => void;
   onCopyText: (message: ChatMessage) => void;
   onViewEditHistory?: (message: ChatMessage) => void;
   onToggleReaction?: (messageId: string, emoji: string) => void;
@@ -115,12 +115,12 @@ export const MessageContextMenu = ({
   );
 
   const handleReply = () => {
-    onReply(message);
+    onReply?.(message);
     onClose();
   };
 
   const handleEdit = () => {
-    onEdit(message);
+    onEdit?.(message);
     onClose();
   };
 
@@ -163,12 +163,14 @@ export const MessageContextMenu = ({
             className="pointer-events-auto flex w-52 flex-col gap-1 rounded-lg border border-stroke-primary bg-bg-surface-container p-1 shadow-[0px_4px_6px_-1px_var(--shadow-soft),0px_2px_4px_-2px_var(--shadow-soft)]"
           >
             <div className="flex w-full flex-col">
-              <MenuItem
-                testId={TEST_IDS.chatMessageContextMenuReply}
-                icon={Reply}
-                label={t('common.action.reply')}
-                onClick={handleReply}
-              />
+              {onReply ? (
+                <MenuItem
+                  testId={TEST_IDS.chatMessageContextMenuReply}
+                  icon={Reply}
+                  label={t('common.action.reply')}
+                  onClick={handleReply}
+                />
+              ) : null}
               <MenuItem
                 testId={TEST_IDS.chatMessageContextMenuCopy}
                 icon={Copy}
@@ -180,7 +182,7 @@ export const MessageContextMenu = ({
             <div className="h-px w-full bg-stroke-secondary" />
 
             <div className="flex w-full flex-col">
-              {isEditable ? (
+              {isEditable && onEdit ? (
                 <MenuItem
                   testId={TEST_IDS.chatMessageContextMenuEdit}
                   icon={SquarePen}

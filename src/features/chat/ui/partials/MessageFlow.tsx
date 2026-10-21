@@ -30,8 +30,8 @@ import { TransferMessageBubble } from './TransferMessageBubble';
 
 type ChatConversationViewProps = {
   session: ChatSession;
-  onReply(message: ChatMessage): void;
-  onEdit(message: ChatMessage, displayText: string): void;
+  onReply?(message: ChatMessage): void;
+  onEdit?(message: ChatMessage, displayText: string): void;
 };
 
 type ContextMenuState = {
@@ -242,10 +242,14 @@ export const MessageFlow = ({ session, onReply, onEdit }: ChatConversationViewPr
           isEdited={latestEdits.has(contextMenu.message.messageId)}
           onClose={handleCloseContextMenu}
           onReply={onReply}
-          onEdit={msg => {
-            const editText = latestEdits.get(msg.messageId)?.text ?? getPlainText(msg.content);
-            onEdit(msg, editText);
-          }}
+          onEdit={
+            onEdit
+              ? msg => {
+                  const editText = latestEdits.get(msg.messageId)?.text ?? getPlainText(msg.content);
+                  onEdit(msg, editText);
+                }
+              : undefined
+          }
           onCopyText={handleCopyText}
           onViewEditHistory={handleViewEditHistory}
           onToggleReaction={onToggleReaction}

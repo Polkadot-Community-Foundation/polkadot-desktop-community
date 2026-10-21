@@ -46,8 +46,7 @@ const LOWERCASE_ASCII = 'abcdefghijklmnopqrstuvwxyz';
  * the lot. A base used exactly once cannot be drawn down at all, which is why the
  * previous signing-bot harness randomised its bases too.
  *
- * Exported for unit testing; the CLI only ever consults this when *creating* an account,
- * so a slot that restores its identity from disk ignores whatever is passed.
+ * Exported for unit testing. Passed only to a slot with no identity yet (`serveArgs`).
  */
 export function freshLiteUsernameBase(): string {
   const letters = Array.from({ length: LITE_USERNAME_ENTROPY_LETTERS }, () => LOWERCASE_ASCII[randomInt(LOWERCASE_ASCII.length)]);
@@ -101,13 +100,11 @@ const EXEC_TIMEOUT_MS = 60_000;
 const STOP_GRACE_MS = 5_000;
 
 /**
- * Per-slot signer directory. Identity is addressed by PATH, not by `--session`.
+ * Per-slot signer directory. Identity is addressed by PATH: `--session` only names the
+ * base of a slot's first identity (`serveArgs`), never selects one.
  *
- * paritytech/host-rust-core#807 adds an alias so a promoted provisional name resolves
- * again, which removes the mint-per-run hazard that first ruled `--session` out. The
- * base-path model stays regardless: a directory is a thing this harness owns outright,
- * where a session name is a key the CLI interprets. The alias only applies to sessions
- * promoted by a fixed binary, so a slot promoted by an older one behaves as before.
+ * A directory is a thing this harness owns outright, where a session name is a key the
+ * CLI interprets — and a fresh base per identity means no name would ever match twice.
  */
 export function slotPath(project: string, parallelIndex: number, suffix = ''): string {
   if (!Number.isInteger(parallelIndex) || parallelIndex < 0) {
@@ -118,51 +115,49 @@ export function slotPath(project: string, parallelIndex: number, suffix = ''): s
 }
 
 /**
- * Whether a slot will restore its existing identity rather than silently provisioning a
- * new one.
+ * Whether the slot already holds an identity the CLI will select on its own.
  *
- * On 0.16.0 stable, selection is driven entirely by the `current-session` pointer file,
- * never by the accounts present on disk. If that file is missing, or names a directory
- * that no longer exists, the CLI falls back to the `default` session — which reports
- * `<not provisioned>` — and a `--serve` in that state attests a fresh identity while the
- * real one sits unused beside it.
+ * Mirrors the CLI's own rule (`SessionCatalog::current_session`, truapi-host 0.25): a
+ * session counts once its `<name>_signing_host` directory holds `accounts.json`, and the
+ * `default` session is not one of ours. With one such session the CLI restores it even
+ * when the `current-session` pointer is lost; with none it falls back to `default`, which
+ * provisions under the shared `headless` base.
  *
- * Checks the pointer, not the account count: a slot holding two account directories is
- * benign (the pointer decides), while a slot holding one account and a broken pointer is
- * the case that costs an identity. Keys on `session.json`, observed in a provisioned
- * session directory and absent from an unprovisioned one.
- *
- * paritytech/host-rust-core#808 changes the fallback: a lost or dangling pointer now
- * adopts the one provisioned directory (warning), or hard-errors when several exist. So
- * once that ships this predicts "will this restore silently, loudly, or not at all"
- * rather than "will this quietly mint an identity" — still worth reporting, no longer
- * the difference between a warm run and a spent suffix.
- *
- * TODO(truapi-host): simplify to a plain "does this slot have an identity" check once
- * the #808 behaviour is in a release the installer resolves.
+ * This decides whether a start names a fresh base (see `serveArgs`), so it must agree
+ * with the CLI: a false negative mints a second identity beside the real one.
  */
-export async function slotWillRestore(basePath: string, network: string): Promise<boolean> {
+export async function slotHasIdentity(basePath: string, network: string): Promise<boolean> {
   const root = path.join(basePath, 'v2', network);
-  try {
-    const pointer = (await fs.readFile(path.join(root, 'signing-host', 'current-session'), 'utf8')).trim();
-    if (!pointer) return false;
-    await fs.access(path.join(root, `${pointer}_signing_host`, 'session.json'));
+  const entries = await fs.readdir(root, { withFileTypes: true }).catch(() => []);
 
-    return true;
-  } catch {
-    return false;
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !entry.name.endsWith('_signing_host') || entry.name === 'default_signing_host') continue;
+
+    const hasAccountStore = await fs
+      .access(path.join(root, entry.name, 'accounts.json'))
+      .then(() => true)
+      .catch(() => false);
+    if (hasAccountStore) return true;
   }
+
+  return false;
+}
+
+/** No `--session`: the CLI selects the slot's session itself — see `slotHasIdentity`. */
+function baseArgs(basePath: string, network: string): string[] {
+  return ['signing-host', '--base-path', basePath, '--network', network];
 }
 
 /**
- * No `--session`: the CLI auto-selects the account already under `basePath`.
- *
- * The base is minted per call rather than held for the slot, because the CLI reads it
- * only when it creates an account — at most one call per slot ever does, and every other
- * one (a restart, an `exec`) passes a base that is never looked at.
+ * A start on a slot with no identity names a fresh base through `--session`, the only
+ * way the CLI takes one. A start on a provisioned slot must NOT: a base no local session
+ * matches makes the CLI create a new session, so it would mint an identity every run
+ * instead of restoring the one on disk.
  */
-function baseArgs(basePath: string, network: string): string[] {
-  return ['signing-host', '--base-path', basePath, '--network', network, '--lite-username-prefix', freshLiteUsernameBase()];
+async function serveArgs(basePath: string, network: string): Promise<string[]> {
+  const session = (await slotHasIdentity(basePath, network)) ? [] : ['--session', freshLiteUsernameBase()];
+
+  return [...baseArgs(basePath, network), ...session];
 }
 
 /** Run one `exec '<command>'` and resolve with its stdout. Rejects on non-zero exit. */
@@ -320,7 +315,8 @@ export class SigningHost {
   private async spawnServe(network: string, extra: string[]): Promise<void> {
     if (this.child) await this.stop();
 
-    const child = spawn(SIGNING_HOST_BIN, [...baseArgs(this.basePath, network), '--serve', '--auto-accept', ...extra], {
+    const args = await serveArgs(this.basePath, network);
+    const child = spawn(SIGNING_HOST_BIN, [...args, '--serve', '--auto-accept', ...extra], {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     this.child = child;

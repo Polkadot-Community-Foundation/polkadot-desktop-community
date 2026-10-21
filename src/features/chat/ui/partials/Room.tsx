@@ -39,6 +39,8 @@ export const Room = ({ session, initialSearch, onDeleted }: ChatConversationView
   );
   const blockedStream = useMemo(() => session.isBlocked ?? of(false), [session.isBlocked]);
   const isBlocked = useObservable(blockedStream, false);
+  const userInputStream = useMemo(() => session.userInput ?? of('text'), [session.userInput]);
+  const acceptsText = useObservable(userInputStream, 'text') === 'text';
   const canBlock = typeof session.setBlocked === 'function';
 
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
@@ -307,48 +309,54 @@ export const Room = ({ session, initialSearch, onDeleted }: ChatConversationView
           onSelect={handleSelectResult}
         />
       ) : (
-        <MessageFlow session={session} onReply={handleReply} onEdit={handleEdit} />
+        <MessageFlow
+          session={session}
+          onReply={acceptsText ? handleReply : undefined}
+          onEdit={acceptsText ? handleEdit : undefined}
+        />
       )}
 
-      <div className="shrink-0 border-t border-stroke-primary">
-        {isBlocked ? (
-          <div className="flex items-center justify-between gap-3 p-3">
-            <p className="text-sm leading-4.5 text-fg-secondary">{t('feature.chat.blockedNotice', { name: sessionName })}</p>
-            <Button variant="ghost" size="sm" onClick={handleToggleBlocked}>
-              {t('feature.chat.unblock')}
-            </Button>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2 p-2">
-            {sendError && <p className="px-1 text-xs text-fg-error">{sendError}</p>}
-            <MessageInput
-              ref={inputRef}
-              initialText={editingMessage?.text}
-              preview={
-                replyingTo
-                  ? {
-                      testId: TEST_IDS.chatReplyComposer,
-                      title:
-                        replyingTo.status.direction === 'outgoing'
-                          ? t('feature.chat.replyToYourself')
-                          : t('feature.chat.replyTo', { name: sessionName }),
-                      text: getMessagePreview(replyingTo),
-                      onClose: handleCancelReply,
-                    }
-                  : editingMessage
+      {acceptsText ? (
+        <div className="shrink-0 border-t border-stroke-primary">
+          {isBlocked ? (
+            <div className="flex items-center justify-between gap-3 p-3">
+              <p className="text-sm leading-4.5 text-fg-secondary">{t('feature.chat.blockedNotice', { name: sessionName })}</p>
+              <Button variant="ghost" size="sm" onClick={handleToggleBlocked}>
+                {t('feature.chat.unblock')}
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2 p-2">
+              {sendError && <p className="px-1 text-xs text-fg-error">{sendError}</p>}
+              <MessageInput
+                ref={inputRef}
+                initialText={editingMessage?.text}
+                preview={
+                  replyingTo
                     ? {
-                        testId: TEST_IDS.chatEditComposer,
-                        title: t('feature.chat.editingMessage'),
-                        text: editingMessage.text,
-                        onClose: handleCancelEdit,
+                        testId: TEST_IDS.chatReplyComposer,
+                        title:
+                          replyingTo.status.direction === 'outgoing'
+                            ? t('feature.chat.replyToYourself')
+                            : t('feature.chat.replyTo', { name: sessionName }),
+                        text: getMessagePreview(replyingTo),
+                        onClose: handleCancelReply,
                       }
-                    : undefined
-              }
-              submitAction={handleSendMessage}
-            />
-          </div>
-        )}
-      </div>
+                    : editingMessage
+                      ? {
+                          testId: TEST_IDS.chatEditComposer,
+                          title: t('feature.chat.editingMessage'),
+                          text: editingMessage.text,
+                          onClose: handleCancelEdit,
+                        }
+                      : undefined
+                }
+                submitAction={handleSendMessage}
+              />
+            </div>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 };
