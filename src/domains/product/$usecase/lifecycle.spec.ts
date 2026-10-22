@@ -8,7 +8,6 @@ vi.mock(import('@/shared/env'), async importOriginal => ({
 
 import { isElectron } from '@/shared/env';
 import { type HexString } from '@/shared/types';
-import { productLocalStorageRepository } from '../local-storage/repository';
 import { declinedUpdatesRepository } from '../product/declined-updates/repository';
 import { type ExecutableKind } from '../product/manifest/constants';
 import { executableArchiveResource } from '../product/manifest/resource';
@@ -25,7 +24,6 @@ vi.spyOn(productDb, 'delete');
 vi.spyOn(productDb, 'getByBaseName');
 vi.spyOn(coreStorageUseCase, 'clearProductSlots');
 vi.spyOn(permissionsUseCase, 'clearProductPermissions');
-vi.spyOn(productLocalStorageRepository, 'clearAllEntries');
 vi.spyOn(declinedUpdatesRepository, 'deleteByBaseName');
 vi.spyOn(offlineCacheUseCase, 'evictArchives').mockResolvedValue();
 
@@ -42,7 +40,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(permissionsUseCase.clearProductPermissions).mockResolvedValue(undefined);
   vi.mocked(coreStorageUseCase.clearProductSlots).mockResolvedValue(undefined);
-  vi.mocked(productLocalStorageRepository.clearAllEntries).mockResolvedValue(undefined);
   vi.mocked(declinedUpdatesRepository.deleteByBaseName).mockResolvedValue(undefined);
   vi.mocked(isElectron).mockReturnValue(true);
   vi.mocked(productDb.getByBaseName).mockReturnValue(ResultAsync.fromSafePromise(Promise.resolve(null)));
@@ -79,23 +76,6 @@ describe('purgeProduct', () => {
 
     expect(clearProductSandboxData).toHaveBeenCalledTimes(1);
     expect(clearProductSandboxData).toHaveBeenCalledWith('app.dot');
-  });
-
-  it('clears the product local storage entries on every platform', async () => {
-    vi.mocked(productDb.delete).mockReturnValue(okResult());
-
-    await lifecycleUseCase.purgeProduct('app.dot');
-
-    expect(productLocalStorageRepository.clearAllEntries).toHaveBeenCalledWith('app.dot');
-  });
-
-  it('clears the product local storage entries even in web mode', async () => {
-    vi.mocked(productDb.delete).mockReturnValue(okResult());
-    vi.mocked(isElectron).mockReturnValue(false);
-
-    await lifecycleUseCase.purgeProduct('app.dot');
-
-    expect(productLocalStorageRepository.clearAllEntries).toHaveBeenCalledWith('app.dot');
   });
 
   it('does not call the sandbox IPC in web mode', async () => {
@@ -218,18 +198,6 @@ describe('purgeProduct', () => {
     warn.mockRestore();
   });
 
-  it('still clears the sandbox partition when clearAllEntries rejects (best-effort)', async () => {
-    vi.mocked(productDb.delete).mockReturnValue(okResult());
-    vi.mocked(productLocalStorageRepository.clearAllEntries).mockRejectedValue(new Error('dexie-locked'));
-    vi.mocked(isElectron).mockReturnValue(true);
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-    await expect(lifecycleUseCase.purgeProduct('app.dot')).resolves.toBe(true);
-    expect(clearProductSandboxData).toHaveBeenCalledWith('app.dot');
-    expect(warn).toHaveBeenCalled();
-    warn.mockRestore();
-  });
-
   it('does not await clearProductSandboxData (fire-and-forget)', async () => {
     vi.mocked(productDb.delete).mockReturnValue(okResult());
     vi.mocked(isElectron).mockReturnValue(true);
@@ -250,23 +218,20 @@ describe('purgeProduct', () => {
 });
 
 describe('clearProductCache', () => {
-  it('clears sandbox session data and product storage in Electron mode', async () => {
+  it('clears sandbox session data in Electron mode', async () => {
     vi.mocked(isElectron).mockReturnValue(true);
 
     await lifecycleUseCase.clearProductCache('app.dot');
 
     expect(clearProductData).toHaveBeenCalledTimes(1);
     expect(clearProductData).toHaveBeenCalledWith('app.dot');
-    expect(productLocalStorageRepository.clearAllEntries).toHaveBeenCalledTimes(1);
-    expect(productLocalStorageRepository.clearAllEntries).toHaveBeenCalledWith('app.dot');
   });
 
-  it('skips sandbox IPC in web mode but still clears product storage', async () => {
+  it('skips sandbox IPC in web mode', async () => {
     vi.mocked(isElectron).mockReturnValue(false);
 
     await lifecycleUseCase.clearProductCache('app.dot');
 
     expect(clearProductData).not.toHaveBeenCalled();
-    expect(productLocalStorageRepository.clearAllEntries).toHaveBeenCalledWith('app.dot');
   });
 });

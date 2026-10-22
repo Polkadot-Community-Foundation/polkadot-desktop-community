@@ -19,11 +19,6 @@ type Deps = {
   onAuthState: (state: AuthState) => void;
 };
 
-// The core prefixes every product-storage key with the calling product before it
-// reaches the host, so this scope only separates core-routed product storage from
-// anything else sharing the table.
-const HOST_PRODUCT_SCOPE = 'truapi';
-
 /**
  * The complete host surface the core requires.
  *
@@ -45,11 +40,7 @@ export function createHostCallbacks({ prompts, onAuthState }: Deps): RequiredHos
       void router.navigate({ to: '/product/$id/{-$route}', params: { id: identifier, route } });
     }),
     ...createCoreStorageCallbacks(),
-    // `productStorage` is the odd one: it is per-product, while the core takes one
-    // host surface for the whole runtime. The core namespaces product keys before
-    // calling, so a host-level binding is correct — the product scope it would
-    // otherwise add is already in the key.
-    ...createProductStorageCallbacks(HOST_PRODUCT_SCOPE),
+    ...createProductStorageCallbacks(),
     ...createProductOperationsCallbacks(),
     ...prompts,
     auth: { authStateChanged: onAuthState },

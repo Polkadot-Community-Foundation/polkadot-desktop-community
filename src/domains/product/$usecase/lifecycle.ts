@@ -1,6 +1,5 @@
 import { createSideEffect } from '@/shared/di';
 import { isElectron } from '@/shared/env';
-import { productLocalStorageRepository } from '../local-storage/repository';
 import { EXECUTABLE_KINDS, invalidateExecutableArchive, productDb } from '../product';
 import { declinedUpdatesRepository } from '../product/declined-updates/repository';
 
@@ -13,8 +12,8 @@ const onProductForgottenSideEffect = createSideEffect<{ productId: string }>({
   name: 'onProductForgotten',
 });
 
-// Product-internal teardown: drop the row, its permissions, cached archives and
-// local storage, then clear the sandbox. Dashboard detachment is a cross-domain
+// Product-internal teardown: drop the row, its permissions and cached archives,
+// then clear the sandbox. Dashboard detachment is a cross-domain
 // concern owned by the product-management aggregate, which calls this after it
 // has removed the product from the dashboard.
 async function purgeProduct(productId: string): Promise<boolean> {
@@ -45,12 +44,6 @@ async function purgeProduct(productId: string): Promise<boolean> {
     coreStorageUseCase.clearProductSlots({ productId, tld }),
     productDb.delete(productId),
     offlineCacheUseCase.evictArchives(productId),
-    // Best-effort: a failing local-storage wipe must not abort the rest of the
-    // reset (sandbox clear below, side-effect fan-out). Without the catch,
-    // Promise.all would reject and skip them.
-    productLocalStorageRepository.clearAllEntries(productId).catch(error => {
-      console.warn('clearAllEntries failed for', productId, error);
-    }),
     // Best-effort: a failing declined-updates wipe must not abort the rest of
     // the reset, otherwise declined rows would leak past a forget.
     declinedUpdatesRepository.deleteByBaseName(productId).catch(error => {
@@ -79,10 +72,9 @@ function refreshProduct(domain: string) {
 }
 
 async function clearProductCache(productId: string): Promise<void> {
-  await Promise.all([
-    isElectron() ? window.App.clearProductData(productId) : Promise.resolve(),
-    productLocalStorageRepository.clearAllEntries(productId),
-  ]);
+  if (isElectron()) {
+    await window.App.clearProductData(productId);
+  }
 }
 
 export const lifecycleUseCase = {

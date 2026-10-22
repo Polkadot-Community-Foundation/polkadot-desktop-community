@@ -1,8 +1,10 @@
+import fs from 'fs/promises';
+import os from 'os';
 import path from 'path';
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { CACHE_ROOT, PAIRED_LINE, freshLiteUsernameBase, slotPath, stripAnsi } from './signing-host';
+import { CACHE_ROOT, PAIRED_LINE, freshLiteUsernameBase, slotHasIdentity, slotPath, stripAnsi } from './signing-host';
 
 describe('slotPath', () => {
   it('joins project and worker index under the cache root', () => {
@@ -87,5 +89,56 @@ describe('freshLiteUsernameBase', () => {
     const bases = new Set(Array.from({ length: 50 }, () => freshLiteUsernameBase()));
 
     expect(bases.size).toBe(50);
+  });
+});
+
+describe('slotHasIdentity', () => {
+  const network = 'paseo-next-v2';
+  let basePath: string;
+
+  beforeEach(async () => {
+    basePath = await fs.mkdtemp(path.join(os.tmpdir(), 'signing-host-spec-'));
+  });
+
+  afterEach(async () => {
+    await fs.rm(basePath, { recursive: true, force: true });
+  });
+
+  async function session(name: string, files: string[]) {
+    const dir = path.join(basePath, 'v2', network, `${name}_signing_host`);
+    await fs.mkdir(dir, { recursive: true });
+    for (const file of files) await fs.writeFile(path.join(dir, file), '{}');
+  }
+
+  it('is false for a slot the CLI has never touched', async () => {
+    expect(await slotHasIdentity(basePath, network)).toBe(false);
+  });
+
+  it('is true once a session holds an account store, with or without the pointer', async () => {
+    await session('truapitestabcdefghij.07', ['accounts.json', 'session.json']);
+
+    expect(await slotHasIdentity(basePath, network)).toBe(true);
+  });
+
+  // A session directory also appears when a name is only inspected; the CLI counts a
+  // session as provisioned only once it holds `accounts.json`.
+  it('ignores a session directory with no account store', async () => {
+    await session('truapitestabcdefghij', ['session.json']);
+
+    expect(await slotHasIdentity(basePath, network)).toBe(false);
+  });
+
+  // `default` is the CLI's bootstrap location, provisioned under the shared `headless`
+  // base; it is never a session this harness minted.
+  it('ignores the default session', async () => {
+    await session('default', ['accounts.json']);
+
+    expect(await slotHasIdentity(basePath, network)).toBe(false);
+  });
+
+  it('only looks at the requested network', async () => {
+    await session('truapitestabcdefghij.07', ['accounts.json']);
+
+    expect(await slotHasIdentity(basePath, 'previewnet')).toBe(false);
   });
 });

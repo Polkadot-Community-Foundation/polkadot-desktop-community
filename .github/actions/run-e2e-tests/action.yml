@@ -180,8 +180,8 @@ runs:
       if: inputs.signer-backed == 'true'
       shell: bash
       env:
-        TRUAPI_HOST_VERSION: 0.23.0-pcf.1
-        TRUAPI_HOST_SHA256: deb6a9eb7262430d5eb51a4df1a96f8866e92908735f0442d36ad7e31b942caa
+        TRUAPI_HOST_VERSION: 0.25.0-pcf.1
+        TRUAPI_HOST_SHA256: 947b39fd49a9fc6bebcb2ce03e06e82b8dca015957a3c75ea757817b9bf49122
       run: |
         set -euo pipefail
         archive="truapi-host-${TRUAPI_HOST_VERSION}-x86_64-unknown-linux-musl.tar.gz"
@@ -239,14 +239,14 @@ runs:
     # match. So one empty save shadows the identities the last good run stored, and every
     # run after it re-mints the whole tree: on-chain attestations, a device slot from each
     # identity's daily budget, and a username base spent per slot. Save only a tree that
-    # holds at least one provisioned session (`session.json`, the same marker
-    # `slotWillRestore` reads in e2e/helpers/signing-host.ts).
+    # holds at least one provisioned session (an `accounts.json` outside `default`, the
+    # same marker `slotHasIdentity` reads in e2e/helpers/signing-host.ts).
     - name: Check for provisioned signer identities
       id: identities
       if: ${{ always() && inputs.signer-backed == 'true' && inputs.identity-cache == 'true' }}
       shell: bash
       run: |
-        if [ -n "$(find .truapi-host -name session.json -print -quit 2>/dev/null)" ]; then
+        if [ -n "$(find .truapi-host -path '*_signing_host/accounts.json' -not -path '*/default_signing_host/*' -print -quit 2>/dev/null)" ]; then
           echo "present=true" >> "$GITHUB_OUTPUT"
         else
           echo "present=false" >> "$GITHUB_OUTPUT"
