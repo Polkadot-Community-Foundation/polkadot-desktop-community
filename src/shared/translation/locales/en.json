@@ -638,6 +638,7 @@
           "Clipboard": "Clipboard",
           "OpenUrl": "Open External URL",
           "Biometrics": "Biometrics",
+          "Motion": "Motion Sensors",
           "NFC": "NFC",
           "Files": "Files",
           "Remote": "Web Domains",
@@ -645,6 +646,7 @@
           "ChainSubmit": "Chain Submit",
           "PreimageSubmit": "Preimage Submit",
           "StatementSubmit": "Statement Submit",
+          "BalanceAccess": "Balance",
           "UserIdentity": "Identity"
         },
         "reason": {
@@ -656,6 +658,7 @@
           "Clipboard": "Used for copying and pasting content you choose to share",
           "OpenUrl": "Used to open external links in your default browser",
           "Biometrics": "Used for features that require verifying your identity",
+          "Motion": "Used for features that respond to how you move or tilt your device",
           "NFC": "Used for contactless reading and writing with nearby tags and devices",
           "Files": "Used for features like uploading, downloading and managing files",
           "Remote": "Used to make requests to the following domains",
@@ -663,6 +666,7 @@
           "ChainSubmit": "Used to broadcast signed transactions to any Substrate chain",
           "PreimageSubmit": "Used to submit preimage data to the bulletin chain",
           "StatementSubmit": "Used to submit statements to the statement store",
+          "BalanceAccess": "Used to read your spendable balance and to tell when a payment fails because it is too low. It does not allow spending",
           "UserIdentity": "Access to your primary username is required for identification. You can manage this later in Settings."
         }
       },
@@ -794,6 +798,15 @@
             "4": "Used only for unlocking or approving actions"
           }
         },
+        "Motion": {
+          "label": "Motion Sensors",
+          "description": "Used for features that respond to how you move or tilt your device",
+          "rule": {
+            "1": "Reads device motion and orientation only",
+            "2": "No access to your location or camera",
+            "3": "You can revoke access later in Settings"
+          }
+        },
         "OpenExternalUrl": {
           "label": "Open External URL",
           "description": "Used to open external links in your default browser",
@@ -852,6 +865,16 @@
             "2": "No transactions are created or modified automatically",
             "3": "Submission happens only after your confirmation",
             "4": "No access to your private keys or sensitive data"
+          }
+        },
+        "BalanceAccess": {
+          "label": "Balance",
+          "description": "Used to read your spendable balance",
+          "rule": {
+            "1": "Shows the balance available for payments",
+            "2": "Does not allow the product to spend or move funds",
+            "3": "Can tell when a payment was declined because your balance was too low",
+            "4": "Revoking access stops further balance updates"
           }
         },
         "UserIdentity": {

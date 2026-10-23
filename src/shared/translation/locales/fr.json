@@ -637,6 +637,7 @@
           "Clipboard": "Presse-papiers",
           "OpenUrl": "Ouvrir une URL externe",
           "Biometrics": "Biométrie",
+          "Motion": "Capteurs de mouvement",
           "NFC": "NFC",
           "Files": "Fichiers",
           "Remote": "Domaines web",
@@ -644,6 +645,7 @@
           "ChainSubmit": "Soumission à la chaîne",
           "PreimageSubmit": "Soumission de preimage",
           "StatementSubmit": "Soumission de statements",
+          "BalanceAccess": "Solde",
           "UserIdentity": "Identité"
         },
         "reason": {
@@ -655,6 +657,7 @@
           "Clipboard": "Utilisé pour copier et coller le contenu que vous choisissez de partager",
           "OpenUrl": "Utilisé pour ouvrir des liens externes dans votre navigateur par défaut",
           "Biometrics": "Utilisé pour les fonctions nécessitant de vérifier votre identité",
+          "Motion": "Utilisé pour les fonctions qui réagissent à la façon dont tu déplaces ou inclines ton appareil",
           "NFC": "Utilisé pour la lecture et l'écriture sans contact avec les tags et appareils à proximité",
           "Files": "Utilisé pour des fonctions comme l'envoi, le téléchargement et la gestion de fichiers",
           "Remote": "Utilisé pour effectuer des requêtes vers les domaines suivants",
@@ -662,6 +665,7 @@
           "ChainSubmit": "Utilisé pour diffuser des transactions signées vers n'importe quelle chaîne Substrate",
           "PreimageSubmit": "Utilisé pour soumettre des données de preimage à la Bulletin Chain",
           "StatementSubmit": "Utilisé pour soumettre des statements au statement store",
+          "BalanceAccess": "Utilisé pour lire ton solde disponible et détecter qu'un paiement échoue parce que le solde est trop bas. Ne permet pas de dépenser",
           "UserIdentity": "L'accès à votre nom d'utilisateur principal est requis pour l'identification. Vous pourrez le gérer plus tard dans les Paramètres."
         }
       },
@@ -793,6 +797,15 @@
             "4": "Utilisé uniquement pour déverrouiller ou approuver des actions"
           }
         },
+        "Motion": {
+          "label": "Capteurs de mouvement",
+          "description": "Utilisé pour les fonctions qui réagissent à la façon dont tu déplaces ou inclines ton appareil",
+          "rule": {
+            "1": "Lit uniquement le mouvement et l'orientation de l'appareil",
+            "2": "Aucun accès à ta position ni à ta caméra",
+            "3": "Tu peux révoquer l'accès plus tard dans les Réglages"
+          }
+        },
         "OpenExternalUrl": {
           "label": "Ouvrir une URL externe",
           "description": "Utilisé pour ouvrir des liens externes dans votre navigateur par défaut",
@@ -851,6 +864,16 @@
             "2": "Aucune transaction n'est créée ni modifiée automatiquement",
             "3": "La soumission n'a lieu qu'après votre confirmation",
             "4": "Aucun accès à vos clés privées ni à des données sensibles"
+          }
+        },
+        "BalanceAccess": {
+          "label": "Solde",
+          "description": "Utilisé pour lire ton solde disponible",
+          "rule": {
+            "1": "Affiche le solde disponible pour les paiements",
+            "2": "Ne permet pas au produit de dépenser ou de déplacer des fonds",
+            "3": "Peut détecter qu'un paiement a été refusé parce que ton solde était trop bas",
+            "4": "Révoquer l'accès arrête les mises à jour du solde"
           }
         },
         "UserIdentity": {

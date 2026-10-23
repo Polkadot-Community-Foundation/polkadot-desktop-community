@@ -637,6 +637,7 @@
           "Clipboard": "Pano",
           "OpenUrl": "Harici URL açma",
           "Biometrics": "Biyometri",
+          "Motion": "Hareket Sensörleri",
           "NFC": "NFC",
           "Files": "Dosyalar",
           "Remote": "Web alan adları",
@@ -644,6 +645,7 @@
           "ChainSubmit": "Zincire gönderim",
           "PreimageSubmit": "Preimage gönderimi",
           "StatementSubmit": "Statement gönderimi",
+          "BalanceAccess": "Bakiye",
           "UserIdentity": "Kimlik"
         },
         "reason": {
@@ -655,6 +657,7 @@
           "Clipboard": "Paylaşmayı seçtiğin içeriği kopyalayıp yapıştırmak için kullanılır",
           "OpenUrl": "Harici bağlantıları varsayılan tarayıcında açmak için kullanılır",
           "Biometrics": "Kimliğinin doğrulanmasını gerektiren özellikler için kullanılır",
+          "Motion": "Cihazını nasıl hareket ettirdiğine veya eğdiğine yanıt veren özellikler için kullanılır",
           "NFC": "Yakındaki etiketler ve cihazlarla temassız okuma ve yazma için kullanılır",
           "Files": "Dosya yükleme, indirme ve yönetme gibi özellikler için kullanılır",
           "Remote": "Aşağıdaki alan adlarına istek göndermek için kullanılır",
@@ -662,6 +665,7 @@
           "ChainSubmit": "İmzalanmış işlemleri herhangi bir Substrate zincirine yayınlamak için kullanılır",
           "PreimageSubmit": "Preimage verisini bulletin zincirine göndermek için kullanılır",
           "StatementSubmit": "Statement'ları statement store'a göndermek için kullanılır",
+          "BalanceAccess": "Harcanabilir bakiyeni okumak ve bakiye çok düşük olduğu için bir ödemenin başarısız olduğunu anlamak için kullanılır. Harcama yapmaya izin vermez",
           "UserIdentity": "Kimlik doğrulaması için birincil kullanıcı adına erişim gereklidir. Bunu daha sonra Ayarlar'dan yönetebilirsin."
         }
       },
@@ -793,6 +797,15 @@
             "4": "Yalnızca kilit açma veya işlem onaylama için kullanılır"
           }
         },
+        "Motion": {
+          "label": "Hareket Sensörleri",
+          "description": "Cihazını nasıl hareket ettirdiğine veya eğdiğine yanıt veren özellikler için kullanılır",
+          "rule": {
+            "1": "Yalnızca cihazın hareketini ve yönünü okur",
+            "2": "Konumuna veya kamerana erişim yoktur",
+            "3": "Erişimi daha sonra Ayarlar’dan iptal edebilirsin"
+          }
+        },
         "OpenExternalUrl": {
           "label": "Harici URL açma",
           "description": "Harici bağlantıları varsayılan tarayıcında açmak için kullanılır",
@@ -851,6 +864,16 @@
             "2": "İşlemler otomatik olarak oluşturulmaz veya değiştirilmez",
             "3": "Gönderim yalnızca senin onayından sonra gerçekleşir",
             "4": "Özel anahtarlarına veya hassas verilerine erişilmez"
+          }
+        },
+        "BalanceAccess": {
+          "label": "Bakiye",
+          "description": "Harcanabilir bakiyeni okumak için kullanılır",
+          "rule": {
+            "1": "Ödemeler için kullanılabilir bakiyeyi gösterir",
+            "2": "Ürünün para harcamasına veya taşımasına izin vermez",
+            "3": "Bakiyen çok düşük olduğu için bir ödemenin reddedildiğini anlayabilir",
+            "4": "Erişimi iptal etmek bakiye güncellemelerini durdurur"
           }
         },
         "UserIdentity": {

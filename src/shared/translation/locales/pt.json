@@ -637,6 +637,7 @@
           "Clipboard": "Área de transferência",
           "OpenUrl": "Abrir URL externa",
           "Biometrics": "Biometria",
+          "Motion": "Sensores de movimento",
           "NFC": "NFC",
           "Files": "Arquivos",
           "Remote": "Domínios web",
@@ -644,6 +645,7 @@
           "ChainSubmit": "Envio à cadeia",
           "PreimageSubmit": "Envio de preimage",
           "StatementSubmit": "Envio de statements",
+          "BalanceAccess": "Saldo",
           "UserIdentity": "Identidade"
         },
         "reason": {
@@ -655,6 +657,7 @@
           "Clipboard": "Usado para copiar e colar o conteúdo que você escolhe compartilhar",
           "OpenUrl": "Usado para abrir links externos no seu navegador padrão",
           "Biometrics": "Usado para recursos que exigem verificar sua identidade",
+          "Motion": "Usado em recursos que respondem a como você move ou inclina o dispositivo",
           "NFC": "Usado para leitura e escrita por aproximação com etiquetas e dispositivos próximos",
           "Files": "Usado para recursos como enviar, baixar e gerenciar arquivos",
           "Remote": "Usado para fazer requisições aos domínios a seguir",
@@ -662,6 +665,7 @@
           "ChainSubmit": "Usado para transmitir transações assinadas a qualquer cadeia Substrate",
           "PreimageSubmit": "Usado para enviar dados de preimage à Bulletin Chain",
           "StatementSubmit": "Usado para enviar statements ao statement store",
+          "BalanceAccess": "Usado para ler o seu saldo disponível e detectar quando um pagamento falha porque o saldo é baixo demais. Não permite gastar",
           "UserIdentity": "O acesso ao seu nome de usuário principal é necessário para identificação. Você pode gerenciar isso depois em Configurações."
         }
       },
@@ -793,6 +797,15 @@
             "4": "Usado apenas para desbloquear ou aprovar ações"
           }
         },
+        "Motion": {
+          "label": "Sensores de movimento",
+          "description": "Usado em recursos que respondem a como você move ou inclina o dispositivo",
+          "rule": {
+            "1": "Lê apenas o movimento e a orientação do dispositivo",
+            "2": "Sem acesso à sua localização ou câmera",
+            "3": "Você pode revogar o acesso depois em Configurações"
+          }
+        },
         "OpenExternalUrl": {
           "label": "Abrir URL externa",
           "description": "Usado para abrir links externos no seu navegador padrão",
@@ -851,6 +864,16 @@
             "2": "Nenhuma transação é criada ou modificada automaticamente",
             "3": "O envio acontece somente após a sua confirmação",
             "4": "Sem acesso às suas chaves privadas ou a dados sensíveis"
+          }
+        },
+        "BalanceAccess": {
+          "label": "Saldo",
+          "description": "Usado para ler o seu saldo disponível",
+          "rule": {
+            "1": "Mostra o saldo disponível para pagamentos",
+            "2": "Não permite que o produto gaste ou mova fundos",
+            "3": "Pode detectar quando um pagamento foi recusado porque o saldo estava baixo demais",
+            "4": "Revogar o acesso interrompe novas atualizações de saldo"
           }
         },
         "UserIdentity": {

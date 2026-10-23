@@ -637,6 +637,7 @@
           "Clipboard": "剪贴板",
           "OpenUrl": "打开外部链接",
           "Biometrics": "生物识别",
+          "Motion": "运动传感器",
           "NFC": "NFC",
           "Files": "文件",
           "Remote": "网页域名",
@@ -644,6 +645,7 @@
           "ChainSubmit": "链上提交",
           "PreimageSubmit": "Preimage 提交",
           "StatementSubmit": "Statement 提交",
+          "BalanceAccess": "余额",
           "UserIdentity": "身份"
         },
         "reason": {
@@ -655,6 +657,7 @@
           "Clipboard": "用于复制和粘贴你选择共享的内容",
           "OpenUrl": "用于在默认浏览器中打开外部链接",
           "Biometrics": "用于需要验证你身份的功能",
+          "Motion": "用于根据你移动或倾斜设备而响应的功能",
           "NFC": "用于与附近的标签和设备进行非接触式读写",
           "Files": "用于上传、下载和管理文件等功能",
           "Remote": "用于向以下域名发起请求",
@@ -662,6 +665,7 @@
           "ChainSubmit": "用于向任意 Substrate 链广播已签名的交易",
           "PreimageSubmit": "用于向 Bulletin Chain 提交 preimage 数据",
           "StatementSubmit": "用于向 statement store 提交 statement",
+          "BalanceAccess": "用于读取你的可用余额，并在支付因余额不足而失败时获知。不允许花费资金",
           "UserIdentity": "需要访问你的主用户名以进行身份识别。你之后可以在「设置」中管理此项。"
         }
       },
@@ -793,6 +797,15 @@
             "4": "仅用于解锁或批准操作"
           }
         },
+        "Motion": {
+          "label": "运动传感器",
+          "description": "用于根据你移动或倾斜设备而响应的功能",
+          "rule": {
+            "1": "仅读取设备的运动和方向",
+            "2": "无法访问你的位置或相机",
+            "3": "你可以稍后在设置中撤销访问权限"
+          }
+        },
         "OpenExternalUrl": {
           "label": "打开外部链接",
           "description": "用于在默认浏览器中打开外部链接",
@@ -851,6 +864,16 @@
             "2": "不会自动创建或修改交易",
             "3": "仅在你确认后才会提交",
             "4": "不会访问你的私钥或敏感数据"
+          }
+        },
+        "BalanceAccess": {
+          "label": "余额",
+          "description": "用于读取你的可用余额",
+          "rule": {
+            "1": "显示可用于支付的余额",
+            "2": "不允许该产品花费或转移资金",
+            "3": "可以得知支付是否因余额不足而被拒绝",
+            "4": "撤销访问权限后将停止后续的余额更新"
           }
         },
         "UserIdentity": {
