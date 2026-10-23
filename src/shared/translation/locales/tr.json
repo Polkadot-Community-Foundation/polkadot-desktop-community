@@ -174,9 +174,6 @@
       "statementStoreErrorTitle": "Statement store hatası",
       "feeUnavailable": "—",
       "customChainSigningWarning": "Bu özel zincir için işlem ayrıntıları kullanılamıyor. İmzalamadan önce ham çağrı verisini incele.",
-      "storeDataRequest": "Veri saklama isteği",
-      "storeDataDescription": "Ürün, Bulletin Chain üzerinde veri ({size}) saklamak istiyor.",
-      "storeDataDeny": "Reddet",
       "webVersionNotification": "Uygulamanın web sürümünü kullanıyorsun. Ürünlerle etkileşim için lütfen masaüstü sürümünü kullan.",
       "findPlaceholder": "Sayfada bul",
       "findCount": "{current}/{total}",
@@ -840,8 +837,8 @@
           "label": "Preimage gönderimi",
           "description": "Preimage verisini bulletin zincirine göndermek için kullanılır",
           "rule": {
-            "1": "Yalnızca imzalanmış işlemler gönderilebilir",
-            "2": "Gönderim yalnızca senin onayından sonra gerçekleşir",
+            "1": "Depolanan veriler Bulletin zincirinde herkese açıktır",
+            "2": "Her Zaman İzin Ver tüm yüklemeleri kapsar; Bir Kez İzin Ver tek bir yüklemeyi kapsar",
             "3": "Veriler sağlandığı gibi, değiştirilmeden gönderilir",
             "4": "Özel anahtarlarına veya hassas verilerine erişilmez"
           }

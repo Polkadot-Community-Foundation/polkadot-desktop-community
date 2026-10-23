@@ -174,9 +174,6 @@
       "statementStoreErrorTitle": "Erreur du statement store",
       "feeUnavailable": "—",
       "customChainSigningWarning": "Les détails de la transaction ne sont pas disponibles pour cette chaîne personnalisée. Vérifiez le call data brut avant de signer.",
-      "storeDataRequest": "Demande de stockage de données",
-      "storeDataDescription": "Le produit souhaite stocker des données ({size}) sur la Bulletin Chain.",
-      "storeDataDeny": "Refuser",
       "webVersionNotification": "Vous utilisez la version web de l'app. Utilisez la version bureau pour interagir avec les produits.",
       "findPlaceholder": "Rechercher dans la page",
       "findCount": "{current}/{total}",
@@ -840,8 +837,8 @@
           "label": "Soumission de preimage",
           "description": "Utilisé pour soumettre des données de preimage à la Bulletin Chain",
           "rule": {
-            "1": "Seules des transactions signées peuvent être soumises",
-            "2": "La soumission n'a lieu qu'après votre confirmation",
+            "1": "Les données stockées sont publiques sur la chaîne Bulletin",
+            "2": "Toujours autoriser couvre chaque envoi ; Autoriser une fois couvre un seul envoi",
             "3": "Les données sont soumises telles quelles, sans modification",
             "4": "Aucun accès à vos clés privées ni à des données sensibles"
           }

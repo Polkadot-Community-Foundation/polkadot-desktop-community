@@ -174,9 +174,6 @@
       "statementStoreErrorTitle": "Statement Store のエラー",
       "feeUnavailable": "—",
       "customChainSigningWarning": "このカスタムチェーンではトランザクションの詳細を表示できません。署名する前に生のコールデータを確認してください。",
-      "storeDataRequest": "データ保存のリクエスト",
-      "storeDataDescription": "プロダクトが Bulletin Chain にデータ（{size}）を保存しようとしています。",
-      "storeDataDeny": "拒否",
       "webVersionNotification": "現在アプリのウェブ版を使用しています。プロダクトを操作するにはデスクトップ版をご利用ください。",
       "findPlaceholder": "ページ内を検索",
       "findCount": "{current}/{total}",
@@ -840,8 +837,8 @@
           "label": "プリイメージの送信",
           "description": "プリイメージデータを Bulletin チェーンに送信するために使用されます",
           "rule": {
-            "1": "送信できるのは署名済みトランザクションのみです",
-            "2": "送信は確認後にのみ行われます",
+            "1": "保存されたデータは Bulletin チェーン上で公開されます",
+            "2": "「常に許可」はすべてのアップロードに適用され、「一度だけ許可」は1回のアップロードに適用されます",
             "3": "データは提供されたとおりに、変更されることなく送信されます",
             "4": "秘密鍵や機密データにアクセスすることはありません"
           }

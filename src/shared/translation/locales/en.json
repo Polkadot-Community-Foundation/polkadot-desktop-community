@@ -175,9 +175,6 @@
       "statementStoreErrorTitle": "Statement store error",
       "feeUnavailable": "—",
       "customChainSigningWarning": "Transaction details are unavailable for this custom chain. Review the raw call data before signing.",
-      "storeDataRequest": "Store Data Request",
-      "storeDataDescription": "Product wants to store data ({size}) on the Bulletin Chain.",
-      "storeDataDeny": "Deny",
       "webVersionNotification": "You are using the web version of the app. Please use the desktop version for interacting with the Products.",
       "findPlaceholder": "Find in page",
       "findCount": "{current}/{total}",
@@ -841,8 +838,8 @@
           "label": "Preimage Submit",
           "description": "Used to submit preimage data to the bulletin chain",
           "rule": {
-            "1": "Only signed transactions can be submitted",
-            "2": "Submission happens only after your confirmation",
+            "1": "Stored data is public on the Bulletin chain",
+            "2": "Always Allow covers every upload; Allow Once covers a single upload",
             "3": "Data is submitted exactly as provided, without modification",
             "4": "No access to your private keys or sensitive data"
           }

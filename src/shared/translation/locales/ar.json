@@ -174,9 +174,6 @@
       "statementStoreErrorTitle": "خطأ في statement store",
       "feeUnavailable": "—",
       "customChainSigningWarning": "تفاصيل المعاملة غير متاحة لهذه السلسلة المخصّصة. راجع call data الخام قبل التوقيع.",
-      "storeDataRequest": "طلب تخزين بيانات",
-      "storeDataDescription": "يريد المنتج تخزين بيانات ({size}) على Bulletin Chain.",
-      "storeDataDeny": "رفض",
       "webVersionNotification": "أنت تستخدم نسخة الويب من التطبيق. استخدم نسخة سطح المكتب للتفاعل مع المنتجات.",
       "findPlaceholder": "بحث في الصفحة",
       "findCount": "{current}/{total}",
@@ -840,8 +837,8 @@
           "label": "إرسال preimage",
           "description": "يُستخدم لإرسال بيانات preimage إلى Bulletin Chain",
           "rule": {
-            "1": "لا يمكن إرسال سوى المعاملات الموقّعة",
-            "2": "لا يتم الإرسال إلا بعد تأكيدك",
+            "1": "البيانات المخزنة عامة على سلسلة Bulletin",
+            "2": "السماح دائمًا يشمل كل عمليات الرفع، والسماح مرة واحدة يشمل عملية رفع واحدة",
             "3": "تُرسَل البيانات كما هي تمامًا دون تعديل",
             "4": "لا وصول إلى مفاتيحك الخاصة أو بياناتك الحساسة"
           }

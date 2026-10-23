@@ -174,9 +174,6 @@
       "statementStoreErrorTitle": "statement store 错误",
       "feeUnavailable": "—",
       "customChainSigningWarning": "此自定义链无法显示交易详情。签名前请检查原始 call data。",
-      "storeDataRequest": "数据存储请求",
-      "storeDataDescription": "该产品希望在 Bulletin Chain 上存储数据（{size}）。",
-      "storeDataDeny": "拒绝",
       "webVersionNotification": "你正在使用应用的网页版。请使用桌面版与产品交互。",
       "findPlaceholder": "在页面中查找",
       "findCount": "{current}/{total}",
@@ -840,8 +837,8 @@
           "label": "Preimage 提交",
           "description": "用于向 Bulletin Chain 提交 preimage 数据",
           "rule": {
-            "1": "只能提交已签名的交易",
-            "2": "仅在你确认后才会提交",
+            "1": "存储的数据在 Bulletin 链上是公开的",
+            "2": "“始终允许”适用于每次上传，“允许一次”仅适用于单次上传",
             "3": "数据按原样提交，不作修改",
             "4": "不会访问你的私钥或敏感数据"
           }

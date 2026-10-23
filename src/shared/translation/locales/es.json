@@ -174,9 +174,6 @@
       "statementStoreErrorTitle": "Error del statement store",
       "feeUnavailable": "—",
       "customChainSigningWarning": "Los detalles de la transacción no están disponibles para esta cadena personalizada. Revisa el call data sin procesar antes de firmar.",
-      "storeDataRequest": "Solicitud de almacenamiento de datos",
-      "storeDataDescription": "El producto quiere almacenar datos ({size}) en la Bulletin Chain.",
-      "storeDataDeny": "Denegar",
       "webVersionNotification": "Estás usando la versión web de la app. Usa la versión de escritorio para interactuar con los productos.",
       "findPlaceholder": "Buscar en la página",
       "findCount": "{current}/{total}",
@@ -840,8 +837,8 @@
           "label": "Envío de preimage",
           "description": "Se usa para enviar datos de preimage a la Bulletin Chain",
           "rule": {
-            "1": "Solo se pueden enviar transacciones firmadas",
-            "2": "El envío ocurre solo tras tu confirmación",
+            "1": "Los datos almacenados son públicos en la cadena Bulletin",
+            "2": "Permitir siempre cubre todas las cargas; Permitir una vez cubre una sola carga",
             "3": "Los datos se envían exactamente como se proporcionan, sin modificarlos",
             "4": "Sin acceso a tus claves privadas ni a datos sensibles"
           }

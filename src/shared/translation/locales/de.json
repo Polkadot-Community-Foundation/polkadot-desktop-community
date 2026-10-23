@@ -174,9 +174,6 @@
       "statementStoreErrorTitle": "Statement-Store-Fehler",
       "feeUnavailable": "—",
       "customChainSigningWarning": "Für diese benutzerdefinierte Chain sind keine Transaktionsdetails verfügbar. Prüfe die rohen Call-Daten vor dem Signieren.",
-      "storeDataRequest": "Anfrage zum Speichern von Daten",
-      "storeDataDescription": "Das Produkt möchte Daten ({size}) auf der Bulletin Chain speichern.",
-      "storeDataDeny": "Ablehnen",
       "webVersionNotification": "Du verwendest die Webversion der App. Bitte nutze die Desktop-Version, um mit den Produkten zu interagieren.",
       "findPlaceholder": "Auf Seite suchen",
       "findCount": "{current}/{total}",
@@ -840,8 +837,8 @@
           "label": "Preimage-Übermittlung",
           "description": "Wird verwendet, um Preimage-Daten an die Bulletin Chain zu senden",
           "rule": {
-            "1": "Es können nur signierte Transaktionen übermittelt werden",
-            "2": "Die Übermittlung erfolgt erst nach deiner Bestätigung",
+            "1": "Gespeicherte Daten sind auf der Bulletin Chain öffentlich",
+            "2": "„Immer erlauben“ gilt für jeden Upload, „Einmal erlauben“ für einen einzelnen Upload",
             "3": "Daten werden genau so übermittelt, wie sie bereitgestellt wurden, ohne Änderung",
             "4": "Kein Zugriff auf deine privaten Schlüssel oder sensiblen Daten"
           }
