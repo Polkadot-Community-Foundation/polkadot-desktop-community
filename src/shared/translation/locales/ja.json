@@ -1078,13 +1078,6 @@
           "title": "証明を作成",
           "subtitle": "このアプリが要求している証明を確認してください。"
         },
-        "permission": {
-          "IdentityDisclosure": "このアプリはあなたの ID を知ろうとしています。",
-          "PreimageSubmit": "このアプリはコンテンツの送信を求めています。",
-          "AccountAccess": "このアプリは別のアプリのアカウントの使用を求めています。",
-          "AccountAlias": "このアプリはエイリアスの導出を求めています。",
-          "title": "権限リクエスト"
-        },
         "legacyAccountNotice": "レガシーアカウントで署名しています。",
         "resource": {
           "statementStore": "ステートメントストアのスロット",
@@ -1228,75 +1221,6 @@
           "SmartContractAllowance": "スマートコントラクトの呼び出しに自動で署名する",
           "AutoSigning": "トランザクションに自動で署名する"
         }
-      },
-      "permissionDenied": {
-        "appSettings": "アプリの設定",
-        "systemDeviceSettings": "デバイスの設定",
-        "Camera": {
-          "title": "カメラへのアクセスが必要です",
-          "description": "ビデオ通話、QR コードの読み取り、メディアの撮影などの機能に使用されます"
-        },
-        "Microphone": {
-          "title": "マイクへのアクセスが必要です",
-          "description": "音声通話、メッセージ、音声録音などの機能に使用されます"
-        },
-        "Bluetooth": {
-          "title": "Bluetooth へのアクセスが必要です",
-          "description": "近くのデバイスへの接続とデータ転送に使用されます"
-        },
-        "Location": {
-          "title": "位置情報へのアクセスが必要です",
-          "description": "位置情報に基づくサービスやコンテンツのパーソナライズに使用されます"
-        },
-        "Notifications": {
-          "title": "通知へのアクセスが必要です",
-          "description": "最新情報、通知、重要なお知らせを送信するために使用されます"
-        },
-        "Biometrics": {
-          "title": "生体認証へのアクセスが必要です",
-          "description": "本人確認が必要な機能に使用されます"
-        },
-        "Clipboard": {
-          "title": "クリップボードへのアクセスが必要です",
-          "description": "共有するコンテンツのコピーと貼り付けに使用されます"
-        },
-        "OpenUrl": {
-          "title": "外部リンクへのアクセスが必要です",
-          "description": "既定のブラウザで外部リンクを開くために使用されます"
-        },
-        "ExternalRequest": {
-          "title": "ウェブドメインへのアクセスが必要です",
-          "description": "以下のドメインへのリクエストに使用されます"
-        },
-        "TransactionSubmit": {
-          "title": "チェーンへの送信アクセスが必要です",
-          "description": "署名済みトランザクションを任意の Substrate チェーンにブロードキャストするために使用されます"
-        },
-        "ChainSubmit": {
-          "title": "チェーンへの送信アクセスが必要です",
-          "description": "署名済みトランザクションを任意の Substrate チェーンにブロードキャストするために使用されます"
-        },
-        "PreimageSubmit": {
-          "title": "プリイメージ送信のアクセスが必要です",
-          "description": "プリイメージデータを Bulletin チェーンに送信するために使用されます"
-        },
-        "StatementSubmit": {
-          "title": "ステートメント送信のアクセスが必要です",
-          "description": "ステートメントを Statement Store に送信するために使用されます"
-        },
-        "fallback": {
-          "title": "アクセスが必要です",
-          "description": "アプリの設定でアクセスを有効にしてください。"
-        }
-      },
-      "subtreeRequest": {
-        "title": "プロダクトアカウントを設定中",
-        "preparing": "このプロダクトのアカウントを確認しています...",
-        "line1": "お使いのデバイスで Polkadot アプリを開くと、",
-        "line2": "このプロダクトのアカウントが提供されます。",
-        "failedTitle": "プロダクトアカウントを設定できませんでした",
-        "failedDescription": "デバイスへのリクエストが完了しませんでした。これを閉じてもう一度お試しください。",
-        "rejected": "プロダクトアカウントの設定をキャンセルしました"
       }
     }
   }

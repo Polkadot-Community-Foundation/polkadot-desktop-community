@@ -1078,13 +1078,6 @@
           "title": "Criar prova",
           "subtitle": "Revise a prova que este app está solicitando."
         },
-        "permission": {
-          "IdentityDisclosure": "Este app está pedindo para saber sua identidade.",
-          "PreimageSubmit": "Este app está pedindo para enviar conteúdo.",
-          "AccountAccess": "Este app está pedindo para usar a conta de outro app.",
-          "AccountAlias": "Este app está pedindo para derivar um alias.",
-          "title": "Solicitação de permissão"
-        },
         "legacyAccountNotice": "Assinando com uma conta legada.",
         "resource": {
           "statementStore": "Espaço do armazenamento de declarações",
@@ -1228,75 +1221,6 @@
           "SmartContractAllowance": "Assinar automaticamente chamadas de contratos inteligentes",
           "AutoSigning": "Assinar transações automaticamente"
         }
-      },
-      "permissionDenied": {
-        "appSettings": "Configurações do app",
-        "systemDeviceSettings": "Configurações do dispositivo",
-        "Camera": {
-          "title": "Acesso à câmera necessário",
-          "description": "Usado para recursos como videochamadas, leitura de QR e captura de mídia"
-        },
-        "Microphone": {
-          "title": "Acesso ao microfone necessário",
-          "description": "Usado para recursos como chamadas de voz, mensagens e gravação de áudio"
-        },
-        "Bluetooth": {
-          "title": "Acesso ao Bluetooth necessário",
-          "description": "Usado para conectar a dispositivos próximos e transferir dados"
-        },
-        "Location": {
-          "title": "Acesso à localização necessário",
-          "description": "Usado para serviços baseados em localização e personalização de conteúdo"
-        },
-        "Notifications": {
-          "title": "Acesso às notificações necessário",
-          "description": "Usado para enviar novidades, alertas e informações importantes"
-        },
-        "Biometrics": {
-          "title": "Acesso à biometria necessário",
-          "description": "Usado para recursos que exigem verificar sua identidade"
-        },
-        "Clipboard": {
-          "title": "Acesso à área de transferência necessário",
-          "description": "Usado para copiar e colar o conteúdo que você escolhe compartilhar"
-        },
-        "OpenUrl": {
-          "title": "Acesso a links externos necessário",
-          "description": "Usado para abrir links externos no seu navegador padrão"
-        },
-        "ExternalRequest": {
-          "title": "Acesso a domínios web necessário",
-          "description": "Usado para fazer requisições aos domínios a seguir"
-        },
-        "TransactionSubmit": {
-          "title": "Acesso de envio à cadeia necessário",
-          "description": "Usado para transmitir transações assinadas a qualquer cadeia Substrate"
-        },
-        "ChainSubmit": {
-          "title": "Acesso de envio à cadeia necessário",
-          "description": "Usado para transmitir transações assinadas a qualquer cadeia Substrate"
-        },
-        "PreimageSubmit": {
-          "title": "Acesso de envio de preimage necessário",
-          "description": "Usado para enviar dados de preimage à Bulletin Chain"
-        },
-        "StatementSubmit": {
-          "title": "Acesso de envio de statements necessário",
-          "description": "Usado para enviar statements ao statement store"
-        },
-        "fallback": {
-          "title": "Acesso necessário",
-          "description": "Ative o acesso nas configurações do app."
-        }
-      },
-      "subtreeRequest": {
-        "title": "Configurando as contas do produto",
-        "preparing": "Verificando as contas deste produto...",
-        "line1": "Abra o Polkadot App no seu dispositivo",
-        "line2": "para que ele forneça as contas deste produto.",
-        "failedTitle": "Não foi possível configurar as contas do produto",
-        "failedDescription": "A solicitação ao seu dispositivo não foi concluída. Feche esta janela e tente novamente.",
-        "rejected": "Configuração das contas do produto cancelada"
       }
     }
   }

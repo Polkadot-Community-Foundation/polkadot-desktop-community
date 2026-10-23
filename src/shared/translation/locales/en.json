@@ -1079,13 +1079,6 @@
           "title": "Create proof",
           "subtitle": "Review the proof this app is requesting."
         },
-        "permission": {
-          "IdentityDisclosure": "This app is asking to learn your identity.",
-          "PreimageSubmit": "This app is asking to submit content.",
-          "AccountAccess": "This app is asking to use another app’s account.",
-          "AccountAlias": "This app is asking to derive an alias.",
-          "title": "Permission request"
-        },
         "legacyAccountNotice": "Signing with a legacy account.",
         "resource": {
           "statementStore": "Statement store slot",
@@ -1229,75 +1222,6 @@
           "SmartContractAllowance": "Sign smart-contract calls automatically",
           "AutoSigning": "Sign transactions automatically"
         }
-      },
-      "permissionDenied": {
-        "appSettings": "App settings",
-        "systemDeviceSettings": "Device settings",
-        "Camera": {
-          "title": "Camera Access Required",
-          "description": "Used for features like video calls, QR scanning and media capture"
-        },
-        "Microphone": {
-          "title": "Microphone Access Required",
-          "description": "Used for features like voice calls, messaging and audio recording"
-        },
-        "Bluetooth": {
-          "title": "Bluetooth Access Required",
-          "description": "Used for connecting to nearby devices and data transfer"
-        },
-        "Location": {
-          "title": "Location Access Required",
-          "description": "Used for location-based services and content personalization"
-        },
-        "Notifications": {
-          "title": "Notification Access Required",
-          "description": "Used to send you updates, alerts and important information"
-        },
-        "Biometrics": {
-          "title": "Biometrics Access Required",
-          "description": "Used for features that require verifying your identity"
-        },
-        "Clipboard": {
-          "title": "Clipboard Access Required",
-          "description": "Used for copying and pasting content you choose to share"
-        },
-        "OpenUrl": {
-          "title": "External Link Access Required",
-          "description": "Used to open external links in your default browser"
-        },
-        "ExternalRequest": {
-          "title": "Web Domains Access Required",
-          "description": "Used to make requests to the following domains"
-        },
-        "TransactionSubmit": {
-          "title": "Chain Submit Access Required",
-          "description": "Used to broadcast signed transactions to any Substrate chain"
-        },
-        "ChainSubmit": {
-          "title": "Chain Submit Access Required",
-          "description": "Used to broadcast signed transactions to any Substrate chain"
-        },
-        "PreimageSubmit": {
-          "title": "Preimage Submit Access Required",
-          "description": "Used to submit preimage data to the bulletin chain"
-        },
-        "StatementSubmit": {
-          "title": "Statement Submit Access Required",
-          "description": "Used to submit statements to the statement store"
-        },
-        "fallback": {
-          "title": "Access Required",
-          "description": "Enable access in App Settings."
-        }
-      },
-      "subtreeRequest": {
-        "title": "Setting up product accounts",
-        "preparing": "Checking this product's accounts...",
-        "line1": "Open the Polkadot app on your device",
-        "line2": "so it can provide this product's accounts.",
-        "failedTitle": "Couldn't set up product accounts",
-        "failedDescription": "The request to your device did not complete. Close this and try again.",
-        "rejected": "Product account setup cancelled"
       }
     }
   }

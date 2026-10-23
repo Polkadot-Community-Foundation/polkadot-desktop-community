@@ -1078,13 +1078,6 @@
           "title": "Crea prova",
           "subtitle": "Controlla la prova richiesta da questa app."
         },
-        "permission": {
-          "IdentityDisclosure": "Questa app chiede di conoscere la tua identità.",
-          "PreimageSubmit": "Questa app chiede di inviare contenuti.",
-          "AccountAccess": "Questa app chiede di usare l’account di un’altra app.",
-          "AccountAlias": "Questa app chiede di derivare un alias.",
-          "title": "Richiesta di autorizzazione"
-        },
         "legacyAccountNotice": "Firma con un account legacy.",
         "resource": {
           "statementStore": "Slot dello statement store",
@@ -1228,75 +1221,6 @@
           "SmartContractAllowance": "Firmare automaticamente le chiamate agli smart contract",
           "AutoSigning": "Firmare automaticamente le transazioni"
         }
-      },
-      "permissionDenied": {
-        "appSettings": "Impostazioni dell'app",
-        "systemDeviceSettings": "Impostazioni del dispositivo",
-        "Camera": {
-          "title": "Accesso alla fotocamera richiesto",
-          "description": "Usata per funzioni come videochiamate, scansione di QR e acquisizione di contenuti"
-        },
-        "Microphone": {
-          "title": "Accesso al microfono richiesto",
-          "description": "Usato per funzioni come chiamate vocali, messaggi e registrazione audio"
-        },
-        "Bluetooth": {
-          "title": "Accesso al Bluetooth richiesto",
-          "description": "Usato per connettersi ai dispositivi nelle vicinanze e trasferire dati"
-        },
-        "Location": {
-          "title": "Accesso alla posizione richiesto",
-          "description": "Usata per servizi basati sulla posizione e per personalizzare i contenuti"
-        },
-        "Notifications": {
-          "title": "Accesso alle notifiche richiesto",
-          "description": "Usate per inviarti aggiornamenti, avvisi e informazioni importanti"
-        },
-        "Biometrics": {
-          "title": "Accesso alla biometria richiesto",
-          "description": "Usata per funzioni che richiedono di verificare la tua identità"
-        },
-        "Clipboard": {
-          "title": "Accesso agli appunti richiesto",
-          "description": "Usati per copiare e incollare i contenuti che scegli di condividere"
-        },
-        "OpenUrl": {
-          "title": "Accesso ai link esterni richiesto",
-          "description": "Usato per aprire link esterni nel tuo browser predefinito"
-        },
-        "ExternalRequest": {
-          "title": "Accesso ai domini web richiesto",
-          "description": "Usati per effettuare richieste ai seguenti domini"
-        },
-        "TransactionSubmit": {
-          "title": "Accesso all'invio su chain richiesto",
-          "description": "Usato per trasmettere transazioni firmate a qualsiasi chain Substrate"
-        },
-        "ChainSubmit": {
-          "title": "Accesso all'invio su chain richiesto",
-          "description": "Usato per trasmettere transazioni firmate a qualsiasi chain Substrate"
-        },
-        "PreimageSubmit": {
-          "title": "Accesso all'invio di preimage richiesto",
-          "description": "Usato per inviare dati preimage alla bulletin chain"
-        },
-        "StatementSubmit": {
-          "title": "Accesso all'invio di statement richiesto",
-          "description": "Usato per inviare statement allo statement store"
-        },
-        "fallback": {
-          "title": "Accesso richiesto",
-          "description": "Attiva l'accesso nelle impostazioni dell'app."
-        }
-      },
-      "subtreeRequest": {
-        "title": "Configurazione degli account prodotto",
-        "preparing": "Controllo degli account di questo prodotto...",
-        "line1": "Apri l'app Polkadot sul tuo dispositivo",
-        "line2": "affinché fornisca gli account di questo prodotto.",
-        "failedTitle": "Impossibile configurare gli account prodotto",
-        "failedDescription": "La richiesta al tuo dispositivo non è stata completata. Chiudi e riprova.",
-        "rejected": "Configurazione dell'account prodotto annullata"
       }
     }
   }

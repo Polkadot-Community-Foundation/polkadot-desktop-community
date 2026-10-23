@@ -1078,13 +1078,6 @@
           "title": "Nachweis erstellen",
           "subtitle": "Prüfe den Nachweis, den diese App anfordert."
         },
-        "permission": {
-          "IdentityDisclosure": "Diese App möchte deine Identität erfahren.",
-          "PreimageSubmit": "Diese App möchte Inhalte einreichen.",
-          "AccountAccess": "Diese App möchte das Konto einer anderen App nutzen.",
-          "AccountAlias": "Diese App möchte einen Alias ableiten.",
-          "title": "Berechtigungsanfrage"
-        },
         "legacyAccountNotice": "Signieren mit einem Legacy-Konto.",
         "resource": {
           "statementStore": "Statement-Store-Slot",
@@ -1228,75 +1221,6 @@
           "SmartContractAllowance": "Smart-Contract-Calls automatisch signieren",
           "AutoSigning": "Transaktionen automatisch signieren"
         }
-      },
-      "permissionDenied": {
-        "appSettings": "App-Einstellungen",
-        "systemDeviceSettings": "Geräteeinstellungen",
-        "Camera": {
-          "title": "Kamerazugriff erforderlich",
-          "description": "Wird für Funktionen wie Videoanrufe, QR-Scans und Medienaufnahmen verwendet"
-        },
-        "Microphone": {
-          "title": "Mikrofonzugriff erforderlich",
-          "description": "Wird für Funktionen wie Sprachanrufe, Nachrichten und Audioaufnahmen verwendet"
-        },
-        "Bluetooth": {
-          "title": "Bluetooth-Zugriff erforderlich",
-          "description": "Wird zum Verbinden mit Geräten in der Nähe und zur Datenübertragung verwendet"
-        },
-        "Location": {
-          "title": "Standortzugriff erforderlich",
-          "description": "Wird für standortbasierte Dienste und personalisierte Inhalte verwendet"
-        },
-        "Notifications": {
-          "title": "Benachrichtigungszugriff erforderlich",
-          "description": "Wird verwendet, um dir Updates, Hinweise und wichtige Informationen zu senden"
-        },
-        "Biometrics": {
-          "title": "Biometriezugriff erforderlich",
-          "description": "Wird für Funktionen verwendet, die deine Identität bestätigen müssen"
-        },
-        "Clipboard": {
-          "title": "Zugriff auf die Zwischenablage erforderlich",
-          "description": "Wird zum Kopieren und Einfügen von Inhalten verwendet, die du teilen möchtest"
-        },
-        "OpenUrl": {
-          "title": "Zugriff auf externe Links erforderlich",
-          "description": "Wird verwendet, um externe Links in deinem Standardbrowser zu öffnen"
-        },
-        "ExternalRequest": {
-          "title": "Zugriff auf Web-Domains erforderlich",
-          "description": "Wird verwendet, um Anfragen an die folgenden Domains zu senden"
-        },
-        "TransactionSubmit": {
-          "title": "Zugriff auf Chain-Übermittlung erforderlich",
-          "description": "Wird verwendet, um signierte Transaktionen an eine beliebige Substrate-Chain zu senden"
-        },
-        "ChainSubmit": {
-          "title": "Zugriff auf Chain-Übermittlung erforderlich",
-          "description": "Wird verwendet, um signierte Transaktionen an eine beliebige Substrate-Chain zu senden"
-        },
-        "PreimageSubmit": {
-          "title": "Zugriff auf Preimage-Übermittlung erforderlich",
-          "description": "Wird verwendet, um Preimage-Daten an die Bulletin Chain zu senden"
-        },
-        "StatementSubmit": {
-          "title": "Zugriff auf Statement-Übermittlung erforderlich",
-          "description": "Wird verwendet, um Statements an den Statement Store zu senden"
-        },
-        "fallback": {
-          "title": "Zugriff erforderlich",
-          "description": "Aktiviere den Zugriff in den App-Einstellungen."
-        }
-      },
-      "subtreeRequest": {
-        "title": "Produktkonten werden eingerichtet",
-        "preparing": "Konten dieses Produkts werden geprüft...",
-        "line1": "Öffne die Polkadot App auf deinem Gerät,",
-        "line2": "damit sie die Konten dieses Produkts bereitstellen kann.",
-        "failedTitle": "Produktkonten konnten nicht eingerichtet werden",
-        "failedDescription": "Die Anfrage an dein Gerät wurde nicht abgeschlossen. Schließe dies und versuche es erneut.",
-        "rejected": "Einrichtung des Produktkontos abgebrochen"
       }
     }
   }

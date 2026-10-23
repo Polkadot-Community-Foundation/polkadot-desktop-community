@@ -1078,13 +1078,6 @@
           "title": "Kanıt oluştur",
           "subtitle": "Bu uygulamanın istediği kanıtı gözden geçir."
         },
-        "permission": {
-          "IdentityDisclosure": "Bu uygulama kimliğini öğrenmek istiyor.",
-          "PreimageSubmit": "Bu uygulama içerik göndermek istiyor.",
-          "AccountAccess": "Bu uygulama başka bir uygulamanın hesabını kullanmak istiyor.",
-          "AccountAlias": "Bu uygulama bir takma ad türetmek istiyor.",
-          "title": "İzin isteği"
-        },
         "legacyAccountNotice": "Eski bir hesapla imzalanıyor.",
         "resource": {
           "statementStore": "Beyan deposu alanı",
@@ -1228,75 +1221,6 @@
           "SmartContractAllowance": "Akıllı sözleşme çağrılarını otomatik imzalama",
           "AutoSigning": "İşlemleri otomatik imzalama"
         }
-      },
-      "permissionDenied": {
-        "appSettings": "Uygulama ayarları",
-        "systemDeviceSettings": "Cihaz ayarları",
-        "Camera": {
-          "title": "Kamera erişimi gerekli",
-          "description": "Görüntülü arama, QR tarama ve medya çekimi gibi özellikler için kullanılır"
-        },
-        "Microphone": {
-          "title": "Mikrofon erişimi gerekli",
-          "description": "Sesli arama, mesajlaşma ve ses kaydı gibi özellikler için kullanılır"
-        },
-        "Bluetooth": {
-          "title": "Bluetooth erişimi gerekli",
-          "description": "Yakındaki cihazlara bağlanmak ve veri aktarmak için kullanılır"
-        },
-        "Location": {
-          "title": "Konum erişimi gerekli",
-          "description": "Konum tabanlı hizmetler ve içerik kişiselleştirme için kullanılır"
-        },
-        "Notifications": {
-          "title": "Bildirim erişimi gerekli",
-          "description": "Sana güncellemeler, uyarılar ve önemli bilgiler göndermek için kullanılır"
-        },
-        "Biometrics": {
-          "title": "Biyometri erişimi gerekli",
-          "description": "Kimliğinin doğrulanmasını gerektiren özellikler için kullanılır"
-        },
-        "Clipboard": {
-          "title": "Pano erişimi gerekli",
-          "description": "Paylaşmayı seçtiğin içeriği kopyalayıp yapıştırmak için kullanılır"
-        },
-        "OpenUrl": {
-          "title": "Harici bağlantı erişimi gerekli",
-          "description": "Harici bağlantıları varsayılan tarayıcında açmak için kullanılır"
-        },
-        "ExternalRequest": {
-          "title": "Web alan adı erişimi gerekli",
-          "description": "Aşağıdaki alan adlarına istek göndermek için kullanılır"
-        },
-        "TransactionSubmit": {
-          "title": "Zincire gönderim erişimi gerekli",
-          "description": "İmzalanmış işlemleri herhangi bir Substrate zincirine yayınlamak için kullanılır"
-        },
-        "ChainSubmit": {
-          "title": "Zincire gönderim erişimi gerekli",
-          "description": "İmzalanmış işlemleri herhangi bir Substrate zincirine yayınlamak için kullanılır"
-        },
-        "PreimageSubmit": {
-          "title": "Preimage gönderim erişimi gerekli",
-          "description": "Preimage verisini bulletin zincirine göndermek için kullanılır"
-        },
-        "StatementSubmit": {
-          "title": "Statement gönderim erişimi gerekli",
-          "description": "Statement'ları statement store'a göndermek için kullanılır"
-        },
-        "fallback": {
-          "title": "Erişim gerekli",
-          "description": "Uygulama Ayarları'ndan erişimi etkinleştir."
-        }
-      },
-      "subtreeRequest": {
-        "title": "Ürün hesapları hazırlanıyor",
-        "preparing": "Bu ürünün hesapları kontrol ediliyor...",
-        "line1": "Bu ürünün hesaplarını sağlaması için",
-        "line2": "cihazında Polkadot uygulamasını aç.",
-        "failedTitle": "Ürün hesapları hazırlanamadı",
-        "failedDescription": "Cihazına gönderilen istek tamamlanmadı. Bunu kapat ve yeniden dene.",
-        "rejected": "Ürün hesabı kurulumu iptal edildi"
       }
     }
   }

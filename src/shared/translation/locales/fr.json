@@ -1078,13 +1078,6 @@
           "title": "Créer une preuve",
           "subtitle": "Vérifiez la preuve demandée par cette app."
         },
-        "permission": {
-          "IdentityDisclosure": "Cette app demande à connaître votre identité.",
-          "PreimageSubmit": "Cette app demande à soumettre du contenu.",
-          "AccountAccess": "Cette app demande à utiliser le compte d’une autre app.",
-          "AccountAlias": "Cette app demande à dériver un alias.",
-          "title": "Demande d’autorisation"
-        },
         "legacyAccountNotice": "Signature avec un compte hérité.",
         "resource": {
           "statementStore": "Emplacement du magasin de déclarations",
@@ -1228,75 +1221,6 @@
           "SmartContractAllowance": "Signer automatiquement les appels de contrats intelligents",
           "AutoSigning": "Signer automatiquement les transactions"
         }
-      },
-      "permissionDenied": {
-        "appSettings": "Paramètres de l'app",
-        "systemDeviceSettings": "Paramètres de l'appareil",
-        "Camera": {
-          "title": "Accès à la caméra requis",
-          "description": "Utilisé pour des fonctions comme les appels vidéo, le scan de QR et la capture de contenu"
-        },
-        "Microphone": {
-          "title": "Accès au microphone requis",
-          "description": "Utilisé pour des fonctions comme les appels vocaux, la messagerie et l'enregistrement audio"
-        },
-        "Bluetooth": {
-          "title": "Accès au Bluetooth requis",
-          "description": "Utilisé pour se connecter aux appareils à proximité et transférer des données"
-        },
-        "Location": {
-          "title": "Accès à la localisation requis",
-          "description": "Utilisé pour les services de géolocalisation et la personnalisation du contenu"
-        },
-        "Notifications": {
-          "title": "Accès aux notifications requis",
-          "description": "Utilisé pour vous envoyer des actualités, des alertes et des informations importantes"
-        },
-        "Biometrics": {
-          "title": "Accès à la biométrie requis",
-          "description": "Utilisé pour les fonctions nécessitant de vérifier votre identité"
-        },
-        "Clipboard": {
-          "title": "Accès au presse-papiers requis",
-          "description": "Utilisé pour copier et coller le contenu que vous choisissez de partager"
-        },
-        "OpenUrl": {
-          "title": "Accès aux liens externes requis",
-          "description": "Utilisé pour ouvrir des liens externes dans votre navigateur par défaut"
-        },
-        "ExternalRequest": {
-          "title": "Accès aux domaines web requis",
-          "description": "Utilisé pour effectuer des requêtes vers les domaines suivants"
-        },
-        "TransactionSubmit": {
-          "title": "Accès à la soumission à la chaîne requis",
-          "description": "Utilisé pour diffuser des transactions signées vers n'importe quelle chaîne Substrate"
-        },
-        "ChainSubmit": {
-          "title": "Accès à la soumission à la chaîne requis",
-          "description": "Utilisé pour diffuser des transactions signées vers n'importe quelle chaîne Substrate"
-        },
-        "PreimageSubmit": {
-          "title": "Accès à la soumission de preimage requis",
-          "description": "Utilisé pour soumettre des données de preimage à la Bulletin Chain"
-        },
-        "StatementSubmit": {
-          "title": "Accès à la soumission de statements requis",
-          "description": "Utilisé pour soumettre des statements au statement store"
-        },
-        "fallback": {
-          "title": "Accès requis",
-          "description": "Activez l'accès dans les paramètres de l'app."
-        }
-      },
-      "subtreeRequest": {
-        "title": "Configuration des comptes de produit",
-        "preparing": "Vérification des comptes de ce produit...",
-        "line1": "Ouvrez la Polkadot App sur votre appareil",
-        "line2": "pour qu'elle fournisse les comptes de ce produit.",
-        "failedTitle": "Impossible de configurer les comptes de produit",
-        "failedDescription": "La demande envoyée à votre appareil n'a pas abouti. Fermez cette fenêtre et réessayez.",
-        "rejected": "Configuration des comptes de produit annulée"
       }
     }
   }
