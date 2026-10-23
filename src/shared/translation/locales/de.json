@@ -838,7 +838,7 @@
           "description": "Wird verwendet, um Preimage-Daten an die Bulletin Chain zu senden",
           "rule": {
             "1": "Gespeicherte Daten sind auf der Bulletin Chain öffentlich",
-            "2": "„Immer erlauben“ gilt für jeden Upload, „Einmal erlauben“ für einen einzelnen Upload",
+            "2": "„Immer zulassen“ gilt für jeden Upload, „Einmal zulassen“ für einen einzelnen Upload",
             "3": "Daten werden genau so übermittelt, wie sie bereitgestellt wurden, ohne Änderung",
             "4": "Kein Zugriff auf deine privaten Schlüssel oder sensiblen Daten"
           }

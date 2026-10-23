@@ -838,7 +838,7 @@
           "description": "Preimage verisini bulletin zincirine göndermek için kullanılır",
           "rule": {
             "1": "Depolanan veriler Bulletin zincirinde herkese açıktır",
-            "2": "Her Zaman İzin Ver tüm yüklemeleri kapsar; Bir Kez İzin Ver tek bir yüklemeyi kapsar",
+            "2": "Her zaman izin ver tüm yüklemeleri kapsar; Bir kez izin ver tek bir yüklemeyi kapsar",
             "3": "Veriler sağlandığı gibi, değiştirilmeden gönderilir",
             "4": "Özel anahtarlarına veya hassas verilerine erişilmez"
           }
