@@ -5,7 +5,6 @@ import { AliasPermissionModal } from './requests/AliasPermissionModal';
 import { AllocationRequestModal } from './requests/AllocationRequestModal';
 import { CreateTransactionModal } from './requests/CreateTransactionModal';
 import { KeyListingPermissionModal } from './requests/KeyListingPermissionModal';
-import { PreimageSubmitModal } from './requests/PreimageSubmitModal';
 import { ProductSubtreeModal } from './requests/ProductSubtreeModal';
 import { ProofPermissionModal } from './requests/ProofPermissionModal';
 import { SignPayloadModal } from './requests/SignPayloadModal';
@@ -57,9 +56,6 @@ export const ProductReviewDialog = ({ props, onDecide }: Props) => {
 
     case 'identityDisclosure':
       return <KeyListingPermissionModal review={props.review} onDecide={onDecide} />;
-
-    case 'preimageSubmit':
-      return <PreimageSubmitModal review={props.review} onDecide={onDecide} />;
 
     case 'accountAccess':
       return <AccountAccessModal review={props.review} onDecide={onDecide} />;

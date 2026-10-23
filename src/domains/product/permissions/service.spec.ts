@@ -12,6 +12,7 @@ const STORED_DEVICE_SETTINGS_IDS = [
   'Clipboard',
   'OpenExternalUrl',
   'Biometrics',
+  'Motion',
 ] as const;
 
 describe('device permission settings mapping', () => {
@@ -70,6 +71,21 @@ describe('core mapping', () => {
       tag: 'Remote',
       value: { permission: { tag: 'ChainSubmit' } },
     });
+  });
+
+  it('maps Motion and BalanceAccess', () => {
+    expect(permissionsService.toAuthorizationRequest('Motion')).toEqual({ tag: 'Device', value: 'Motion' });
+    expect(permissionsService.toAuthorizationRequest('BalanceAccess')).toEqual({
+      tag: 'Remote',
+      value: { permission: { tag: 'BalanceAccess' } },
+    });
+  });
+
+  it('lists Motion and BalanceAccess in the catalogue', () => {
+    const ids = permissionsService.catalogueRequests().map(r => permissionsService.fromAuthorizationRequest(r));
+
+    expect(ids).toContain('Motion');
+    expect(ids).toContain('BalanceAccess');
   });
 
   it('carries the pattern for an external request', () => {

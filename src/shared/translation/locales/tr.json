@@ -174,9 +174,6 @@
       "statementStoreErrorTitle": "Statement store hatası",
       "feeUnavailable": "—",
       "customChainSigningWarning": "Bu özel zincir için işlem ayrıntıları kullanılamıyor. İmzalamadan önce ham çağrı verisini incele.",
-      "storeDataRequest": "Veri saklama isteği",
-      "storeDataDescription": "Ürün, Bulletin Chain üzerinde veri ({size}) saklamak istiyor.",
-      "storeDataDeny": "Reddet",
       "webVersionNotification": "Uygulamanın web sürümünü kullanıyorsun. Ürünlerle etkileşim için lütfen masaüstü sürümünü kullan.",
       "findPlaceholder": "Sayfada bul",
       "findCount": "{current}/{total}",
@@ -640,6 +637,7 @@
           "Clipboard": "Pano",
           "OpenUrl": "Harici URL açma",
           "Biometrics": "Biyometri",
+          "Motion": "Hareket Sensörleri",
           "NFC": "NFC",
           "Files": "Dosyalar",
           "Remote": "Web alan adları",
@@ -647,6 +645,7 @@
           "ChainSubmit": "Zincire gönderim",
           "PreimageSubmit": "Preimage gönderimi",
           "StatementSubmit": "Statement gönderimi",
+          "BalanceAccess": "Bakiye",
           "UserIdentity": "Kimlik"
         },
         "reason": {
@@ -658,6 +657,7 @@
           "Clipboard": "Paylaşmayı seçtiğin içeriği kopyalayıp yapıştırmak için kullanılır",
           "OpenUrl": "Harici bağlantıları varsayılan tarayıcında açmak için kullanılır",
           "Biometrics": "Kimliğinin doğrulanmasını gerektiren özellikler için kullanılır",
+          "Motion": "Cihazını nasıl hareket ettirdiğine veya eğdiğine yanıt veren özellikler için kullanılır",
           "NFC": "Yakındaki etiketler ve cihazlarla temassız okuma ve yazma için kullanılır",
           "Files": "Dosya yükleme, indirme ve yönetme gibi özellikler için kullanılır",
           "Remote": "Aşağıdaki alan adlarına istek göndermek için kullanılır",
@@ -665,6 +665,7 @@
           "ChainSubmit": "İmzalanmış işlemleri herhangi bir Substrate zincirine yayınlamak için kullanılır",
           "PreimageSubmit": "Preimage verisini bulletin zincirine göndermek için kullanılır",
           "StatementSubmit": "Statement'ları statement store'a göndermek için kullanılır",
+          "BalanceAccess": "Harcanabilir bakiyeni okumak ve bakiye çok düşük olduğu için bir ödemenin başarısız olduğunu anlamak için kullanılır. Harcama yapmaya izin vermez",
           "UserIdentity": "Kimlik doğrulaması için birincil kullanıcı adına erişim gereklidir. Bunu daha sonra Ayarlar'dan yönetebilirsin."
         }
       },
@@ -796,6 +797,15 @@
             "4": "Yalnızca kilit açma veya işlem onaylama için kullanılır"
           }
         },
+        "Motion": {
+          "label": "Hareket Sensörleri",
+          "description": "Cihazını nasıl hareket ettirdiğine veya eğdiğine yanıt veren özellikler için kullanılır",
+          "rule": {
+            "1": "Yalnızca cihazın hareketini ve yönünü okur",
+            "2": "Konumuna veya kamerana erişim yoktur",
+            "3": "Erişimi daha sonra Ayarlar’dan iptal edebilirsin"
+          }
+        },
         "OpenExternalUrl": {
           "label": "Harici URL açma",
           "description": "Harici bağlantıları varsayılan tarayıcında açmak için kullanılır",
@@ -840,8 +850,8 @@
           "label": "Preimage gönderimi",
           "description": "Preimage verisini bulletin zincirine göndermek için kullanılır",
           "rule": {
-            "1": "Yalnızca imzalanmış işlemler gönderilebilir",
-            "2": "Gönderim yalnızca senin onayından sonra gerçekleşir",
+            "1": "Depolanan veriler Bulletin zincirinde herkese açıktır",
+            "2": "Her zaman izin ver tüm yüklemeleri kapsar; Bir kez izin ver tek bir yüklemeyi kapsar",
             "3": "Veriler sağlandığı gibi, değiştirilmeden gönderilir",
             "4": "Özel anahtarlarına veya hassas verilerine erişilmez"
           }
@@ -854,6 +864,16 @@
             "2": "İşlemler otomatik olarak oluşturulmaz veya değiştirilmez",
             "3": "Gönderim yalnızca senin onayından sonra gerçekleşir",
             "4": "Özel anahtarlarına veya hassas verilerine erişilmez"
+          }
+        },
+        "BalanceAccess": {
+          "label": "Bakiye",
+          "description": "Harcanabilir bakiyeni okumak için kullanılır",
+          "rule": {
+            "1": "Ödemeler için kullanılabilir bakiyeyi gösterir",
+            "2": "Ürünün para harcamasına veya taşımasına izin vermez",
+            "3": "Bakiyen çok düşük olduğu için bir ödemenin reddedildiğini anlayabilir",
+            "4": "Erişimi iptal etmek bakiye güncellemelerini durdurur"
           }
         },
         "UserIdentity": {
@@ -1058,13 +1078,6 @@
           "title": "Kanıt oluştur",
           "subtitle": "Bu uygulamanın istediği kanıtı gözden geçir."
         },
-        "permission": {
-          "IdentityDisclosure": "Bu uygulama kimliğini öğrenmek istiyor.",
-          "PreimageSubmit": "Bu uygulama içerik göndermek istiyor.",
-          "AccountAccess": "Bu uygulama başka bir uygulamanın hesabını kullanmak istiyor.",
-          "AccountAlias": "Bu uygulama bir takma ad türetmek istiyor.",
-          "title": "İzin isteği"
-        },
         "legacyAccountNotice": "Eski bir hesapla imzalanıyor.",
         "resource": {
           "statementStore": "Beyan deposu alanı",
@@ -1208,75 +1221,6 @@
           "SmartContractAllowance": "Akıllı sözleşme çağrılarını otomatik imzalama",
           "AutoSigning": "İşlemleri otomatik imzalama"
         }
-      },
-      "permissionDenied": {
-        "appSettings": "Uygulama ayarları",
-        "systemDeviceSettings": "Cihaz ayarları",
-        "Camera": {
-          "title": "Kamera erişimi gerekli",
-          "description": "Görüntülü arama, QR tarama ve medya çekimi gibi özellikler için kullanılır"
-        },
-        "Microphone": {
-          "title": "Mikrofon erişimi gerekli",
-          "description": "Sesli arama, mesajlaşma ve ses kaydı gibi özellikler için kullanılır"
-        },
-        "Bluetooth": {
-          "title": "Bluetooth erişimi gerekli",
-          "description": "Yakındaki cihazlara bağlanmak ve veri aktarmak için kullanılır"
-        },
-        "Location": {
-          "title": "Konum erişimi gerekli",
-          "description": "Konum tabanlı hizmetler ve içerik kişiselleştirme için kullanılır"
-        },
-        "Notifications": {
-          "title": "Bildirim erişimi gerekli",
-          "description": "Sana güncellemeler, uyarılar ve önemli bilgiler göndermek için kullanılır"
-        },
-        "Biometrics": {
-          "title": "Biyometri erişimi gerekli",
-          "description": "Kimliğinin doğrulanmasını gerektiren özellikler için kullanılır"
-        },
-        "Clipboard": {
-          "title": "Pano erişimi gerekli",
-          "description": "Paylaşmayı seçtiğin içeriği kopyalayıp yapıştırmak için kullanılır"
-        },
-        "OpenUrl": {
-          "title": "Harici bağlantı erişimi gerekli",
-          "description": "Harici bağlantıları varsayılan tarayıcında açmak için kullanılır"
-        },
-        "ExternalRequest": {
-          "title": "Web alan adı erişimi gerekli",
-          "description": "Aşağıdaki alan adlarına istek göndermek için kullanılır"
-        },
-        "TransactionSubmit": {
-          "title": "Zincire gönderim erişimi gerekli",
-          "description": "İmzalanmış işlemleri herhangi bir Substrate zincirine yayınlamak için kullanılır"
-        },
-        "ChainSubmit": {
-          "title": "Zincire gönderim erişimi gerekli",
-          "description": "İmzalanmış işlemleri herhangi bir Substrate zincirine yayınlamak için kullanılır"
-        },
-        "PreimageSubmit": {
-          "title": "Preimage gönderim erişimi gerekli",
-          "description": "Preimage verisini bulletin zincirine göndermek için kullanılır"
-        },
-        "StatementSubmit": {
-          "title": "Statement gönderim erişimi gerekli",
-          "description": "Statement'ları statement store'a göndermek için kullanılır"
-        },
-        "fallback": {
-          "title": "Erişim gerekli",
-          "description": "Uygulama Ayarları'ndan erişimi etkinleştir."
-        }
-      },
-      "subtreeRequest": {
-        "title": "Ürün hesapları hazırlanıyor",
-        "preparing": "Bu ürünün hesapları kontrol ediliyor...",
-        "line1": "Bu ürünün hesaplarını sağlaması için",
-        "line2": "cihazında Polkadot uygulamasını aç.",
-        "failedTitle": "Ürün hesapları hazırlanamadı",
-        "failedDescription": "Cihazına gönderilen istek tamamlanmadı. Bunu kapat ve yeniden dene.",
-        "rejected": "Ürün hesabı kurulumu iptal edildi"
       }
     }
   }

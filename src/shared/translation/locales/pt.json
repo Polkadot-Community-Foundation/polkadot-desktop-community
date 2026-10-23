@@ -174,9 +174,6 @@
       "statementStoreErrorTitle": "Erro do statement store",
       "feeUnavailable": "—",
       "customChainSigningWarning": "Os detalhes da transação não estão disponíveis para esta cadeia personalizada. Revise o call data bruto antes de assinar.",
-      "storeDataRequest": "Solicitação de armazenamento de dados",
-      "storeDataDescription": "O produto quer armazenar dados ({size}) na Bulletin Chain.",
-      "storeDataDeny": "Negar",
       "webVersionNotification": "Você está usando a versão web do app. Use a versão desktop para interagir com os produtos.",
       "findPlaceholder": "Localizar na página",
       "findCount": "{current}/{total}",
@@ -640,6 +637,7 @@
           "Clipboard": "Área de transferência",
           "OpenUrl": "Abrir URL externa",
           "Biometrics": "Biometria",
+          "Motion": "Sensores de movimento",
           "NFC": "NFC",
           "Files": "Arquivos",
           "Remote": "Domínios web",
@@ -647,6 +645,7 @@
           "ChainSubmit": "Envio à cadeia",
           "PreimageSubmit": "Envio de preimage",
           "StatementSubmit": "Envio de statements",
+          "BalanceAccess": "Saldo",
           "UserIdentity": "Identidade"
         },
         "reason": {
@@ -658,6 +657,7 @@
           "Clipboard": "Usado para copiar e colar o conteúdo que você escolhe compartilhar",
           "OpenUrl": "Usado para abrir links externos no seu navegador padrão",
           "Biometrics": "Usado para recursos que exigem verificar sua identidade",
+          "Motion": "Usado em recursos que respondem a como você move ou inclina o dispositivo",
           "NFC": "Usado para leitura e escrita por aproximação com etiquetas e dispositivos próximos",
           "Files": "Usado para recursos como enviar, baixar e gerenciar arquivos",
           "Remote": "Usado para fazer requisições aos domínios a seguir",
@@ -665,6 +665,7 @@
           "ChainSubmit": "Usado para transmitir transações assinadas a qualquer cadeia Substrate",
           "PreimageSubmit": "Usado para enviar dados de preimage à Bulletin Chain",
           "StatementSubmit": "Usado para enviar statements ao statement store",
+          "BalanceAccess": "Usado para ler o seu saldo disponível e detectar quando um pagamento falha porque o saldo é baixo demais. Não permite gastar",
           "UserIdentity": "O acesso ao seu nome de usuário principal é necessário para identificação. Você pode gerenciar isso depois em Configurações."
         }
       },
@@ -796,6 +797,15 @@
             "4": "Usado apenas para desbloquear ou aprovar ações"
           }
         },
+        "Motion": {
+          "label": "Sensores de movimento",
+          "description": "Usado em recursos que respondem a como você move ou inclina o dispositivo",
+          "rule": {
+            "1": "Lê apenas o movimento e a orientação do dispositivo",
+            "2": "Sem acesso à sua localização ou câmera",
+            "3": "Você pode revogar o acesso depois em Configurações"
+          }
+        },
         "OpenExternalUrl": {
           "label": "Abrir URL externa",
           "description": "Usado para abrir links externos no seu navegador padrão",
@@ -840,8 +850,8 @@
           "label": "Envio de preimage",
           "description": "Usado para enviar dados de preimage à Bulletin Chain",
           "rule": {
-            "1": "Somente transações assinadas podem ser enviadas",
-            "2": "O envio acontece somente após a sua confirmação",
+            "1": "Os dados armazenados são públicos na cadeia Bulletin",
+            "2": "Permitir sempre cobre todos os envios; Permitir uma vez cobre um único envio",
             "3": "Os dados são enviados exatamente como fornecidos, sem modificação",
             "4": "Sem acesso às suas chaves privadas ou a dados sensíveis"
           }
@@ -854,6 +864,16 @@
             "2": "Nenhuma transação é criada ou modificada automaticamente",
             "3": "O envio acontece somente após a sua confirmação",
             "4": "Sem acesso às suas chaves privadas ou a dados sensíveis"
+          }
+        },
+        "BalanceAccess": {
+          "label": "Saldo",
+          "description": "Usado para ler o seu saldo disponível",
+          "rule": {
+            "1": "Mostra o saldo disponível para pagamentos",
+            "2": "Não permite que o produto gaste ou mova fundos",
+            "3": "Pode detectar quando um pagamento foi recusado porque o saldo estava baixo demais",
+            "4": "Revogar o acesso interrompe novas atualizações de saldo"
           }
         },
         "UserIdentity": {
@@ -1058,13 +1078,6 @@
           "title": "Criar prova",
           "subtitle": "Revise a prova que este app está solicitando."
         },
-        "permission": {
-          "IdentityDisclosure": "Este app está pedindo para saber sua identidade.",
-          "PreimageSubmit": "Este app está pedindo para enviar conteúdo.",
-          "AccountAccess": "Este app está pedindo para usar a conta de outro app.",
-          "AccountAlias": "Este app está pedindo para derivar um alias.",
-          "title": "Solicitação de permissão"
-        },
         "legacyAccountNotice": "Assinando com uma conta legada.",
         "resource": {
           "statementStore": "Espaço do armazenamento de declarações",
@@ -1208,75 +1221,6 @@
           "SmartContractAllowance": "Assinar automaticamente chamadas de contratos inteligentes",
           "AutoSigning": "Assinar transações automaticamente"
         }
-      },
-      "permissionDenied": {
-        "appSettings": "Configurações do app",
-        "systemDeviceSettings": "Configurações do dispositivo",
-        "Camera": {
-          "title": "Acesso à câmera necessário",
-          "description": "Usado para recursos como videochamadas, leitura de QR e captura de mídia"
-        },
-        "Microphone": {
-          "title": "Acesso ao microfone necessário",
-          "description": "Usado para recursos como chamadas de voz, mensagens e gravação de áudio"
-        },
-        "Bluetooth": {
-          "title": "Acesso ao Bluetooth necessário",
-          "description": "Usado para conectar a dispositivos próximos e transferir dados"
-        },
-        "Location": {
-          "title": "Acesso à localização necessário",
-          "description": "Usado para serviços baseados em localização e personalização de conteúdo"
-        },
-        "Notifications": {
-          "title": "Acesso às notificações necessário",
-          "description": "Usado para enviar novidades, alertas e informações importantes"
-        },
-        "Biometrics": {
-          "title": "Acesso à biometria necessário",
-          "description": "Usado para recursos que exigem verificar sua identidade"
-        },
-        "Clipboard": {
-          "title": "Acesso à área de transferência necessário",
-          "description": "Usado para copiar e colar o conteúdo que você escolhe compartilhar"
-        },
-        "OpenUrl": {
-          "title": "Acesso a links externos necessário",
-          "description": "Usado para abrir links externos no seu navegador padrão"
-        },
-        "ExternalRequest": {
-          "title": "Acesso a domínios web necessário",
-          "description": "Usado para fazer requisições aos domínios a seguir"
-        },
-        "TransactionSubmit": {
-          "title": "Acesso de envio à cadeia necessário",
-          "description": "Usado para transmitir transações assinadas a qualquer cadeia Substrate"
-        },
-        "ChainSubmit": {
-          "title": "Acesso de envio à cadeia necessário",
-          "description": "Usado para transmitir transações assinadas a qualquer cadeia Substrate"
-        },
-        "PreimageSubmit": {
-          "title": "Acesso de envio de preimage necessário",
-          "description": "Usado para enviar dados de preimage à Bulletin Chain"
-        },
-        "StatementSubmit": {
-          "title": "Acesso de envio de statements necessário",
-          "description": "Usado para enviar statements ao statement store"
-        },
-        "fallback": {
-          "title": "Acesso necessário",
-          "description": "Ative o acesso nas configurações do app."
-        }
-      },
-      "subtreeRequest": {
-        "title": "Configurando as contas do produto",
-        "preparing": "Verificando as contas deste produto...",
-        "line1": "Abra o Polkadot App no seu dispositivo",
-        "line2": "para que ele forneça as contas deste produto.",
-        "failedTitle": "Não foi possível configurar as contas do produto",
-        "failedDescription": "A solicitação ao seu dispositivo não foi concluída. Feche esta janela e tente novamente.",
-        "rejected": "Configuração das contas do produto cancelada"
       }
     }
   }
