@@ -174,9 +174,6 @@
       "statementStoreErrorTitle": "Erreur du statement store",
       "feeUnavailable": "—",
       "customChainSigningWarning": "Les détails de la transaction ne sont pas disponibles pour cette chaîne personnalisée. Vérifiez le call data brut avant de signer.",
-      "storeDataRequest": "Demande de stockage de données",
-      "storeDataDescription": "Le produit souhaite stocker des données ({size}) sur la Bulletin Chain.",
-      "storeDataDeny": "Refuser",
       "webVersionNotification": "Vous utilisez la version web de l'app. Utilisez la version bureau pour interagir avec les produits.",
       "findPlaceholder": "Rechercher dans la page",
       "findCount": "{current}/{total}",
@@ -640,6 +637,7 @@
           "Clipboard": "Presse-papiers",
           "OpenUrl": "Ouvrir une URL externe",
           "Biometrics": "Biométrie",
+          "Motion": "Capteurs de mouvement",
           "NFC": "NFC",
           "Files": "Fichiers",
           "Remote": "Domaines web",
@@ -647,6 +645,7 @@
           "ChainSubmit": "Soumission à la chaîne",
           "PreimageSubmit": "Soumission de preimage",
           "StatementSubmit": "Soumission de statements",
+          "BalanceAccess": "Solde",
           "UserIdentity": "Identité"
         },
         "reason": {
@@ -658,6 +657,7 @@
           "Clipboard": "Utilisé pour copier et coller le contenu que vous choisissez de partager",
           "OpenUrl": "Utilisé pour ouvrir des liens externes dans votre navigateur par défaut",
           "Biometrics": "Utilisé pour les fonctions nécessitant de vérifier votre identité",
+          "Motion": "Utilisé pour les fonctions qui réagissent à la façon dont vous déplacez ou inclinez votre appareil",
           "NFC": "Utilisé pour la lecture et l'écriture sans contact avec les tags et appareils à proximité",
           "Files": "Utilisé pour des fonctions comme l'envoi, le téléchargement et la gestion de fichiers",
           "Remote": "Utilisé pour effectuer des requêtes vers les domaines suivants",
@@ -665,6 +665,7 @@
           "ChainSubmit": "Utilisé pour diffuser des transactions signées vers n'importe quelle chaîne Substrate",
           "PreimageSubmit": "Utilisé pour soumettre des données de preimage à la Bulletin Chain",
           "StatementSubmit": "Utilisé pour soumettre des statements au statement store",
+          "BalanceAccess": "Utilisé pour lire votre solde disponible et détecter qu'un paiement échoue parce que le solde est trop bas. Ne permet pas de dépenser",
           "UserIdentity": "L'accès à votre nom d'utilisateur principal est requis pour l'identification. Vous pourrez le gérer plus tard dans les Paramètres."
         }
       },
@@ -796,6 +797,15 @@
             "4": "Utilisé uniquement pour déverrouiller ou approuver des actions"
           }
         },
+        "Motion": {
+          "label": "Capteurs de mouvement",
+          "description": "Utilisé pour les fonctions qui réagissent à la façon dont vous déplacez ou inclinez votre appareil",
+          "rule": {
+            "1": "Lit uniquement le mouvement et l'orientation de l'appareil",
+            "2": "Aucun accès ni à votre position ni à votre caméra",
+            "3": "Vous pouvez révoquer l'accès plus tard dans les Réglages"
+          }
+        },
         "OpenExternalUrl": {
           "label": "Ouvrir une URL externe",
           "description": "Utilisé pour ouvrir des liens externes dans votre navigateur par défaut",
@@ -840,8 +850,8 @@
           "label": "Soumission de preimage",
           "description": "Utilisé pour soumettre des données de preimage à la Bulletin Chain",
           "rule": {
-            "1": "Seules des transactions signées peuvent être soumises",
-            "2": "La soumission n'a lieu qu'après votre confirmation",
+            "1": "Les données stockées sont publiques sur la chaîne Bulletin",
+            "2": "Toujours autoriser couvre chaque envoi ; Autoriser une fois couvre un seul envoi",
             "3": "Les données sont soumises telles quelles, sans modification",
             "4": "Aucun accès à vos clés privées ni à des données sensibles"
           }
@@ -854,6 +864,16 @@
             "2": "Aucune transaction n'est créée ni modifiée automatiquement",
             "3": "La soumission n'a lieu qu'après votre confirmation",
             "4": "Aucun accès à vos clés privées ni à des données sensibles"
+          }
+        },
+        "BalanceAccess": {
+          "label": "Solde",
+          "description": "Utilisé pour lire votre solde disponible",
+          "rule": {
+            "1": "Affiche le solde disponible pour les paiements",
+            "2": "Ne permet pas au produit de dépenser ou de déplacer des fonds",
+            "3": "Peut détecter qu'un paiement a été refusé parce que votre solde était trop bas",
+            "4": "Révoquer l'accès arrête les mises à jour du solde"
           }
         },
         "UserIdentity": {
@@ -1058,13 +1078,6 @@
           "title": "Créer une preuve",
           "subtitle": "Vérifiez la preuve demandée par cette app."
         },
-        "permission": {
-          "IdentityDisclosure": "Cette app demande à connaître votre identité.",
-          "PreimageSubmit": "Cette app demande à soumettre du contenu.",
-          "AccountAccess": "Cette app demande à utiliser le compte d’une autre app.",
-          "AccountAlias": "Cette app demande à dériver un alias.",
-          "title": "Demande d’autorisation"
-        },
         "legacyAccountNotice": "Signature avec un compte hérité.",
         "resource": {
           "statementStore": "Emplacement du magasin de déclarations",
@@ -1208,75 +1221,6 @@
           "SmartContractAllowance": "Signer automatiquement les appels de contrats intelligents",
           "AutoSigning": "Signer automatiquement les transactions"
         }
-      },
-      "permissionDenied": {
-        "appSettings": "Paramètres de l'app",
-        "systemDeviceSettings": "Paramètres de l'appareil",
-        "Camera": {
-          "title": "Accès à la caméra requis",
-          "description": "Utilisé pour des fonctions comme les appels vidéo, le scan de QR et la capture de contenu"
-        },
-        "Microphone": {
-          "title": "Accès au microphone requis",
-          "description": "Utilisé pour des fonctions comme les appels vocaux, la messagerie et l'enregistrement audio"
-        },
-        "Bluetooth": {
-          "title": "Accès au Bluetooth requis",
-          "description": "Utilisé pour se connecter aux appareils à proximité et transférer des données"
-        },
-        "Location": {
-          "title": "Accès à la localisation requis",
-          "description": "Utilisé pour les services de géolocalisation et la personnalisation du contenu"
-        },
-        "Notifications": {
-          "title": "Accès aux notifications requis",
-          "description": "Utilisé pour vous envoyer des actualités, des alertes et des informations importantes"
-        },
-        "Biometrics": {
-          "title": "Accès à la biométrie requis",
-          "description": "Utilisé pour les fonctions nécessitant de vérifier votre identité"
-        },
-        "Clipboard": {
-          "title": "Accès au presse-papiers requis",
-          "description": "Utilisé pour copier et coller le contenu que vous choisissez de partager"
-        },
-        "OpenUrl": {
-          "title": "Accès aux liens externes requis",
-          "description": "Utilisé pour ouvrir des liens externes dans votre navigateur par défaut"
-        },
-        "ExternalRequest": {
-          "title": "Accès aux domaines web requis",
-          "description": "Utilisé pour effectuer des requêtes vers les domaines suivants"
-        },
-        "TransactionSubmit": {
-          "title": "Accès à la soumission à la chaîne requis",
-          "description": "Utilisé pour diffuser des transactions signées vers n'importe quelle chaîne Substrate"
-        },
-        "ChainSubmit": {
-          "title": "Accès à la soumission à la chaîne requis",
-          "description": "Utilisé pour diffuser des transactions signées vers n'importe quelle chaîne Substrate"
-        },
-        "PreimageSubmit": {
-          "title": "Accès à la soumission de preimage requis",
-          "description": "Utilisé pour soumettre des données de preimage à la Bulletin Chain"
-        },
-        "StatementSubmit": {
-          "title": "Accès à la soumission de statements requis",
-          "description": "Utilisé pour soumettre des statements au statement store"
-        },
-        "fallback": {
-          "title": "Accès requis",
-          "description": "Activez l'accès dans les paramètres de l'app."
-        }
-      },
-      "subtreeRequest": {
-        "title": "Configuration des comptes de produit",
-        "preparing": "Vérification des comptes de ce produit...",
-        "line1": "Ouvrez la Polkadot App sur votre appareil",
-        "line2": "pour qu'elle fournisse les comptes de ce produit.",
-        "failedTitle": "Impossible de configurer les comptes de produit",
-        "failedDescription": "La demande envoyée à votre appareil n'a pas abouti. Fermez cette fenêtre et réessayez.",
-        "rejected": "Configuration des comptes de produit annulée"
       }
     }
   }

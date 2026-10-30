@@ -174,9 +174,6 @@
       "statementStoreErrorTitle": "Statement-Store-Fehler",
       "feeUnavailable": "—",
       "customChainSigningWarning": "Für diese benutzerdefinierte Chain sind keine Transaktionsdetails verfügbar. Prüfe die rohen Call-Daten vor dem Signieren.",
-      "storeDataRequest": "Anfrage zum Speichern von Daten",
-      "storeDataDescription": "Das Produkt möchte Daten ({size}) auf der Bulletin Chain speichern.",
-      "storeDataDeny": "Ablehnen",
       "webVersionNotification": "Du verwendest die Webversion der App. Bitte nutze die Desktop-Version, um mit den Produkten zu interagieren.",
       "findPlaceholder": "Auf Seite suchen",
       "findCount": "{current}/{total}",
@@ -640,6 +637,7 @@
           "Clipboard": "Zwischenablage",
           "OpenUrl": "Externe URL öffnen",
           "Biometrics": "Biometrie",
+          "Motion": "Bewegungssensoren",
           "NFC": "NFC",
           "Files": "Dateien",
           "Remote": "Web-Domains",
@@ -647,6 +645,7 @@
           "ChainSubmit": "Chain-Übermittlung",
           "PreimageSubmit": "Preimage-Übermittlung",
           "StatementSubmit": "Statement-Übermittlung",
+          "BalanceAccess": "Guthaben",
           "UserIdentity": "Identität"
         },
         "reason": {
@@ -658,6 +657,7 @@
           "Clipboard": "Wird zum Kopieren und Einfügen von Inhalten verwendet, die du teilen möchtest",
           "OpenUrl": "Wird verwendet, um externe Links in deinem Standardbrowser zu öffnen",
           "Biometrics": "Wird für Funktionen verwendet, die deine Identität bestätigen müssen",
+          "Motion": "Wird für Funktionen verwendet, die darauf reagieren, wie du dein Gerät bewegst oder neigst",
           "NFC": "Wird zum kontaktlosen Lesen und Schreiben mit Tags und Geräten in der Nähe verwendet",
           "Files": "Wird für Funktionen wie Hoch- und Herunterladen sowie Verwalten von Dateien verwendet",
           "Remote": "Wird verwendet, um Anfragen an die folgenden Domains zu senden",
@@ -665,6 +665,7 @@
           "ChainSubmit": "Wird verwendet, um signierte Transaktionen an eine beliebige Substrate-Chain zu senden",
           "PreimageSubmit": "Wird verwendet, um Preimage-Daten an die Bulletin Chain zu senden",
           "StatementSubmit": "Wird verwendet, um Statements an den Statement Store zu senden",
+          "BalanceAccess": "Wird verwendet, um dein verfügbares Guthaben zu lesen und zu erkennen, wenn eine Zahlung wegen zu geringen Guthabens fehlschlägt. Ausgaben sind damit nicht erlaubt",
           "UserIdentity": "Der Zugriff auf deinen primären Benutzernamen ist zur Identifikation erforderlich. Du kannst dies später in den Einstellungen verwalten."
         }
       },
@@ -796,6 +797,15 @@
             "4": "Wird nur zum Entsperren oder Bestätigen von Aktionen verwendet"
           }
         },
+        "Motion": {
+          "label": "Bewegungssensoren",
+          "description": "Wird für Funktionen verwendet, die darauf reagieren, wie du dein Gerät bewegst oder neigst",
+          "rule": {
+            "1": "Liest nur Bewegung und Ausrichtung des Geräts",
+            "2": "Kein Zugriff auf deinen Standort oder deine Kamera",
+            "3": "Du kannst den Zugriff später in den Einstellungen widerrufen"
+          }
+        },
         "OpenExternalUrl": {
           "label": "Externe URL öffnen",
           "description": "Wird verwendet, um externe Links in deinem Standardbrowser zu öffnen",
@@ -840,8 +850,8 @@
           "label": "Preimage-Übermittlung",
           "description": "Wird verwendet, um Preimage-Daten an die Bulletin Chain zu senden",
           "rule": {
-            "1": "Es können nur signierte Transaktionen übermittelt werden",
-            "2": "Die Übermittlung erfolgt erst nach deiner Bestätigung",
+            "1": "Gespeicherte Daten sind auf der Bulletin Chain öffentlich",
+            "2": "„Immer zulassen“ gilt für jeden Upload, „Einmal zulassen“ für einen einzelnen Upload",
             "3": "Daten werden genau so übermittelt, wie sie bereitgestellt wurden, ohne Änderung",
             "4": "Kein Zugriff auf deine privaten Schlüssel oder sensiblen Daten"
           }
@@ -854,6 +864,16 @@
             "2": "Es werden keine Transaktionen automatisch erstellt oder verändert",
             "3": "Die Übermittlung erfolgt erst nach deiner Bestätigung",
             "4": "Kein Zugriff auf deine privaten Schlüssel oder sensiblen Daten"
+          }
+        },
+        "BalanceAccess": {
+          "label": "Guthaben",
+          "description": "Wird verwendet, um dein verfügbares Guthaben zu lesen",
+          "rule": {
+            "1": "Zeigt das für Zahlungen verfügbare Guthaben an",
+            "2": "Erlaubt dem Produkt nicht, Geld auszugeben oder zu bewegen",
+            "3": "Erkennt, wenn eine Zahlung wegen zu geringen Guthabens abgelehnt wurde",
+            "4": "Wenn du den Zugriff widerrufst, werden keine weiteren Guthaben-Updates mehr gesendet"
           }
         },
         "UserIdentity": {
@@ -1058,13 +1078,6 @@
           "title": "Nachweis erstellen",
           "subtitle": "Prüfe den Nachweis, den diese App anfordert."
         },
-        "permission": {
-          "IdentityDisclosure": "Diese App möchte deine Identität erfahren.",
-          "PreimageSubmit": "Diese App möchte Inhalte einreichen.",
-          "AccountAccess": "Diese App möchte das Konto einer anderen App nutzen.",
-          "AccountAlias": "Diese App möchte einen Alias ableiten.",
-          "title": "Berechtigungsanfrage"
-        },
         "legacyAccountNotice": "Signieren mit einem Legacy-Konto.",
         "resource": {
           "statementStore": "Statement-Store-Slot",
@@ -1208,75 +1221,6 @@
           "SmartContractAllowance": "Smart-Contract-Calls automatisch signieren",
           "AutoSigning": "Transaktionen automatisch signieren"
         }
-      },
-      "permissionDenied": {
-        "appSettings": "App-Einstellungen",
-        "systemDeviceSettings": "Geräteeinstellungen",
-        "Camera": {
-          "title": "Kamerazugriff erforderlich",
-          "description": "Wird für Funktionen wie Videoanrufe, QR-Scans und Medienaufnahmen verwendet"
-        },
-        "Microphone": {
-          "title": "Mikrofonzugriff erforderlich",
-          "description": "Wird für Funktionen wie Sprachanrufe, Nachrichten und Audioaufnahmen verwendet"
-        },
-        "Bluetooth": {
-          "title": "Bluetooth-Zugriff erforderlich",
-          "description": "Wird zum Verbinden mit Geräten in der Nähe und zur Datenübertragung verwendet"
-        },
-        "Location": {
-          "title": "Standortzugriff erforderlich",
-          "description": "Wird für standortbasierte Dienste und personalisierte Inhalte verwendet"
-        },
-        "Notifications": {
-          "title": "Benachrichtigungszugriff erforderlich",
-          "description": "Wird verwendet, um dir Updates, Hinweise und wichtige Informationen zu senden"
-        },
-        "Biometrics": {
-          "title": "Biometriezugriff erforderlich",
-          "description": "Wird für Funktionen verwendet, die deine Identität bestätigen müssen"
-        },
-        "Clipboard": {
-          "title": "Zugriff auf die Zwischenablage erforderlich",
-          "description": "Wird zum Kopieren und Einfügen von Inhalten verwendet, die du teilen möchtest"
-        },
-        "OpenUrl": {
-          "title": "Zugriff auf externe Links erforderlich",
-          "description": "Wird verwendet, um externe Links in deinem Standardbrowser zu öffnen"
-        },
-        "ExternalRequest": {
-          "title": "Zugriff auf Web-Domains erforderlich",
-          "description": "Wird verwendet, um Anfragen an die folgenden Domains zu senden"
-        },
-        "TransactionSubmit": {
-          "title": "Zugriff auf Chain-Übermittlung erforderlich",
-          "description": "Wird verwendet, um signierte Transaktionen an eine beliebige Substrate-Chain zu senden"
-        },
-        "ChainSubmit": {
-          "title": "Zugriff auf Chain-Übermittlung erforderlich",
-          "description": "Wird verwendet, um signierte Transaktionen an eine beliebige Substrate-Chain zu senden"
-        },
-        "PreimageSubmit": {
-          "title": "Zugriff auf Preimage-Übermittlung erforderlich",
-          "description": "Wird verwendet, um Preimage-Daten an die Bulletin Chain zu senden"
-        },
-        "StatementSubmit": {
-          "title": "Zugriff auf Statement-Übermittlung erforderlich",
-          "description": "Wird verwendet, um Statements an den Statement Store zu senden"
-        },
-        "fallback": {
-          "title": "Zugriff erforderlich",
-          "description": "Aktiviere den Zugriff in den App-Einstellungen."
-        }
-      },
-      "subtreeRequest": {
-        "title": "Produktkonten werden eingerichtet",
-        "preparing": "Konten dieses Produkts werden geprüft...",
-        "line1": "Öffne die Polkadot App auf deinem Gerät,",
-        "line2": "damit sie die Konten dieses Produkts bereitstellen kann.",
-        "failedTitle": "Produktkonten konnten nicht eingerichtet werden",
-        "failedDescription": "Die Anfrage an dein Gerät wurde nicht abgeschlossen. Schließe dies und versuche es erneut.",
-        "rejected": "Einrichtung des Produktkontos abgebrochen"
       }
     }
   }

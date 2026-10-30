@@ -4,7 +4,7 @@ import { ProductRequestDialog } from '../ProductRequestDialog';
 import { RequestFooter, RequestProductHeader, RequestWarningBanner } from '../productRequestParts';
 
 type Props = {
-  identifier: Nullable<string>;
+  identifier: string;
   title: string;
   subtitle: string;
   /** A line between the subtitle and the warning — who owns a key, what context is bound. */
@@ -42,9 +42,7 @@ export const PermissionRequestModal = ({
 }: Props) => (
   <ProductRequestDialog.Root variant="default" onDismiss={onDeny}>
     <div className="contents" data-testid={dialogTestId} />
-    {/* TODO(truapi): render the header unconditionally when UserConfirmation carries a ProductContext —
-        a preimage-submit review still reaches the host naming no product. */}
-    {identifier ? <RequestProductHeader identifier={identifier} /> : null}
+    <RequestProductHeader identifier={identifier} />
 
     <div className="flex flex-col gap-2 py-3">
       <ProductRequestDialog.Title>{title}</ProductRequestDialog.Title>

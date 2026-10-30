@@ -10,6 +10,8 @@ import {
   IdCard,
   MapPin,
   Mic,
+  Move3d,
+  Wallet,
 } from 'lucide-react';
 import { createElement } from 'react';
 
@@ -78,6 +80,13 @@ const PERMISSION_METADATA_BY_ID = {
     descriptionKey: 'feature.permissionSettings.permission.Biometrics.description',
     ruleKeys: ruleKeys('Biometrics', 4),
   },
+  Motion: {
+    category: 'device',
+    icon: icon(Move3d),
+    labelKey: 'feature.permissionSettings.permission.Motion.label',
+    descriptionKey: 'feature.permissionSettings.permission.Motion.description',
+    ruleKeys: ruleKeys('Motion', 3),
+  },
   OpenExternalUrl: {
     category: 'service',
     icon: icon(ExternalLink),
@@ -119,6 +128,13 @@ const PERMISSION_METADATA_BY_ID = {
     labelKey: 'feature.permissionSettings.permission.StatementSubmit.label',
     descriptionKey: 'feature.permissionSettings.permission.StatementSubmit.description',
     ruleKeys: ruleKeys('StatementSubmit', 4),
+  },
+  BalanceAccess: {
+    category: 'onchain',
+    icon: icon(Wallet),
+    labelKey: 'feature.permissionSettings.permission.BalanceAccess.label',
+    descriptionKey: 'feature.permissionSettings.permission.BalanceAccess.description',
+    ruleKeys: ruleKeys('BalanceAccess', 4),
   },
   UserIdentity: {
     category: 'service',

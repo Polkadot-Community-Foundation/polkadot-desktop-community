@@ -175,9 +175,6 @@
       "statementStoreErrorTitle": "Statement store error",
       "feeUnavailable": "—",
       "customChainSigningWarning": "Transaction details are unavailable for this custom chain. Review the raw call data before signing.",
-      "storeDataRequest": "Store Data Request",
-      "storeDataDescription": "Product wants to store data ({size}) on the Bulletin Chain.",
-      "storeDataDeny": "Deny",
       "webVersionNotification": "You are using the web version of the app. Please use the desktop version for interacting with the Products.",
       "findPlaceholder": "Find in page",
       "findCount": "{current}/{total}",
@@ -641,6 +638,7 @@
           "Clipboard": "Clipboard",
           "OpenUrl": "Open External URL",
           "Biometrics": "Biometrics",
+          "Motion": "Motion Sensors",
           "NFC": "NFC",
           "Files": "Files",
           "Remote": "Web Domains",
@@ -648,6 +646,7 @@
           "ChainSubmit": "Chain Submit",
           "PreimageSubmit": "Preimage Submit",
           "StatementSubmit": "Statement Submit",
+          "BalanceAccess": "Balance",
           "UserIdentity": "Identity"
         },
         "reason": {
@@ -659,6 +658,7 @@
           "Clipboard": "Used for copying and pasting content you choose to share",
           "OpenUrl": "Used to open external links in your default browser",
           "Biometrics": "Used for features that require verifying your identity",
+          "Motion": "Used for features that respond to how you move or tilt your device",
           "NFC": "Used for contactless reading and writing with nearby tags and devices",
           "Files": "Used for features like uploading, downloading and managing files",
           "Remote": "Used to make requests to the following domains",
@@ -666,6 +666,7 @@
           "ChainSubmit": "Used to broadcast signed transactions to any Substrate chain",
           "PreimageSubmit": "Used to submit preimage data to the bulletin chain",
           "StatementSubmit": "Used to submit statements to the statement store",
+          "BalanceAccess": "Used to read your spendable balance and to tell when a payment fails because it is too low. It does not allow spending",
           "UserIdentity": "Access to your primary username is required for identification. You can manage this later in Settings."
         }
       },
@@ -797,6 +798,15 @@
             "4": "Used only for unlocking or approving actions"
           }
         },
+        "Motion": {
+          "label": "Motion Sensors",
+          "description": "Used for features that respond to how you move or tilt your device",
+          "rule": {
+            "1": "Reads device motion and orientation only",
+            "2": "No access to your location or camera",
+            "3": "You can revoke access later in Settings"
+          }
+        },
         "OpenExternalUrl": {
           "label": "Open External URL",
           "description": "Used to open external links in your default browser",
@@ -841,8 +851,8 @@
           "label": "Preimage Submit",
           "description": "Used to submit preimage data to the bulletin chain",
           "rule": {
-            "1": "Only signed transactions can be submitted",
-            "2": "Submission happens only after your confirmation",
+            "1": "Stored data is public on the Bulletin chain",
+            "2": "Always Allow covers every upload; Allow Once covers a single upload",
             "3": "Data is submitted exactly as provided, without modification",
             "4": "No access to your private keys or sensitive data"
           }
@@ -855,6 +865,16 @@
             "2": "No transactions are created or modified automatically",
             "3": "Submission happens only after your confirmation",
             "4": "No access to your private keys or sensitive data"
+          }
+        },
+        "BalanceAccess": {
+          "label": "Balance",
+          "description": "Used to read your spendable balance",
+          "rule": {
+            "1": "Shows the balance available for payments",
+            "2": "Does not allow the product to spend or move funds",
+            "3": "Can tell when a payment was declined because your balance was too low",
+            "4": "Revoking access stops further balance updates"
           }
         },
         "UserIdentity": {
@@ -1059,13 +1079,6 @@
           "title": "Create proof",
           "subtitle": "Review the proof this app is requesting."
         },
-        "permission": {
-          "IdentityDisclosure": "This app is asking to learn your identity.",
-          "PreimageSubmit": "This app is asking to submit content.",
-          "AccountAccess": "This app is asking to use another app’s account.",
-          "AccountAlias": "This app is asking to derive an alias.",
-          "title": "Permission request"
-        },
         "legacyAccountNotice": "Signing with a legacy account.",
         "resource": {
           "statementStore": "Statement store slot",
@@ -1209,75 +1222,6 @@
           "SmartContractAllowance": "Sign smart-contract calls automatically",
           "AutoSigning": "Sign transactions automatically"
         }
-      },
-      "permissionDenied": {
-        "appSettings": "App settings",
-        "systemDeviceSettings": "Device settings",
-        "Camera": {
-          "title": "Camera Access Required",
-          "description": "Used for features like video calls, QR scanning and media capture"
-        },
-        "Microphone": {
-          "title": "Microphone Access Required",
-          "description": "Used for features like voice calls, messaging and audio recording"
-        },
-        "Bluetooth": {
-          "title": "Bluetooth Access Required",
-          "description": "Used for connecting to nearby devices and data transfer"
-        },
-        "Location": {
-          "title": "Location Access Required",
-          "description": "Used for location-based services and content personalization"
-        },
-        "Notifications": {
-          "title": "Notification Access Required",
-          "description": "Used to send you updates, alerts and important information"
-        },
-        "Biometrics": {
-          "title": "Biometrics Access Required",
-          "description": "Used for features that require verifying your identity"
-        },
-        "Clipboard": {
-          "title": "Clipboard Access Required",
-          "description": "Used for copying and pasting content you choose to share"
-        },
-        "OpenUrl": {
-          "title": "External Link Access Required",
-          "description": "Used to open external links in your default browser"
-        },
-        "ExternalRequest": {
-          "title": "Web Domains Access Required",
-          "description": "Used to make requests to the following domains"
-        },
-        "TransactionSubmit": {
-          "title": "Chain Submit Access Required",
-          "description": "Used to broadcast signed transactions to any Substrate chain"
-        },
-        "ChainSubmit": {
-          "title": "Chain Submit Access Required",
-          "description": "Used to broadcast signed transactions to any Substrate chain"
-        },
-        "PreimageSubmit": {
-          "title": "Preimage Submit Access Required",
-          "description": "Used to submit preimage data to the bulletin chain"
-        },
-        "StatementSubmit": {
-          "title": "Statement Submit Access Required",
-          "description": "Used to submit statements to the statement store"
-        },
-        "fallback": {
-          "title": "Access Required",
-          "description": "Enable access in App Settings."
-        }
-      },
-      "subtreeRequest": {
-        "title": "Setting up product accounts",
-        "preparing": "Checking this product's accounts...",
-        "line1": "Open the Polkadot app on your device",
-        "line2": "so it can provide this product's accounts.",
-        "failedTitle": "Couldn't set up product accounts",
-        "failedDescription": "The request to your device did not complete. Close this and try again.",
-        "rejected": "Product account setup cancelled"
       }
     }
   }
