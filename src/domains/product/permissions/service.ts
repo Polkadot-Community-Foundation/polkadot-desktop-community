@@ -16,6 +16,7 @@ const SETTINGS_ID_TO_DEVICE_NAME = {
   Clipboard: 'Clipboard',
   OpenExternalUrl: 'OpenUrl',
   Biometrics: 'Biometrics',
+  Motion: 'Motion',
 } as const satisfies Record<string, DevicePermissionType>;
 
 type StoredDeviceSettingsPermissionId = keyof typeof SETTINGS_ID_TO_DEVICE_NAME;
@@ -99,6 +100,7 @@ function toAuthorizationRequest(
     case 'PreimageSubmit':
     case 'StatementSubmit':
     case 'WebRtc':
+    case 'BalanceAccess':
       return { tag: 'Remote', value: { permission: { tag: permissionId } } };
     case 'ExternalRequest':
       if (!options?.pattern) return null;

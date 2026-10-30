@@ -174,9 +174,6 @@
       "statementStoreErrorTitle": "statement store 错误",
       "feeUnavailable": "—",
       "customChainSigningWarning": "此自定义链无法显示交易详情。签名前请检查原始 call data。",
-      "storeDataRequest": "数据存储请求",
-      "storeDataDescription": "该产品希望在 Bulletin Chain 上存储数据（{size}）。",
-      "storeDataDeny": "拒绝",
       "webVersionNotification": "你正在使用应用的网页版。请使用桌面版与产品交互。",
       "findPlaceholder": "在页面中查找",
       "findCount": "{current}/{total}",
@@ -640,6 +637,7 @@
           "Clipboard": "剪贴板",
           "OpenUrl": "打开外部链接",
           "Biometrics": "生物识别",
+          "Motion": "运动传感器",
           "NFC": "NFC",
           "Files": "文件",
           "Remote": "网页域名",
@@ -647,6 +645,7 @@
           "ChainSubmit": "链上提交",
           "PreimageSubmit": "Preimage 提交",
           "StatementSubmit": "Statement 提交",
+          "BalanceAccess": "余额",
           "UserIdentity": "身份"
         },
         "reason": {
@@ -658,6 +657,7 @@
           "Clipboard": "用于复制和粘贴你选择共享的内容",
           "OpenUrl": "用于在默认浏览器中打开外部链接",
           "Biometrics": "用于需要验证你身份的功能",
+          "Motion": "用于根据你移动或倾斜设备而响应的功能",
           "NFC": "用于与附近的标签和设备进行非接触式读写",
           "Files": "用于上传、下载和管理文件等功能",
           "Remote": "用于向以下域名发起请求",
@@ -665,6 +665,7 @@
           "ChainSubmit": "用于向任意 Substrate 链广播已签名的交易",
           "PreimageSubmit": "用于向 Bulletin Chain 提交 preimage 数据",
           "StatementSubmit": "用于向 statement store 提交 statement",
+          "BalanceAccess": "用于读取你的可用余额，并在支付因余额不足而失败时获知。不允许花费资金",
           "UserIdentity": "需要访问你的主用户名以进行身份识别。你之后可以在「设置」中管理此项。"
         }
       },
@@ -796,6 +797,15 @@
             "4": "仅用于解锁或批准操作"
           }
         },
+        "Motion": {
+          "label": "运动传感器",
+          "description": "用于根据你移动或倾斜设备而响应的功能",
+          "rule": {
+            "1": "仅读取设备的运动和方向",
+            "2": "无法访问你的位置或相机",
+            "3": "你可以稍后在设置中撤销访问权限"
+          }
+        },
         "OpenExternalUrl": {
           "label": "打开外部链接",
           "description": "用于在默认浏览器中打开外部链接",
@@ -840,8 +850,8 @@
           "label": "Preimage 提交",
           "description": "用于向 Bulletin Chain 提交 preimage 数据",
           "rule": {
-            "1": "只能提交已签名的交易",
-            "2": "仅在你确认后才会提交",
+            "1": "存储的数据在 Bulletin 链上是公开的",
+            "2": "“始终允许”适用于每次上传，“仅允许一次”仅适用于单次上传",
             "3": "数据按原样提交，不作修改",
             "4": "不会访问你的私钥或敏感数据"
           }
@@ -854,6 +864,16 @@
             "2": "不会自动创建或修改交易",
             "3": "仅在你确认后才会提交",
             "4": "不会访问你的私钥或敏感数据"
+          }
+        },
+        "BalanceAccess": {
+          "label": "余额",
+          "description": "用于读取你的可用余额",
+          "rule": {
+            "1": "显示可用于支付的余额",
+            "2": "不允许该产品花费或转移资金",
+            "3": "可以得知支付是否因余额不足而被拒绝",
+            "4": "撤销访问权限后将停止后续的余额更新"
           }
         },
         "UserIdentity": {
@@ -1058,13 +1078,6 @@
           "title": "创建证明",
           "subtitle": "请检查此应用请求的证明。"
         },
-        "permission": {
-          "IdentityDisclosure": "此应用请求获知你的身份。",
-          "PreimageSubmit": "此应用请求提交内容。",
-          "AccountAccess": "此应用请求使用另一个应用的账户。",
-          "AccountAlias": "此应用请求派生一个别名。",
-          "title": "权限请求"
-        },
         "legacyAccountNotice": "正在使用旧版账户签署。",
         "resource": {
           "statementStore": "声明存储槽位",
@@ -1208,75 +1221,6 @@
           "SmartContractAllowance": "自动签署智能合约调用",
           "AutoSigning": "自动签署交易"
         }
-      },
-      "permissionDenied": {
-        "appSettings": "应用设置",
-        "systemDeviceSettings": "设备设置",
-        "Camera": {
-          "title": "需要相机访问权限",
-          "description": "用于视频通话、扫描二维码和拍摄等功能"
-        },
-        "Microphone": {
-          "title": "需要麦克风访问权限",
-          "description": "用于语音通话、消息和录音等功能"
-        },
-        "Bluetooth": {
-          "title": "需要蓝牙访问权限",
-          "description": "用于连接附近设备并传输数据"
-        },
-        "Location": {
-          "title": "需要位置访问权限",
-          "description": "用于基于位置的服务和内容个性化"
-        },
-        "Notifications": {
-          "title": "需要通知访问权限",
-          "description": "用于向你发送更新、提醒和重要信息"
-        },
-        "Biometrics": {
-          "title": "需要生物识别访问权限",
-          "description": "用于需要验证你身份的功能"
-        },
-        "Clipboard": {
-          "title": "需要剪贴板访问权限",
-          "description": "用于复制和粘贴你选择共享的内容"
-        },
-        "OpenUrl": {
-          "title": "需要外部链接访问权限",
-          "description": "用于在默认浏览器中打开外部链接"
-        },
-        "ExternalRequest": {
-          "title": "需要网页域名访问权限",
-          "description": "用于向以下域名发起请求"
-        },
-        "TransactionSubmit": {
-          "title": "需要链上提交权限",
-          "description": "用于向任意 Substrate 链广播已签名的交易"
-        },
-        "ChainSubmit": {
-          "title": "需要链上提交权限",
-          "description": "用于向任意 Substrate 链广播已签名的交易"
-        },
-        "PreimageSubmit": {
-          "title": "需要 Preimage 提交权限",
-          "description": "用于向 Bulletin Chain 提交 preimage 数据"
-        },
-        "StatementSubmit": {
-          "title": "需要 Statement 提交权限",
-          "description": "用于向 statement store 提交 statement"
-        },
-        "fallback": {
-          "title": "需要访问权限",
-          "description": "请在应用设置中启用访问权限。"
-        }
-      },
-      "subtreeRequest": {
-        "title": "正在设置产品账户",
-        "preparing": "正在检查该产品的账户…",
-        "line1": "在你的设备上打开 Polkadot App",
-        "line2": "以获取该产品的账户。",
-        "failedTitle": "无法设置产品账户",
-        "failedDescription": "向你的设备发出的请求未能完成。请关闭此窗口后重试。",
-        "rejected": "产品账户设置已取消"
       }
     }
   }

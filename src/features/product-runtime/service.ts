@@ -13,7 +13,6 @@ import {
   type CreateProofReview,
   type CreateTransactionReview,
   type IdentityDisclosureReview,
-  type PreimageSubmitReview,
   type ProductSubtreeReview,
   type ResourceAllocationReview,
   type SignPayloadReview,
@@ -34,7 +33,7 @@ import { type MessageContent } from '@/domains/chat';
  * layer switches on `target` instead of re-reading the core's shape.
  *
  * One `target` per surface, so `target` discriminates `review`: a modal receives the
- * exact review type it renders and cannot be handed a sibling's payload. The four
+ * exact review type it renders and cannot be handed a sibling's payload. The five
  * permission-shaped requests are listed individually for that reason, even though they
  * share a layout.
  *
@@ -51,7 +50,6 @@ export type ReviewModalProps =
   | { target: 'statementSign'; review: StatementStoreProductSignReview }
   | { target: 'createProof'; review: CreateProofReview }
   | { target: 'identityDisclosure'; review: IdentityDisclosureReview }
-  | { target: 'preimageSubmit'; review: PreimageSubmitReview }
   | { target: 'accountAccess'; review: AccountAccessReview }
   | { target: 'accountAlias'; review: AccountAliasReview }
   | { target: 'productSubtree'; review: ProductSubtreeReview };
@@ -81,9 +79,6 @@ function toModalProps(review: UserConfirmationReview): ReviewModalProps {
 
     case 'IdentityDisclosure':
       return { target: 'identityDisclosure', review: review.value };
-
-    case 'PreimageSubmit':
-      return { target: 'preimageSubmit', review: review.value };
 
     case 'AccountAccess':
       return { target: 'accountAccess', review: review.value };
@@ -161,11 +156,6 @@ function rawPayloadText(payload: RawPayload): string {
 /** Hex for the transcript items, statement payloads, and labels shown verbatim. */
 function formatTranscriptBytes(value: string | Uint8Array): string {
   return typeof value === 'string' ? value : toHex(value);
-}
-
-/** `1.4 KB` / `912 B`. Sizes arrive as `bigint` from the core. */
-function formatByteSize(size: bigint): string {
-  return size < 1024n ? `${size} B` : `${(Number(size) / 1024).toFixed(1)} KB`;
 }
 
 /**
@@ -293,7 +283,6 @@ export const productRuntimeService = {
   formatProductAccount,
   formatProofContext,
   formatTranscriptBytes,
-  formatByteSize,
   rawPayloadText,
   batchBehaviorKey,
   toChatMessageContent,
