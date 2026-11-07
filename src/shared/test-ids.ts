@@ -88,8 +88,8 @@ export const TEST_IDS = {
   productSubtreeAllow: 'product-subtree-allow',
   aliasPermissionAllow: 'alias-permission-allow',
   aliasPermissionDialog: 'alias-permission-dialog',
-  keyListingPermissionAllow: 'key-listing-permission-allow',
-  keyListingPermissionDialog: 'key-listing-permission-dialog',
+  identityDisclosureAllow: 'identity-disclosure-allow',
+  identityDisclosureDialog: 'identity-disclosure-dialog',
   proofPermissionAllow: 'proof-permission-allow',
   proofPermissionDialog: 'proof-permission-dialog',
   signVrfAllow: 'sign-vrf-allow',
@@ -186,6 +186,7 @@ export const TEST_IDS = {
 
   // Chat — message display + actions (seeded-session coverage)
   chatMessageBubble: 'chat-message-bubble',
+  chatMessageLink: 'chat-message-link',
   chatDateSeparator: 'chat-date-separator',
   chatNoMessagesPlaceholder: 'chat-no-messages-placeholder',
   chatMessageContextMenu: 'chat-message-context-menu',
