@@ -85,8 +85,6 @@ jobs:
           VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
           VITE_WEBRTC_TURN_HOST: ${{ vars.VITE_WEBRTC_TURN_HOST }}
           VITE_WEBRTC_TURN_TTL: ${{ vars.VITE_WEBRTC_TURN_TTL }}
-          SANDBOX_IPFS_ALLOWLIST: ${{ vars.SANDBOX_IPFS_ALLOWLIST }}
-          SANDBOX_RELAY_ALLOWLIST: ${{ vars.SANDBOX_RELAY_ALLOWLIST }}
           VITE_WEBRTC_TURN_SECRET: ${{ secrets.VITE_WEBRTC_TURN_SECRET }}
         run: |
           set -euo pipefail
@@ -106,8 +104,6 @@ jobs:
           write VITE_WEBRTC_TURN_HOST
           write VITE_WEBRTC_TURN_TTL
           write VITE_WEBRTC_TURN_SECRET
-          write SANDBOX_IPFS_ALLOWLIST
-          write SANDBOX_RELAY_ALLOWLIST
           write AUTO_UPDATE_URL
           write BUILD_SOURCE
           echo "Wrote .env with $(grep -c '=' .env) keys."
