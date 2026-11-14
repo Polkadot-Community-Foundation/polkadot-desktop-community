@@ -102,8 +102,6 @@ jobs:
       update_repo_name: ${{ steps.export.outputs.update_repo_name }}
       turn_host: ${{ steps.export.outputs.turn_host }}
       turn_ttl: ${{ steps.export.outputs.turn_ttl }}
-      sandbox_ipfs_allowlist: ${{ steps.export.outputs.sandbox_ipfs_allowlist }}
-      sandbox_relay_allowlist: ${{ steps.export.outputs.sandbox_relay_allowlist }}
       build_bucket: ${{ steps.export.outputs.build_bucket }}
       wif_provider: ${{ steps.export.outputs.wif_provider }}
       service_account: ${{ steps.export.outputs.service_account }}
@@ -127,8 +125,6 @@ jobs:
           UPDATE_REPO_NAME: ${{ vars.UPDATE_REPO_NAME || github.event.repository.name }}
           VITE_WEBRTC_TURN_HOST: ${{ vars.VITE_WEBRTC_TURN_HOST }}
           VITE_WEBRTC_TURN_TTL: ${{ vars.VITE_WEBRTC_TURN_TTL }}
-          SANDBOX_IPFS_ALLOWLIST: ${{ vars.SANDBOX_IPFS_ALLOWLIST }}
-          SANDBOX_RELAY_ALLOWLIST: ${{ vars.SANDBOX_RELAY_ALLOWLIST }}
           BUILD_BUCKET: ${{ vars.BUILD_BUCKET }}
           GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           GCP_SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
@@ -164,8 +160,6 @@ jobs:
           emit update_repo_name "${UPDATE_REPO_NAME}"
           emit turn_host "${VITE_WEBRTC_TURN_HOST}"
           emit turn_ttl "${VITE_WEBRTC_TURN_TTL}"
-          emit sandbox_ipfs_allowlist "${SANDBOX_IPFS_ALLOWLIST}"
-          emit sandbox_relay_allowlist "${SANDBOX_RELAY_ALLOWLIST}"
           emit build_bucket "${BUILD_BUCKET}"
           emit wif_provider "${GCP_WORKLOAD_IDENTITY_PROVIDER}"
           emit service_account "${GCP_SERVICE_ACCOUNT}"
@@ -305,8 +299,6 @@ jobs:
           webrtc_turn_host: ${{ needs.config.outputs.turn_host }}
           webrtc_turn_secret: ${{ secrets.VITE_WEBRTC_TURN_SECRET }}
           webrtc_turn_ttl: ${{ needs.config.outputs.turn_ttl }}
-          sandbox_ipfs_allowlist: ${{ needs.config.outputs.sandbox_ipfs_allowlist }}
-          sandbox_relay_allowlist: ${{ needs.config.outputs.sandbox_relay_allowlist }}
           sentry_dsn: ${{ secrets.SENTRY_DSN }}
           sentry_required: 'false'
           include_dist_artifacts: false
