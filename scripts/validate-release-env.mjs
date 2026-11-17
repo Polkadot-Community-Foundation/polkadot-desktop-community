@@ -1,7 +1,7 @@
 /**
  * Fails the build before packaging when the release `.env` would ship a misconfigured installer:
  *   - VITE_ENVIRONMENTS must be valid JSON with exactly one channel, the declared default
- *     (more than one renders the network chooser)
+ *     (more than one renders the network chooser), naming a stack bundled in `.trinity/`
  *   - the Firebase web ids Remote Config needs must be set
  * Values in `process.env` take precedence over the file, as they do for Vite. Pass an expected
  * channel id (arg 2 or EXPECTED_CHANNEL) to pin it.
@@ -78,6 +78,12 @@ if (expectedChannel && only !== expectedChannel) {
   fail(`expected the "${expectedChannel}" channel; got "${only}"`);
 }
 
+const stack = catalog.channels[only].stack;
+const bundled = JSON.parse(readFileSync(new URL('../.trinity/stacks.json', import.meta.url), 'utf8'));
+if (!Object.hasOwn(bundled, stack ?? '')) {
+  fail(`channel "${only}" must name a stack bundled in .trinity/stacks.json; got ${JSON.stringify(stack)}`);
+}
+
 const missing = REQUIRED_KEYS.filter(k => !read(k));
 if (missing.length) fail(`missing required Firebase ids: ${missing.join(', ')}`);
 
@@ -89,4 +95,4 @@ for (const [key, note] of [
   if (!read(key)) console.warn(`⚠ release-env: ${key} unset — ${note}`);
 }
 
-console.log(`✓ release-env: single channel "${channels[0]}", Firebase ids present`);
+console.log(`✓ release-env: single channel "${channels[0]}" on stack "${stack}", Firebase ids present`);
