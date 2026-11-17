@@ -1,7 +1,8 @@
 name: Release (Paseo / DEV)
 
 # Devnet desktop release. A dispatch on `devnet` builds every platform, tags the commit
-# `devnet/<YYYY-MM-DD>.<n>` and publishes a GitHub Release behind `tester-distribution`.
+# `devnet/<YYYY-MM-DD>.<n>` and publishes it as GitHub Release `v<version>` behind
+# `tester-distribution`.
 # A dispatch on any other branch only uploads the installers as run artifacts.
 # Upstream's release-pipeline.yml and create-release-tag.yml are deleted on purpose (they
 # publish unguarded builds); do not restore them.
@@ -84,8 +85,6 @@ jobs:
           VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
           VITE_WEBRTC_TURN_HOST: ${{ vars.VITE_WEBRTC_TURN_HOST }}
           VITE_WEBRTC_TURN_TTL: ${{ vars.VITE_WEBRTC_TURN_TTL }}
-          SANDBOX_IPFS_ALLOWLIST: ${{ vars.SANDBOX_IPFS_ALLOWLIST }}
-          SANDBOX_RELAY_ALLOWLIST: ${{ vars.SANDBOX_RELAY_ALLOWLIST }}
           VITE_WEBRTC_TURN_SECRET: ${{ secrets.VITE_WEBRTC_TURN_SECRET }}
         run: |
           set -euo pipefail
@@ -105,8 +104,6 @@ jobs:
           write VITE_WEBRTC_TURN_HOST
           write VITE_WEBRTC_TURN_TTL
           write VITE_WEBRTC_TURN_SECRET
-          write SANDBOX_IPFS_ALLOWLIST
-          write SANDBOX_RELAY_ALLOWLIST
           write AUTO_UPDATE_URL
           write BUILD_SOURCE
           echo "Wrote .env with $(grep -c '=' .env) keys."
@@ -194,6 +191,19 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Refuse a version that is already released
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./package.json').version")
+          status=0
+          git ls-remote --exit-code --tags origin "refs/tags/v${VERSION}" >/dev/null || status=$?
+          case "$status" in
+            0) echo "::error::v${VERSION} is already released. Bump the version in package.json first."; exit 1 ;;
+            2) ;;
+            *) echo "::error::Could not list tags on origin (git exit ${status})."; exit 1 ;;
+          esac
+
       - name: Tag the built commit
         id: tag
         shell: bash
@@ -258,7 +268,7 @@ jobs:
             PRERELEASE=true
           fi
           {
-            echo "tag=${TAG}"
+            echo "tag=v${VERSION}"
             echo "name=v${VERSION} (${TAG})"
             echo "prerelease=${PRERELEASE}"
           } >> "$GITHUB_OUTPUT"
@@ -283,7 +293,9 @@ jobs:
         # v2, pinned to a commit.
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
         with:
+          # A semver tag: electron-updater's pre-release lookup skips any other.
           tag_name: ${{ steps.channel.outputs.tag }}
+          target_commitish: ${{ github.sha }}
           name: ${{ steps.channel.outputs.name }}
           prerelease: ${{ steps.channel.outputs.prerelease }}
           make_latest: ${{ steps.channel.outputs.prerelease == 'true' && 'false' || 'true' }}

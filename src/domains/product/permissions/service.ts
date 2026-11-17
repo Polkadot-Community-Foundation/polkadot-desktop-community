@@ -1,3 +1,4 @@
+import { asProductId } from '@parity/truapi';
 import {
   type DevicePermissionStatus,
   type PermissionAuthorizationRequest,
@@ -16,6 +17,7 @@ const SETTINGS_ID_TO_DEVICE_NAME = {
   Clipboard: 'Clipboard',
   OpenExternalUrl: 'OpenUrl',
   Biometrics: 'Biometrics',
+  Motion: 'Motion',
 } as const satisfies Record<string, DevicePermissionType>;
 
 type StoredDeviceSettingsPermissionId = keyof typeof SETTINGS_ID_TO_DEVICE_NAME;
@@ -99,6 +101,7 @@ function toAuthorizationRequest(
     case 'PreimageSubmit':
     case 'StatementSubmit':
     case 'WebRtc':
+    case 'BalanceAccess':
       return { tag: 'Remote', value: { permission: { tag: permissionId } } };
     case 'ExternalRequest':
       if (!options?.pattern) return null;
@@ -117,7 +120,7 @@ function toAuthorizationRequest(
  * not a member of `PERMISSION_IDS`.
  */
 function toAccountAccessRequest(targetProductId: string): PermissionAuthorizationRequest {
-  return { tag: 'AccountAccess', value: { targetProductId } };
+  return { tag: 'AccountAccess', value: { targetProductId: asProductId(targetProductId) } };
 }
 
 /** The inverse of `toAuthorizationRequest`, for naming a slot the core handed back. */

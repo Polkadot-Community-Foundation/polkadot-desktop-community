@@ -9,12 +9,14 @@ export const PERMISSION_IDS = [
   'Bluetooth',
   'Location',
   'Biometrics',
+  'Motion',
   'OpenExternalUrl',
   'ExternalRequest',
   'WebRtc',
   'ChainSubmit',
   'PreimageSubmit',
   'StatementSubmit',
+  'BalanceAccess',
   'UserIdentity',
 ] as const;
 
