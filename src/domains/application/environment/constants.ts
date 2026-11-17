@@ -1,4 +1,5 @@
 import paseoNextV2Document from '~trinity/paseo-next-v2.json?raw';
+import pcfDevnetDocument from '~trinity/pcf-devnet.json?raw';
 import previewnetDocument from '~trinity/previewnet.json?raw';
 import stackLinks from '~trinity/stacks.json';
 import * as v from 'valibot';
@@ -18,6 +19,12 @@ export const bundledStacks: Record<keyof typeof stackLinks, BundledStack> = {
     descriptor: new TextEncoder().encode(paseoNextV2Document),
   },
   previewnet: { pointer: stackLinks.previewnet, descriptor: new TextEncoder().encode(previewnetDocument) },
+  // Paseo chains under the `dot` TLD, a reserved value the core refuses unless allowed.
+  'pcf-devnet': {
+    pointer: stackLinks['pcf-devnet'],
+    descriptor: new TextEncoder().encode(pcfDevnetDocument),
+    allowsReservedValues: true,
+  },
 };
 
 // Build-time channel catalog from `VITE_ENVIRONMENTS`. Read eagerly (not injected)
