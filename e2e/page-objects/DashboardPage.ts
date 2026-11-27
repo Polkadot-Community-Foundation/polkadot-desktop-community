@@ -1,6 +1,7 @@
 import { type Page, type TestInfo, expect } from '@playwright/test';
 
 import { TEST_IDS } from '@/shared/test-ids';
+import { colorModeButton } from '../helpers/colorMode';
 import { DEFAULT_TIMEOUT, LONG_TIMEOUT } from '../helpers/timeouts';
 
 export class DashboardPage {
@@ -10,13 +11,8 @@ export class DashboardPage {
     return this.page.getByTestId(TEST_IDS.userButton);
   }
 
-  get connectionStatus() {
-    return this.page.getByTestId(TEST_IDS.userConnectionStatus);
-  }
-
-  /** The user-button badge reflects connection as a `data-state` attribute. */
-  async expectConnectionState(state: 'connected' | 'reconnecting' | 'offline' | 'no-connection') {
-    await expect(this.connectionStatus).toHaveAttribute('data-state', state, { timeout: DEFAULT_TIMEOUT });
+  async expectSignedOut() {
+    await expect(this.userButton).toHaveAccessibleName('Connect account', { timeout: DEFAULT_TIMEOUT });
   }
 
   get quickChatButton() {
@@ -40,7 +36,7 @@ export class DashboardPage {
   }
 
   async openAddWidgetModal() {
-    await this.addWidgetButton.locator('button').click({ timeout: DEFAULT_TIMEOUT });
+    await this.addWidgetButton.click({ timeout: DEFAULT_TIMEOUT });
   }
 
   get homeButton() {
@@ -59,7 +55,7 @@ export class DashboardPage {
   }
 
   async clickUserButton() {
-    await this.userButton.locator('button').click({ timeout: DEFAULT_TIMEOUT });
+    await this.userButton.click({ timeout: DEFAULT_TIMEOUT });
   }
 
   /**
@@ -77,7 +73,7 @@ export class DashboardPage {
     await expect(appearanceLink).toBeVisible({ timeout: DEFAULT_TIMEOUT });
     await appearanceLink.click();
 
-    const themeOption = this.page.getByRole('radio', { name: theme, exact: true });
+    const themeOption = colorModeButton(this.page, theme);
     await expect(themeOption).toBeVisible({ timeout: DEFAULT_TIMEOUT });
     await themeOption.click();
 
@@ -85,7 +81,7 @@ export class DashboardPage {
   }
 
   async openQuickChat() {
-    await this.quickChatButton.locator('button').click({ timeout: DEFAULT_TIMEOUT });
+    await this.quickChatButton.click({ timeout: DEFAULT_TIMEOUT });
   }
 
   async openSettings() {

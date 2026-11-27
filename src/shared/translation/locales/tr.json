@@ -22,7 +22,9 @@
       "all": "Tümü",
       "electronics": "Elektronik",
       "fashion": "Moda",
-      "downloadLogs": "Günlükleri indir"
+      "downloadLogs": "Günlükleri indir",
+      "copied": "Kopyalandı",
+      "copyFailed": "Kopyalanamadı"
     },
     "label": {
       "signer": "İmzalayan",
@@ -114,6 +116,7 @@
       "newTab": "Yeni sekme",
       "newTabPrompt": "{tld} adresi gir",
       "closeTab": "Sekmeyi kapat",
+      "tabsAria": "Açık sekmeler",
       "signTransaction": "İşlemi imzala",
       "signingRequestTitle": "{call} imzalama isteği",
       "operationTitle": {
@@ -188,28 +191,14 @@
       "clearRecent": "Temizle"
     },
     "userManager": {
-      "connectionStatus": {
-        "connected": "Bağlandı",
-        "reconnecting": "Yeniden bağlanılıyor…",
-        "offline": "Çevrimdışısın",
-        "noConnection": "Bağlı değil — giriş yapmak için tıkla"
-      },
       "aria": {
         "account": "Hesap",
         "connectAccount": "Hesabı bağla"
       },
-      "banner": {
-        "connectedTitle": "{networkName} ağına bağlanıldı",
-        "connectedSubtitle": "Masaüstü, mobil ile eşleştirildi",
-        "reconnectingTitle": "{networkName} ağına yeniden bağlanılıyor…",
-        "reconnectingSubtitle": "Düğüme yeniden ulaşılmaya çalışılıyor",
-        "offlineTitle": "Çevrimdışısın",
-        "offlineSubtitle": "İnternet bağlantını kontrol et ve yeniden dene",
-        "noConnectionTitle": "Bağlı değil",
-        "noConnectionSubtitle": "Hesabını eşleştirmek için giriş yap"
-      },
       "popover": {
-        "settings": "Ayarlar"
+        "settings": "Ayarlar",
+        "signedInAs": "Giriş yapılan hesap",
+        "signedOut": "Giriş yapılmadı"
       }
     },
     "chat": {
@@ -240,6 +229,7 @@
       "results": "Sonuçlar ({count})",
       "recent": "Son kullanılanlar",
       "clear": "Temizle",
+      "moreReactions": "Diğer tepkiler",
       "contacts": "Kişiler",
       "noMessages": "Henüz mesaj yok",
       "thisIsChat": "Bu bir sohbet",
@@ -294,7 +284,14 @@
         "inviteHint": "Bu davette yalnızca bir mesaj gönderebilirsin",
         "inviteFailed": "Davet gönderilemedi. Bağlantını kontrol et ve yeniden dene.",
         "waitForAccept": "Sonraki mesajı göndermeden önce <b>{name}</b> kişisinin isteğini kabul etmesini bekle.",
-        "today": "Bugün"
+        "today": "Bugün",
+        "cancelRequest": "İsteği iptal et",
+        "cancelTitle": "İstek iptal edilsin mi?",
+        "cancelBody": "{name} artık isteğini görmeyecek.",
+        "keepRequest": "İsteği koru",
+        "cancelledByPeer": "<b>{name}</b> bu sohbet isteğini iptal etti.",
+        "declineTitle": "Mesaj isteği reddedilsin mi?",
+        "declineBody": "{name} kişisinden mesaj isteği"
       },
       "contactSearch": {
         "searchEntry": "Ara",
@@ -303,8 +300,6 @@
         "tabApps": "Uygulamalar",
         "groupChatsAndContacts": "Sohbetler ve kişiler",
         "groupMessages": "Mesajlar",
-        "recent": "Son kullanılanlar",
-        "clear": "Temizle",
         "appsComingSoon": "Uygulama araması yakında geliyor",
         "noResultsTitle": "Sonuç yok",
         "noResultsHint": "Aramanı değiştirmeyi dene"
@@ -366,7 +361,10 @@
           "tapToCallBack": "Geri aramak için dokun",
           "tapToCallAgain": "Tekrar aramak için dokun"
         }
-      }
+      },
+      "searchPrevious": "Önceki eşleşme",
+      "searchNext": "Sonraki eşleşme",
+      "roomActions": "Sohbet işlemleri"
     },
     "productActionsMenu": {
       "trigger": "Ürün işlemleri",
@@ -400,7 +398,8 @@
           "title": "Hesabın hâlâ hazırlanıyor",
           "subtitle": "Lütfen daha sonra yeniden dene"
         }
-      }
+      },
+      "networkLabel": "Ağ"
     },
     "dashboard": {
       "title": "Pano",
@@ -491,7 +490,8 @@
         "cleanup": "Panoyu düzenle",
         "reload": "Widget'ı yeniden yükle",
         "removeWidget": "Widget'ı kaldır"
-      }
+      },
+      "home": "Ana sayfa"
     },
     "ticketApp": {
       "title": "Ticket App",
@@ -711,7 +711,6 @@
       "navItem": "İzinler",
       "heading": "İzinler",
       "subheading": "Uygulamaların özelliklere ve verilere erişimini incele ve yönet",
-      "categoryHeading": "{name}:",
       "appCount": "{count, plural, =0 {Uygulama yok} one {# uygulama} other {# uygulama}}",
       "category": {
         "device": "Cihaz ve sistem erişimi",
@@ -725,7 +724,7 @@
       },
       "detail": {
         "rulesTitle": "Kurallar ve güvenceler",
-        "appsLabel": "Uygulamalar:",
+        "appsLabel": "Uygulamalar",
         "noApps": "Bu izni isteyen uygulama yok",
         "allowedFor": "{modalities} için izin verildi",
         "appSubtitle": "{baseName} • {allowed}"
@@ -1099,6 +1098,57 @@
           "title": "Bu uygulamanın kendi hesabına erişmesine izin verilsin mi?",
           "subtitle": "Bu uygulamanın hesabını eşleştirilmiş cihazından alır"
         }
+      }
+    },
+    "networkStatus": {
+      "title": "Ağ",
+      "health": {
+        "connected": "Bağlı",
+        "syncing": "Eşitleniyor",
+        "unstable": "Kararsız",
+        "offline": "Çevrimdışı",
+        "unused": "Kullanımda değil",
+        "unreachable": "Erişilemiyor"
+      },
+      "role": {
+        "relay": "Röle",
+        "assetHub": "Hub",
+        "bulletin": "Depolama",
+        "people": "Kimlik"
+      },
+      "status": {
+        "noInternet": "İnternet yok",
+        "noEndpoint": "Uç nokta yok",
+        "notInUse": "Kullanımda değil",
+        "disconnected": "Bağlantı kesildi",
+        "syncing": "Eşitleniyor",
+        "syncingShare": "Eşitleniyor: %{percent}",
+        "connecting": "Bağlanıyor",
+        "notProducing": "Blok üretmiyor",
+        "connected": "Bağlı",
+        "behind": "Geride",
+        "live": "{word} · Canlı %{percent} · Blok ~{duration}"
+      },
+      "duration": {
+        "seconds": "{seconds} sn",
+        "minutes": "{minutes} dk {seconds} sn"
+      },
+      "otherChains": "Diğer zincirler ({count})",
+      "lastBlocks": "Son {count} blok",
+      "separator": " · ",
+      "strip": {
+        "title": "Son {count} blok, en yenisi sağda",
+        "label": "{chain}: son {count} blok, en yenisi sağda"
+      },
+      "block": {
+        "onTime": "{gap} sn, zamanında",
+        "late": "{gap} sn, {late} sn gecikmeli",
+        "label": "Blok {number}, {delay}",
+        "newest": "#{number, number}"
+      },
+      "peers": {
+        "count": "{count, plural, one {# eş} other {# eş}}",
+        "label": "{chain}: {peers} bağlı"
       }
     }
   },

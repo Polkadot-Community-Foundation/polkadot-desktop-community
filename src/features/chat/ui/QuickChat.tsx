@@ -1,30 +1,27 @@
-import { Popover } from '@novasamatech/tr-ui';
 import { useNavigate } from '@tanstack/react-router';
-import { ArrowLeft, MessagesSquare } from 'lucide-react';
+import { MessageCircle, MessagesSquare } from 'lucide-react';
 import { type PropsWithChildren, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useObservable } from 'react-rx';
 import { of } from 'rxjs';
 
-import ChatBubbleOvalLeftIcon from '@/shared/assets/images/header/chat-bubble-oval-left.svg?jsx';
 import MaximizeIcon from '@/shared/assets/images/header/maximize.svg?jsx';
-import { DismissOverlay } from '@/shared/components';
+import { AppIcon, Avatar, DismissOverlay, EmptyState, IconButton, PaneHeader, Popover } from '@/shared/components';
+import { useCloseOnWindowLeave } from '@/shared/hooks';
 import { TEST_IDS } from '@/shared/test-ids';
 import { useTranslation } from '@/shared/translation';
-import { type ChatSession, type RoomFooter, useP2PRequests, useProductSessions } from '@/domains/chat';
+import { type ChatSession, type RoomFooter, useProductSessions } from '@/domains/chat';
 import { browserTabs } from '@/aggregates/browser-tabs';
-import { useP2PSessions } from '@/aggregates/p2p-chat';
+import { useP2PChatRequests, useP2PSessions } from '@/aggregates/p2p-chat';
 import { useTruapiUserId } from '@/aggregates/truapi-runtime';
 import { type ChatListEntry, useSortedChatList } from '../hooks/useSortedChatList';
 import { chatService } from '../service';
 import { CHAT } from '../tabs';
 
 import { SyncStatusBanner } from './SyncStatusBanner';
-import { Avatar } from './partials/Avatar';
 import { ChatItem } from './partials/ChatItem';
 import { MessageFlow } from './partials/MessageFlow';
 import { MessageInput } from './partials/MessageInput';
 import { NewRequestsItem } from './partials/NewRequestsItem';
-import { NoData } from './partials/NoData';
 import { OutgoingRequestItem } from './partials/OutgoingRequestItem';
 import { RoomFooterCard } from './partials/RoomFooterCard';
 
@@ -38,7 +35,7 @@ export const QuickChat = memo(({ open, onOpenChange, children }: QuickChatProps)
   const userId = useTruapiUserId();
   const { data: productSessions } = useProductSessions(userId);
   const { data: p2pSessions } = useP2PSessions();
-  const { data: pendingRequests, outgoing: outgoingRequests } = useP2PRequests();
+  const { data: pendingRequests, outgoing: outgoingRequests } = useP2PChatRequests();
   const [selectedSession, setSelectedSession] = useState<ChatSession | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
 
@@ -106,31 +103,14 @@ export const QuickChat = memo(({ open, onOpenChange, children }: QuickChatProps)
     setSendError(null);
   }, [open]);
 
-  // Radix's non-modal outside-click is document `pointerdown`. That never fires
-  // for clicks inside a product iframe, nor for clicks on the toolbar's
-  // -webkit-app-region: drag area (the OS steals the event for window drag).
-  // The toolbar drag area is covered by <DismissOverlay/> below; window blur and
-  // resize still close on iframe focus-steal — same defensive pattern as UserInfoPopover.
-  useEffect(() => {
-    if (!open) return;
-    const close = () => onOpenChange(false);
-    window.addEventListener('blur', close);
-    window.addEventListener('resize', close);
-    return () => {
-      window.removeEventListener('blur', close);
-      window.removeEventListener('resize', close);
-    };
-  }, [open, onOpenChange]);
+  useCloseOnWindowLeave(open, () => onOpenChange(false));
 
   return (
-    <Popover open={open} onOpenChange={onOpenChange}>
+    <Popover.Root open={open} onOpenChange={onOpenChange}>
       <DismissOverlay open={open} testId={TEST_IDS.dismissOverlay} onDismiss={() => onOpenChange(false)} />
       <Popover.Trigger asChild>{children}</Popover.Trigger>
-      <Popover.Content variant="flush" sideOffset={8} align="end" alignOffset={8}>
-        <div
-          data-testid={TEST_IDS.quickChatPopover}
-          className="flex h-137.5 w-89 flex-col overflow-hidden rounded-xl border border-stroke-primary bg-bg-surface-container shadow-lg"
-        >
+      <Popover.Content sideOffset={8} align="end" alignOffset={8}>
+        <div data-testid={TEST_IDS.quickChatPopover} className="flex h-136 w-89 flex-col overflow-hidden">
           {showList ? (
             <ChatList
               chatListEntries={chatListEntries}
@@ -151,7 +131,7 @@ export const QuickChat = memo(({ open, onOpenChange, children }: QuickChatProps)
               </div>
 
               {selectedSession && footer.type !== 'none' ? (
-                <div className="shrink-0 border-t border-stroke-primary p-1">
+                <div className="shrink-0 border-t border-stroke-primary p-2">
                   {footer.type === 'card' ? (
                     <RoomFooterCard roomId={selectedSession.roomId} footer={footer} />
                   ) : (
@@ -166,7 +146,7 @@ export const QuickChat = memo(({ open, onOpenChange, children }: QuickChatProps)
           )}
         </div>
       </Popover.Content>
-    </Popover>
+    </Popover.Root>
   );
 });
 
@@ -182,36 +162,26 @@ const QuickChatPageHeader = ({ session, onBack, onExpand }: QuickChatPageHeaderP
   const sessionName = session ? chatService.formatPeerName(rawSessionName, session.roomId) : '';
 
   return (
-    <div className="flex h-10 shrink-0 items-center gap-2 bg-bg-surface-container p-2">
-      {onBack ? (
-        <>
-          <button
-            className="flex size-7 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-bg-selection-container-hover"
-            aria-label={t('common.action.back')}
-            onClick={onBack}
-          >
-            <ArrowLeft className="size-4 text-fg-secondary" />
-          </button>
-          <Avatar name={sessionName} size="tiny" />
-          <span className="min-w-0 flex-1 truncate text-sm leading-5 font-semibold text-fg-primary">{sessionName}</span>
-        </>
-      ) : (
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-bg-illustration-dark">
-            <ChatBubbleOvalLeftIcon className="size-4 text-fg-primary-inverted" aria-hidden />
-          </div>
-          <span className="truncate text-sm leading-5 font-semibold text-fg-primary">{t('feature.chat.quickChat')}</span>
-        </div>
-      )}
-      <button
-        data-testid={TEST_IDS.quickChatExpandButton}
-        className="flex size-7 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-bg-selection-container-hover"
-        aria-label={t('feature.chat.viewMore')}
-        onClick={() => onExpand()}
-      >
-        <MaximizeIcon className="size-4 text-fg-secondary" aria-hidden />
-      </button>
-    </div>
+    <PaneHeader
+      variant="list"
+      icon={
+        session ? (
+          <Avatar label={sessionName} size="24" />
+        ) : (
+          <AppIcon size="24" alt="">
+            <MessageCircle className="size-4" />
+          </AppIcon>
+        )
+      }
+      actions={
+        <IconButton data-testid={TEST_IDS.quickChatExpandButton} label={t('feature.chat.viewMore')} onClick={() => onExpand()}>
+          <MaximizeIcon aria-hidden />
+        </IconButton>
+      }
+      onBack={onBack}
+    >
+      {session ? sessionName : t('feature.chat.quickChat')}
+    </PaneHeader>
   );
 };
 
@@ -232,18 +202,16 @@ const ChatList = ({
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <QuickChatPageHeader onExpand={onExpand} />
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         <SyncStatusBanner />
         {chatListEntries.length === 0 ? (
-          <div className="flex h-full items-center justify-center">
-            <NoData
-              icon={MessagesSquare}
-              title={t('feature.chat.noChatsYet')}
-              description={t('feature.chat.yourChatsWillAppear')}
-            />
-          </div>
+          <EmptyState
+            icon={<MessagesSquare />}
+            title={t('feature.chat.noChatsYet')}
+            description={t('feature.chat.yourChatsWillAppear')}
+          />
         ) : (
-          chatListEntries.map((entry, index) => {
+          chatListEntries.map(entry => {
             if (entry.kind === 'incoming') {
               return (
                 <NewRequestsItem
@@ -265,14 +233,7 @@ const ChatList = ({
               );
             }
 
-            return (
-              <ChatItem
-                key={entry.session.sessionId}
-                session={entry.session}
-                isLast={index === chatListEntries.length - 1}
-                onClick={() => onSelect(entry.session)}
-              />
-            );
+            return <ChatItem key={entry.session.sessionId} session={entry.session} onClick={() => onSelect(entry.session)} />;
           })
         )}
       </div>

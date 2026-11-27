@@ -1,10 +1,10 @@
 import { MicOff, Settings } from 'lucide-react';
 import { type ReactNode, type SyntheticEvent, useCallback, useEffect, useRef, useState } from 'react';
 
+import { Avatar, Button, IconButton } from '@/shared/components';
 import { cnTw } from '@/shared/utils';
 import { type PendingUpgrade } from '@/domains/chat';
 
-import { CallAvatar } from './CallAvatar';
 import { CallControlButton } from './CallControlButton';
 
 type ActiveCallScreenProps = {
@@ -291,14 +291,11 @@ export const ActiveCallScreen = ({
 
       {/* Settings gear — top-right, above the video scrim; opens the call-settings
           device picker. Present on both audio and video layouts. */}
-      <button
-        type="button"
-        aria-label={settingsLabel}
-        className="absolute end-4 top-4 z-30 rounded-full p-2 text-white/90 hover:bg-white/10"
-        onClick={onOpenSettings}
-      >
-        <Settings className="size-5" />
-      </button>
+      <span className="absolute end-4 top-4 z-30 flex">
+        <IconButton label={settingsLabel} onClick={onOpenSettings}>
+          <Settings />
+        </IconButton>
+      </span>
 
       {showVideoStage ? (
         <>
@@ -315,7 +312,7 @@ export const ActiveCallScreen = ({
                 onLoadedMetadata={handleRemoteMeta}
               />
             ) : (
-              <CallAvatar name={name} sizePx={136} />
+              <Avatar label={name} size="136" />
             )}
           </div>
 
@@ -350,7 +347,7 @@ export const ActiveCallScreen = ({
         <>
           {/* Avatar-centered layout (audio call, or before remote video arrives). */}
           <div className="flex flex-1 flex-col items-center justify-center gap-3">
-            <CallAvatar name={name} sizePx={136} />
+            <Avatar label={name} size="136" />
             <div className="flex flex-col items-center gap-1 text-center">
               <span className="text-2xl font-semibold text-fg-primary">{name}</span>
               <span className="text-base text-fg-primary">{durationLabel}</span>
@@ -373,23 +370,19 @@ export const ActiveCallScreen = ({
             <h2 className="mb-2 text-lg font-semibold text-fg-primary">{switchTitle}</h2>
             <p className="mb-6 text-sm text-fg-primary/70">{switchBody}</p>
             <div className="flex gap-3">
-              <button
-                type="button"
-                className="flex-1 rounded-lg bg-bg-action-secondary py-2 text-sm font-medium text-fg-primary hover:bg-bg-action-secondary-hover"
-                onClick={() => setShowSwitchDialog(false)}
-              >
+              <Button variant="secondary" horizontalSize="fill" onClick={() => setShowSwitchDialog(false)}>
                 {switchCancelLabel}
-              </button>
-              <button
-                type="button"
-                className="flex-1 rounded-lg bg-bg-action-primary py-2 text-sm font-medium text-fg-primary-inverted hover:bg-bg-action-primary-hover"
+              </Button>
+              <Button
+                variant="primary"
+                horizontalSize="fill"
                 onClick={() => {
                   setShowSwitchDialog(false);
                   onRequestVideoUpgrade();
                 }}
               >
                 {switchConfirmLabel}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -403,20 +396,12 @@ export const ActiveCallScreen = ({
           <div className="w-full max-w-sm rounded-xl bg-bg-surface-container p-6 shadow-lg">
             <h2 className="mb-6 text-lg font-semibold text-fg-primary">{upgradeRequestTitle}</h2>
             <div className="flex gap-3">
-              <button
-                type="button"
-                className="flex-1 rounded-lg bg-bg-action-secondary py-2 text-sm font-medium text-fg-primary hover:bg-bg-action-secondary-hover"
-                onClick={onDeclineVideoUpgrade}
-              >
+              <Button variant="secondary" horizontalSize="fill" onClick={onDeclineVideoUpgrade}>
                 {upgradeCancelLabel}
-              </button>
-              <button
-                type="button"
-                className="flex-1 rounded-lg bg-bg-action-primary py-2 text-sm font-medium text-fg-primary-inverted hover:bg-bg-action-primary-hover"
-                onClick={onAcceptVideoUpgrade}
-              >
+              </Button>
+              <Button variant="primary" horizontalSize="fill" onClick={onAcceptVideoUpgrade}>
                 {upgradeConfirmLabel}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

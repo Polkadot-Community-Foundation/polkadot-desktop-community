@@ -1,0 +1,134 @@
+// @vitest-environment happy-dom
+
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { createRef } from 'react';
+import { describe, expect, it, vi } from 'vitest';
+
+import { DropdownMenu } from '../DropdownMenu/DropdownMenu';
+
+import { Button } from './Button';
+
+describe('Button', () => {
+  it('is a plain button by default', () => {
+    render(<Button>Save</Button>);
+
+    expect(screen.getByRole('button', { name: 'Save' })).toHaveAttribute('type', 'button');
+  });
+
+  it('keeps a type the caller passes', () => {
+    render(<Button type="submit">Save</Button>);
+
+    expect(screen.getByRole('button', { name: 'Save' })).toHaveAttribute('type', 'submit');
+  });
+
+  it('passes native attributes and ref through', async () => {
+    const user = userEvent.setup();
+    const ref = createRef<HTMLButtonElement>();
+    const onClick = vi.fn();
+    render(
+      <Button ref={ref} aria-expanded data-testid="b" onClick={onClick}>
+        Save
+      </Button>,
+    );
+
+    const button = screen.getByRole('button', { name: 'Save' });
+    expect(ref.current).toBe(button);
+    expect(button).toHaveAttribute('aria-expanded', 'true');
+    expect(button).toHaveAttribute('data-testid', 'b');
+
+    await user.click(button);
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('opts out of the app focus ring and merges a caller style with no-drag', () => {
+    render(<Button style={{ color: 'red' }}>Save</Button>);
+
+    const button = screen.getByRole('button', { name: 'Save' });
+    expect(button).toHaveAttribute('data-no-app-focus');
+    expect(button.style.color).toBe('red');
+    expect(button.style.getPropertyValue('app-region')).toBe('no-drag');
+  });
+
+  it('blocks clicks while disabled', async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    render(
+      <Button disabled onClick={onClick}>
+        Save
+      </Button>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it('keeps its own classes under a menu trigger', () => {
+    render(
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger asChild>
+          <Button>Save</Button>
+        </DropdownMenu.Trigger>
+      </DropdownMenu.Root>,
+    );
+
+    const button = screen.getByRole('button', { name: 'Save' });
+    expect(button).toHaveClass('inline-flex', 'rounded-full', 'h-control');
+    expect(button).toHaveAttribute('aria-haspopup', 'menu');
+  });
+
+  it('pads and sizes by content by default', () => {
+    render(<Button>Save</Button>);
+
+    const button = screen.getByRole('button', { name: 'Save' });
+    expect(button).toHaveClass('px-4');
+    expect(button).not.toHaveClass('w-full');
+    expect(button).not.toHaveClass('px-1.5');
+  });
+
+  it('pads a condensed button as far from its sides as from its top', () => {
+    render(
+      <>
+        <Button horizontalSize="condensed">Medium</Button>
+        <Button horizontalSize="condensed" size="sm">
+          Small
+        </Button>
+      </>,
+    );
+
+    const medium = screen.getByRole('button', { name: 'Medium' });
+    expect(medium).toHaveClass('px-1.5');
+    expect(medium).not.toHaveClass('px-4');
+    expect(medium).not.toHaveClass('has-[>svg:first-child]:ps-3');
+    expect(medium).not.toHaveClass('w-full');
+
+    const small = screen.getByRole('button', { name: 'Small' });
+    expect(small).toHaveClass('px-1');
+    expect(small).not.toHaveClass('px-3');
+    expect(small).not.toHaveClass('w-full');
+  });
+
+  it('fills its container with the normal padding', () => {
+    render(<Button horizontalSize="fill">Save</Button>);
+
+    const button = screen.getByRole('button', { name: 'Save' });
+    expect(button).toHaveClass('w-full', 'px-4');
+    expect(button).toHaveClass('has-[>svg:first-child]:ps-3');
+  });
+
+  it('carries the ghost checked classes while expanded', () => {
+    render(
+      <Button variant="ghost" aria-expanded>
+        Save
+      </Button>,
+    );
+
+    const button = screen.getByRole('button', { name: 'Save' });
+    expect(button).toHaveAttribute('aria-expanded', 'true');
+    expect(button).toHaveClass(
+      'aria-expanded:bg-chrome-fill-strong',
+      'aria-expanded:shadow-chrome-raised',
+      'aria-pressed:bg-chrome-fill-strong',
+    );
+  });
+});

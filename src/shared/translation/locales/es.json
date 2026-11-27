@@ -22,7 +22,9 @@
       "all": "Todo",
       "electronics": "Electrónica",
       "fashion": "Moda",
-      "downloadLogs": "Descargar registros"
+      "downloadLogs": "Descargar registros",
+      "copied": "Copiado",
+      "copyFailed": "Error al copiar"
     },
     "label": {
       "signer": "Firmante",
@@ -114,6 +116,7 @@
       "newTab": "Nueva pestaña",
       "newTabPrompt": "Introduce una dirección {tld}",
       "closeTab": "Cerrar pestaña",
+      "tabsAria": "Pestañas abiertas",
       "signTransaction": "Firmar transacción",
       "signingRequestTitle": "Solicitud de firma de {call}",
       "operationTitle": {
@@ -188,28 +191,14 @@
       "clearRecent": "Borrar"
     },
     "userManager": {
-      "connectionStatus": {
-        "connected": "Conectado",
-        "reconnecting": "Reconectando…",
-        "offline": "Estás sin conexión",
-        "noConnection": "Sin conexión: haz clic para iniciar sesión"
-      },
       "aria": {
         "account": "Cuenta",
         "connectAccount": "Conectar cuenta"
       },
-      "banner": {
-        "connectedTitle": "Conectado a {networkName}",
-        "connectedSubtitle": "Escritorio emparejado con el móvil",
-        "reconnectingTitle": "Reconectando a {networkName}…",
-        "reconnectingSubtitle": "Intentando alcanzar el nodo de nuevo",
-        "offlineTitle": "Estás sin conexión",
-        "offlineSubtitle": "Comprueba tu conexión a internet e inténtalo de nuevo",
-        "noConnectionTitle": "Sin conexión",
-        "noConnectionSubtitle": "Inicia sesión para emparejar tu cuenta"
-      },
       "popover": {
-        "settings": "Ajustes"
+        "settings": "Ajustes",
+        "signedInAs": "Sesión iniciada como",
+        "signedOut": "Sin sesión iniciada"
       }
     },
     "chat": {
@@ -240,6 +229,7 @@
       "results": "Resultados ({count})",
       "recent": "Reciente",
       "clear": "Borrar",
+      "moreReactions": "Más reacciones",
       "contacts": "Contactos",
       "noMessages": "Todavía no hay mensajes",
       "thisIsChat": "Esto es un chat",
@@ -294,7 +284,14 @@
         "inviteHint": "Solo puedes enviar un mensaje en esta invitación",
         "inviteFailed": "No se pudo enviar la invitación. Comprueba tu conexión e inténtalo de nuevo.",
         "waitForAccept": "Espera a que <b>{name}</b> acepte tu solicitud antes de enviar el siguiente mensaje.",
-        "today": "Hoy"
+        "today": "Hoy",
+        "cancelRequest": "Cancelar solicitud",
+        "cancelTitle": "¿Cancelar la solicitud?",
+        "cancelBody": "{name} ya no verá tu solicitud.",
+        "keepRequest": "Mantener solicitud",
+        "cancelledByPeer": "<b>{name}</b> canceló esta solicitud de chat.",
+        "declineTitle": "¿Rechazar la solicitud de mensaje?",
+        "declineBody": "Solicitud de mensaje de {name}"
       },
       "contactSearch": {
         "searchEntry": "Buscar",
@@ -303,8 +300,6 @@
         "tabApps": "Apps",
         "groupChatsAndContacts": "Chats y contactos",
         "groupMessages": "Mensajes",
-        "recent": "Reciente",
-        "clear": "Borrar",
         "appsComingSoon": "La búsqueda de apps llegará pronto",
         "noResultsTitle": "Sin resultados",
         "noResultsHint": "Prueba a ajustar tu búsqueda"
@@ -366,7 +361,10 @@
           "tapToCallBack": "Toca para devolver la llamada",
           "tapToCallAgain": "Toca para llamar de nuevo"
         }
-      }
+      },
+      "searchPrevious": "Coincidencia anterior",
+      "searchNext": "Coincidencia siguiente",
+      "roomActions": "Acciones del chat"
     },
     "productActionsMenu": {
       "trigger": "Acciones del producto",
@@ -400,7 +398,8 @@
           "title": "Tu cuenta aún se está configurando",
           "subtitle": "Inténtalo de nuevo más tarde"
         }
-      }
+      },
+      "networkLabel": "Red"
     },
     "dashboard": {
       "title": "Panel",
@@ -491,7 +490,8 @@
         "cleanup": "Limpiar el panel",
         "reload": "Recargar widget",
         "removeWidget": "Quitar widget"
-      }
+      },
+      "home": "Inicio"
     },
     "ticketApp": {
       "title": "Ticket App",
@@ -711,7 +711,6 @@
       "navItem": "Permisos",
       "heading": "Permisos",
       "subheading": "Revisa y gestiona el acceso de las apps a las funciones y los datos",
-      "categoryHeading": "{name}:",
       "appCount": "{count, plural, =0 {Ninguna app} one {# app} other {# apps}}",
       "category": {
         "device": "Acceso al dispositivo y al sistema",
@@ -725,7 +724,7 @@
       },
       "detail": {
         "rulesTitle": "Reglas y salvaguardas",
-        "appsLabel": "Apps:",
+        "appsLabel": "Apps",
         "noApps": "Ninguna app ha solicitado este permiso",
         "allowedFor": "Permitido para {modalities}",
         "appSubtitle": "{baseName} • {allowed}"
@@ -1099,6 +1098,57 @@
           "title": "¿Permitir que esta app acceda a su cuenta?",
           "subtitle": "Obtiene la cuenta de esta app desde tu dispositivo vinculado"
         }
+      }
+    },
+    "networkStatus": {
+      "title": "Red",
+      "health": {
+        "connected": "Conectado",
+        "syncing": "Sincronizando",
+        "unstable": "Inestable",
+        "offline": "Sin conexión",
+        "unused": "Sin uso",
+        "unreachable": "Inaccesible"
+      },
+      "role": {
+        "relay": "Relay",
+        "assetHub": "Hub",
+        "bulletin": "Almacenamiento",
+        "people": "Identidad"
+      },
+      "status": {
+        "noInternet": "Sin internet",
+        "noEndpoint": "Sin punto de conexión",
+        "notInUse": "Sin uso",
+        "disconnected": "Desconectado",
+        "syncing": "Sincronizando",
+        "syncingShare": "Sincronizando: {percent} %",
+        "connecting": "Conectando",
+        "notProducing": "No produce bloques",
+        "connected": "Conectado",
+        "behind": "Retrasado",
+        "live": "{word} · En vivo {percent} % · Bloque ~{duration}"
+      },
+      "duration": {
+        "seconds": "{seconds} s",
+        "minutes": "{minutes} min {seconds} s"
+      },
+      "otherChains": "Otras cadenas ({count})",
+      "lastBlocks": "Últimos {count} bloques",
+      "separator": " · ",
+      "strip": {
+        "title": "Últimos {count} bloques, el más reciente a la derecha",
+        "label": "{chain}: últimos {count} bloques, el más reciente a la derecha"
+      },
+      "block": {
+        "onTime": "{gap} s, a tiempo",
+        "late": "{gap} s, {late} s de retraso",
+        "label": "Bloque {number}, {delay}",
+        "newest": "#{number, number}"
+      },
+      "peers": {
+        "count": "{count, plural, one {# par} other {# pares}}",
+        "label": "{chain}: {peers} conectados"
       }
     }
   },

@@ -1,3 +1,4 @@
+import { dotNsService } from '@/domains/product';
 import { type TabRef } from '@/aggregates/browser-tabs';
 
 import { SWIPE_AXIS_SLOP_PX, SWIPE_LIFT_DECAYS, SWIPE_THRESHOLD_PX } from './constants';
@@ -45,4 +46,23 @@ function canSwipeTo(entry: TabRef | null): boolean {
   return entry !== null && entry.type !== NEW_TAB;
 }
 
-export const browserService = { reduceSwipe, toSwipeIndicator, canSwipeTo };
+// `name` is the product's label as the domain names it, cut from the path by position so it keeps the typed casing:
+// it ends at the host's last dot (the TLD's), or at the host's end when the host has no dot. `labelOf` lowercases, which
+// can lengthen a non-ASCII label; the clamp keeps `prefix + name + rest === path`.
+function splitDisplayAddress(path: string): { prefix: string; name: string; rest: string } {
+  const slash = path.indexOf('/');
+  const host = slash === -1 ? path : path.slice(0, slash);
+  const end = host.includes('.') ? host.lastIndexOf('.') : host.length;
+  const start = Math.max(0, end - dotNsService.labelOf(host).length);
+
+  return { prefix: path.slice(0, start), name: path.slice(start, end), rest: path.slice(end) };
+}
+
+function formatMemory(bytes: number): string {
+  const mb = bytes / (1024 * 1024);
+  if (mb >= 1024) return `${(mb / 1024).toFixed(1)}GB`;
+  if (mb >= 10) return `${Math.round(mb)}MB`;
+  return `${mb.toFixed(1)}MB`;
+}
+
+export const browserService = { reduceSwipe, toSwipeIndicator, canSwipeTo, splitDisplayAddress, formatMemory };
