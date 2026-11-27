@@ -1,13 +1,17 @@
 import { MessagesSquare } from 'lucide-react';
 import { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useObservable } from 'react-rx';
+import { type Observable, of } from 'rxjs';
 
+import { EmptyState } from '@/shared/components';
+import { useWindowFocus } from '@/shared/hooks';
 import { TEST_IDS } from '@/shared/test-ids';
 import { useTranslation } from '@/shared/translation';
 import { cnTw } from '@/shared/utils';
 import {
   type ChatMessage,
   type ChatSession,
+  type MessagePosition,
   chatMessageService,
   useCurrentUserPeer,
   useMessageReactions,
@@ -24,7 +28,6 @@ import { CoinageTransferMessageBubble } from './CoinageTransferMessageBubble';
 import { EditHistory } from './EditHistory';
 import { ChatEventItem, DateSeparator, MessageBubble } from './MessageBubble';
 import { MessageContextMenu } from './MessageContextMenu';
-import { NoData } from './NoData';
 import { ScrollControls } from './ScrollControls';
 import { TransferMessageBubble } from './TransferMessageBubble';
 
@@ -33,6 +36,8 @@ type ChatConversationViewProps = {
   onReply?(message: ChatMessage): void;
   onEdit?(message: ChatMessage, displayText: string): void;
 };
+
+const NO_PEER_SEEN: Observable<MessagePosition | null> = of(null);
 
 type ContextMenuState = {
   message: ChatMessage;
@@ -44,6 +49,7 @@ export const MessageFlow = ({ session, onReply, onEdit }: ChatConversationViewPr
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const messages = useObservable(session.messages, []);
+  const peerSeen = useObservable(session.peerSeen ?? NO_PEER_SEEN, null);
   // Event rows (contactAdded/leftChat) carry the peer's accountId as `peer.name`; resolve the
   // room's attested username instead so the event line matches the header and list.
   const peerName = chatService.formatPeerName(useObservable(session.name, ''), session.roomId);
@@ -74,9 +80,13 @@ export const MessageFlow = ({ session, onReply, onEdit }: ChatConversationViewPr
 
   const hasMessages = groupedMessages.length > 0;
 
+  const isWindowFocused = useWindowFocus();
+
+  // A read sends a seen receipt (RFC 0006), and Seen means displayed: an unfocused window, or a view scrolled up
+  // while new messages land below it, must not read.
   useEffect(() => {
-    session.markAsRead();
-  }, [session, groupedMessages]);
+    if (isWindowFocused && isAtBottom) session.markAsRead();
+  }, [session, groupedMessages, isWindowFocused, isAtBottom]);
 
   const handleContextMenu = useCallback((e: MouseEvent, message: ChatMessage) => {
     e.preventDefault();
@@ -147,6 +157,7 @@ export const MessageFlow = ({ session, onReply, onEdit }: ChatConversationViewPr
                             message={message}
                             content={content}
                             isMe={isMe}
+                            isSeen={chatMessageService.isSeenByPeer(message, peerSeen)}
                             onContextMenu={e => handleContextMenu(e, message)}
                           />
                         </div>
@@ -167,6 +178,7 @@ export const MessageFlow = ({ session, onReply, onEdit }: ChatConversationViewPr
                             content={content}
                             state={callState}
                             isMe={isMe}
+                            isSeen={chatMessageService.isSeenByPeer(message, peerSeen)}
                             onContextMenu={e => handleContextMenu(e, message)}
                           />
                         </div>
@@ -202,6 +214,7 @@ export const MessageFlow = ({ session, onReply, onEdit }: ChatConversationViewPr
                           message={message}
                           isMe={isMe}
                           isLastInGroup={isLastInGroup}
+                          isSeen={chatMessageService.isSeenByPeer(message, peerSeen)}
                           quotedMessage={quotedMessage}
                           quotedSenderName={quotedSenderName}
                           reactions={messageReactions.get(message.messageId) ?? []}
@@ -219,8 +232,8 @@ export const MessageFlow = ({ session, onReply, onEdit }: ChatConversationViewPr
             </>
           ) : (
             <div data-testid={TEST_IDS.chatNoMessagesPlaceholder} className="flex size-full flex-col items-center justify-center">
-              <NoData
-                icon={MessagesSquare}
+              <EmptyState
+                icon={<MessagesSquare />}
                 title={t('feature.chat.noMessages')}
                 description={t('feature.chat.sendMessageToBegin')}
               />

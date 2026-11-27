@@ -22,7 +22,9 @@
       "all": "الكل",
       "electronics": "إلكترونيات",
       "fashion": "أزياء",
-      "downloadLogs": "تنزيل السجلات"
+      "downloadLogs": "تنزيل السجلات",
+      "copied": "تم النسخ",
+      "copyFailed": "فشل النسخ"
     },
     "label": {
       "signer": "الموقّع",
@@ -114,6 +116,7 @@
       "newTab": "علامة تبويب جديدة",
       "newTabPrompt": "أدخل عنوان ‎{tld}",
       "closeTab": "إغلاق علامة التبويب",
+      "tabsAria": "علامات التبويب المفتوحة",
       "signTransaction": "توقيع المعاملة",
       "signingRequestTitle": "طلب توقيع {call}",
       "operationTitle": {
@@ -188,28 +191,14 @@
       "clearRecent": "مسح"
     },
     "userManager": {
-      "connectionStatus": {
-        "connected": "متصل",
-        "reconnecting": "جارٍ إعادة الاتصال…",
-        "offline": "أنت غير متصل بالإنترنت",
-        "noConnection": "غير متصل — انقر لتسجيل الدخول"
-      },
       "aria": {
         "account": "الحساب",
         "connectAccount": "توصيل الحساب"
       },
-      "banner": {
-        "connectedTitle": "متصل بـ {networkName}",
-        "connectedSubtitle": "تم إقران سطح المكتب مع الهاتف",
-        "reconnectingTitle": "جارٍ إعادة الاتصال بـ {networkName}…",
-        "reconnectingSubtitle": "محاولة الوصول إلى العقدة من جديد",
-        "offlineTitle": "أنت غير متصل بالإنترنت",
-        "offlineSubtitle": "تحقق من اتصال الإنترنت وحاول مرة أخرى",
-        "noConnectionTitle": "غير متصل",
-        "noConnectionSubtitle": "سجّل الدخول لإقران حسابك"
-      },
       "popover": {
-        "settings": "الإعدادات"
+        "settings": "الإعدادات",
+        "signedInAs": "تم تسجيل الدخول باسم",
+        "signedOut": "لم يتم تسجيل الدخول"
       }
     },
     "chat": {
@@ -240,6 +229,7 @@
       "results": "النتائج ({count})",
       "recent": "الأخيرة",
       "clear": "مسح",
+      "moreReactions": "المزيد من التفاعلات",
       "contacts": "جهات الاتصال",
       "noMessages": "لا توجد رسائل بعد",
       "thisIsChat": "هذه دردشة",
@@ -294,7 +284,14 @@
         "inviteHint": "يمكنك إرسال رسالة واحدة فقط في هذه الدعوة",
         "inviteFailed": "تعذّر إرسال الدعوة. تحقق من اتصالك وحاول مرة أخرى.",
         "waitForAccept": "انتظر حتى يقبل <b>{name}</b> رسالة طلبك قبل إرسال الرسالة التالية.",
-        "today": "اليوم"
+        "today": "اليوم",
+        "cancelRequest": "إلغاء الطلب",
+        "cancelTitle": "إلغاء الطلب؟",
+        "cancelBody": "لن يرى {name} طلبك بعد الآن.",
+        "keepRequest": "الإبقاء على الطلب",
+        "cancelledByPeer": "<b>{name}</b> ألغى طلب الدردشة هذا.",
+        "declineTitle": "رفض طلب الرسالة؟",
+        "declineBody": "طلب رسالة من {name}"
       },
       "contactSearch": {
         "searchEntry": "بحث",
@@ -303,8 +300,6 @@
         "tabApps": "التطبيقات",
         "groupChatsAndContacts": "الدردشات وجهات الاتصال",
         "groupMessages": "الرسائل",
-        "recent": "الأخيرة",
-        "clear": "مسح",
         "appsComingSoon": "البحث في التطبيقات قريبًا",
         "noResultsTitle": "لا توجد نتائج",
         "noResultsHint": "حاول تعديل بحثك"
@@ -366,7 +361,10 @@
           "tapToCallBack": "اضغط لمعاودة الاتصال",
           "tapToCallAgain": "اضغط للاتصال مرة أخرى"
         }
-      }
+      },
+      "searchPrevious": "التطابق السابق",
+      "searchNext": "التطابق التالي",
+      "roomActions": "إجراءات الدردشة"
     },
     "productActionsMenu": {
       "trigger": "إجراءات المنتج",
@@ -400,7 +398,8 @@
           "title": "لا يزال حسابك قيد الإعداد",
           "subtitle": "يرجى المحاولة مرة أخرى لاحقًا"
         }
-      }
+      },
+      "networkLabel": "الشبكة"
     },
     "dashboard": {
       "title": "لوحة التحكم",
@@ -491,7 +490,8 @@
         "cleanup": "تنظيم لوحة التحكم",
         "reload": "إعادة تحميل الأداة",
         "removeWidget": "إزالة الأداة"
-      }
+      },
+      "home": "الرئيسية"
     },
     "ticketApp": {
       "title": "Ticket App",
@@ -711,7 +711,6 @@
       "navItem": "الأذونات",
       "heading": "الأذونات",
       "subheading": "راجع وصول التطبيقات إلى الميزات والبيانات وأدره",
-      "categoryHeading": "{name}:",
       "appCount": "{count, plural, =0 {لا توجد تطبيقات} one {تطبيق واحد} two {تطبيقان} few {# تطبيقات} many {# تطبيقًا} other {# تطبيق}}",
       "category": {
         "device": "الوصول إلى الجهاز والنظام",
@@ -725,7 +724,7 @@
       },
       "detail": {
         "rulesTitle": "القواعد والضمانات",
-        "appsLabel": "التطبيقات:",
+        "appsLabel": "التطبيقات",
         "noApps": "لم يطلب أي تطبيق هذا الإذن",
         "allowedFor": "مسموح لـ {modalities}",
         "appSubtitle": "{baseName} • {allowed}"
@@ -1099,6 +1098,57 @@
           "title": "السماح لهذا التطبيق بالوصول إلى حسابه؟",
           "subtitle": "يجلب حساب هذا التطبيق من جهازك المقترن"
         }
+      }
+    },
+    "networkStatus": {
+      "title": "الشبكة",
+      "health": {
+        "connected": "متصل",
+        "syncing": "قيد المزامنة",
+        "unstable": "غير مستقر",
+        "offline": "غير متصل",
+        "unused": "غير مستخدم",
+        "unreachable": "يتعذر الوصول"
+      },
+      "role": {
+        "relay": "المرحِّل",
+        "assetHub": "المحور",
+        "bulletin": "التخزين",
+        "people": "الهوية"
+      },
+      "status": {
+        "noInternet": "لا يوجد إنترنت",
+        "noEndpoint": "لا توجد نقطة اتصال",
+        "notInUse": "غير مستخدم",
+        "disconnected": "مقطوع الاتصال",
+        "syncing": "قيد المزامنة",
+        "syncingShare": "قيد المزامنة: {percent}%",
+        "connecting": "جارٍ الاتصال",
+        "notProducing": "لا تُنتج كتل",
+        "connected": "متصل",
+        "behind": "متأخر",
+        "live": "{word} · مباشر {percent}% · كتلة ~{duration}"
+      },
+      "duration": {
+        "seconds": "{seconds} ث",
+        "minutes": "{minutes} د {seconds} ث"
+      },
+      "otherChains": "سلاسل أخرى ({count})",
+      "lastBlocks": "آخر {count} كتلة",
+      "separator": " · ",
+      "strip": {
+        "title": "آخر {count} كتلة، الأحدث على اليمين",
+        "label": "{chain}: آخر {count} كتلة، الأحدث على اليمين"
+      },
+      "block": {
+        "onTime": "{gap} ث، في الوقت المحدد",
+        "late": "{gap} ث، متأخرة {late} ث",
+        "label": "الكتلة {number}، {delay}",
+        "newest": "#{number, number}"
+      },
+      "peers": {
+        "count": "{count, plural, zero {# نظير} one {نظير واحد} two {نظيران} few {# نظراء} many {# نظيرًا} other {# نظير}}",
+        "label": "{chain}: {peers} متصل"
       }
     }
   },

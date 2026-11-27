@@ -204,3 +204,55 @@ describe('browserService.canSwipeTo', () => {
     expect(browserService.canSwipeTo(null)).toBe(false);
   });
 });
+
+describe('browserService.splitDisplayAddress', () => {
+  it('splits a name from its tld and path', () => {
+    expect(browserService.splitDisplayAddress('polkadot.dot/staking')).toEqual({
+      prefix: '',
+      name: 'polkadot',
+      rest: '.dot/staking',
+    });
+  });
+
+  it('splits a name from its tld', () => {
+    expect(browserService.splitDisplayAddress('polkadot.dot')).toEqual({ prefix: '', name: 'polkadot', rest: '.dot' });
+  });
+
+  it('keeps a bare name whole', () => {
+    expect(browserService.splitDisplayAddress('chat')).toEqual({ prefix: '', name: 'chat', rest: '' });
+  });
+
+  it('handles an empty path', () => {
+    expect(browserService.splitDisplayAddress('')).toEqual({ prefix: '', name: '', rest: '' });
+  });
+
+  it('takes a dotless host whole and leaves the route after it', () => {
+    expect(browserService.splitDisplayAddress('app/route.x')).toEqual({ prefix: '', name: 'app', rest: '/route.x' });
+  });
+
+  it('names the product label of a subname, not the subname', () => {
+    expect(browserService.splitDisplayAddress('app.caller.dot/route')).toEqual({
+      prefix: 'app.',
+      name: 'caller',
+      rest: '.dot/route',
+    });
+  });
+
+  it('keeps a localhost host with its port whole', () => {
+    expect(browserService.splitDisplayAddress('localhost:50535')).toEqual({ prefix: '', name: 'localhost:50535', rest: '' });
+  });
+});
+
+describe('browserService.formatMemory', () => {
+  it('keeps one decimal under 10 MB', () => {
+    expect(browserService.formatMemory(5 * 1024 * 1024)).toBe('5.0MB');
+  });
+
+  it('rounds to whole megabytes from 10 MB', () => {
+    expect(browserService.formatMemory(100 * 1024 * 1024)).toBe('100MB');
+  });
+
+  it('switches to gigabytes from 1024 MB', () => {
+    expect(browserService.formatMemory(1536 * 1024 * 1024)).toBe('1.5GB');
+  });
+});

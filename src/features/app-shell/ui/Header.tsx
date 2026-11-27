@@ -2,6 +2,7 @@ import { memo, useEffect, useState } from 'react';
 
 import { Slot } from '@/shared/di';
 import { getPlatformType, isElectron } from '@/shared/env';
+import { useWindowFocus } from '@/shared/hooks';
 import { cnTw } from '@/shared/utils';
 import {
   tabBarSlot,
@@ -25,13 +26,13 @@ export const Header = memo(() => {
     // the Electron 42.4.0 fix for the AppKit `sendEvent:` regression (#51576).
     <header
       className={cnTw(
-        'flex w-full shrink-0 flex-col transition-colors duration-200',
-        tintUnfocused ? 'bg-bg-surface-nested dark:bg-bg-surface-container' : 'bg-bg-surface-container',
+        'flex w-full shrink-0 flex-col text-chrome-text shadow-chrome-edge',
+        tintUnfocused ? 'bg-chrome-bottom' : 'bg-(image:--chrome-glass)',
       )}
       style={{ appRegion: 'drag' }}
     >
       <div className="flex h-12 items-center">
-        <div className="flex h-full min-w-0 flex-1 basis-0 items-center border-stroke-primary">
+        <div className="flex h-full min-w-0 flex-1 basis-0 items-center">
           {/* The macOS traffic lights are OS chrome pinned to the physical top-left; they do not
               move under `dir="rtl"`. This flex row does, so the spacer that clears them is rendered
               in whichever track ends up on the physical left — the leading one in LTR, the trailing
@@ -82,27 +83,4 @@ const useFullscreen = () => {
   }, []);
 
   return isFullscreen;
-};
-
-const useWindowFocus = () => {
-  const [isFocused, setIsFocused] = useState(() => (typeof document !== 'undefined' ? document.hasFocus() : true));
-
-  useEffect(() => {
-    if (isElectron()) {
-      return window.App.onWindowFocusChange(setIsFocused);
-    }
-
-    const onFocus = () => setIsFocused(true);
-    const onBlur = () => setIsFocused(false);
-
-    window.addEventListener('focus', onFocus);
-    window.addEventListener('blur', onBlur);
-
-    return () => {
-      window.removeEventListener('focus', onFocus);
-      window.removeEventListener('blur', onBlur);
-    };
-  }, []);
-
-  return isFocused;
 };

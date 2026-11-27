@@ -22,7 +22,9 @@
       "all": "सभी",
       "electronics": "इलेक्ट्रॉनिक्स",
       "fashion": "फ़ैशन",
-      "downloadLogs": "लॉग डाउनलोड करें"
+      "downloadLogs": "लॉग डाउनलोड करें",
+      "copied": "कॉपी किया गया",
+      "copyFailed": "कॉपी नहीं हो सका"
     },
     "label": {
       "signer": "हस्ताक्षरकर्ता",
@@ -114,6 +116,7 @@
       "newTab": "नया टैब",
       "newTabPrompt": "{tld} पता दर्ज करें",
       "closeTab": "टैब बंद करें",
+      "tabsAria": "खुले टैब",
       "signTransaction": "लेनदेन पर हस्ताक्षर करें",
       "signingRequestTitle": "{call} हस्ताक्षर अनुरोध",
       "operationTitle": {
@@ -188,28 +191,14 @@
       "clearRecent": "साफ़ करें"
     },
     "userManager": {
-      "connectionStatus": {
-        "connected": "कनेक्ट है",
-        "reconnecting": "फिर से कनेक्ट हो रहा है…",
-        "offline": "आप ऑफ़लाइन हैं",
-        "noConnection": "कनेक्ट नहीं है — साइन इन करने के लिए क्लिक करें"
-      },
       "aria": {
         "account": "खाता",
         "connectAccount": "खाता कनेक्ट करें"
       },
-      "banner": {
-        "connectedTitle": "{networkName} से कनेक्ट है",
-        "connectedSubtitle": "डेस्कटॉप मोबाइल के साथ जोड़ा गया",
-        "reconnectingTitle": "{networkName} से फिर कनेक्ट हो रहा है…",
-        "reconnectingSubtitle": "नोड तक पहुँचने की फिर कोशिश हो रही है",
-        "offlineTitle": "आप ऑफ़लाइन हैं",
-        "offlineSubtitle": "इंटरनेट कनेक्शन जाँचें और फिर कोशिश करें",
-        "noConnectionTitle": "कनेक्ट नहीं है",
-        "noConnectionSubtitle": "अपना खाता जोड़ने के लिए लॉग इन करें"
-      },
       "popover": {
-        "settings": "सेटिंग्स"
+        "settings": "सेटिंग्स",
+        "signedInAs": "इस रूप में साइन इन",
+        "signedOut": "साइन इन नहीं किया गया"
       }
     },
     "chat": {
@@ -240,6 +229,7 @@
       "results": "परिणाम ({count})",
       "recent": "हाल के",
       "clear": "साफ़ करें",
+      "moreReactions": "और प्रतिक्रियाएँ",
       "contacts": "संपर्क",
       "noMessages": "अभी कोई संदेश नहीं",
       "thisIsChat": "यह एक चैट है",
@@ -294,7 +284,14 @@
         "inviteHint": "इस आमंत्रण में आप सिर्फ़ एक संदेश भेज सकते हैं",
         "inviteFailed": "आमंत्रण नहीं भेजा जा सका। अपना कनेक्शन जाँचें और फिर कोशिश करें।",
         "waitForAccept": "अगला संदेश भेजने से पहले <b>{name}</b> के आपका अनुरोध स्वीकार करने का इंतज़ार करें।",
-        "today": "आज"
+        "today": "आज",
+        "cancelRequest": "अनुरोध रद्द करें",
+        "cancelTitle": "अनुरोध रद्द करें?",
+        "cancelBody": "{name} को अब आपका अनुरोध नहीं दिखेगा।",
+        "keepRequest": "अनुरोध रखें",
+        "cancelledByPeer": "<b>{name}</b> ने यह चैट अनुरोध रद्द कर दिया।",
+        "declineTitle": "संदेश अनुरोध अस्वीकार करें?",
+        "declineBody": "{name} का संदेश अनुरोध"
       },
       "contactSearch": {
         "searchEntry": "खोजें",
@@ -303,8 +300,6 @@
         "tabApps": "ऐप्स",
         "groupChatsAndContacts": "चैट और संपर्क",
         "groupMessages": "संदेश",
-        "recent": "हाल के",
-        "clear": "साफ़ करें",
         "appsComingSoon": "ऐप खोज जल्द ही आ रही है",
         "noResultsTitle": "कोई परिणाम नहीं",
         "noResultsHint": "अपनी खोज बदलकर देखें"
@@ -366,7 +361,10 @@
           "tapToCallBack": "वापस कॉल करने के लिए टैप करें",
           "tapToCallAgain": "फिर कॉल करने के लिए टैप करें"
         }
-      }
+      },
+      "searchPrevious": "पिछला मिलान",
+      "searchNext": "अगला मिलान",
+      "roomActions": "चैट क्रियाएँ"
     },
     "productActionsMenu": {
       "trigger": "प्रोडक्ट क्रियाएँ",
@@ -400,7 +398,8 @@
           "title": "आपका खाता अभी सेट हो रहा है",
           "subtitle": "कृपया बाद में फिर कोशिश करें"
         }
-      }
+      },
+      "networkLabel": "नेटवर्क"
     },
     "dashboard": {
       "title": "डैशबोर्ड",
@@ -491,7 +490,8 @@
         "cleanup": "डैशबोर्ड साफ़ करें",
         "reload": "विजेट रीलोड करें",
         "removeWidget": "विजेट हटाएँ"
-      }
+      },
+      "home": "होम"
     },
     "ticketApp": {
       "title": "Ticket App",
@@ -711,7 +711,6 @@
       "navItem": "अनुमतियाँ",
       "heading": "अनुमतियाँ",
       "subheading": "सुविधाओं और डेटा तक ऐप्स की पहुँच की समीक्षा करें और उसे प्रबंधित करें",
-      "categoryHeading": "{name}:",
       "appCount": "{count, plural, =0 {कोई ऐप नहीं} one {# ऐप} other {# ऐप्स}}",
       "category": {
         "device": "डिवाइस और सिस्टम पहुँच",
@@ -725,7 +724,7 @@
       },
       "detail": {
         "rulesTitle": "नियम और सुरक्षा उपाय",
-        "appsLabel": "ऐप्स:",
+        "appsLabel": "ऐप्स",
         "noApps": "किसी ऐप ने यह अनुमति नहीं माँगी है",
         "allowedFor": "{modalities} के लिए अनुमति है",
         "appSubtitle": "{baseName} • {allowed}"
@@ -1099,6 +1098,57 @@
           "title": "इस ऐप को अपने खाते तक पहुँचने दें?",
           "subtitle": "इस ऐप का खाता आपके जुड़े डिवाइस से लाता है"
         }
+      }
+    },
+    "networkStatus": {
+      "title": "नेटवर्क",
+      "health": {
+        "connected": "कनेक्टेड",
+        "syncing": "सिंक हो रहा है",
+        "unstable": "अस्थिर",
+        "offline": "ऑफ़लाइन",
+        "unused": "उपयोग में नहीं",
+        "unreachable": "पहुँच से बाहर"
+      },
+      "role": {
+        "relay": "रिले",
+        "assetHub": "हब",
+        "bulletin": "स्टोरेज",
+        "people": "पहचान"
+      },
+      "status": {
+        "noInternet": "इंटरनेट नहीं",
+        "noEndpoint": "कोई एंडपॉइंट नहीं",
+        "notInUse": "उपयोग में नहीं",
+        "disconnected": "डिस्कनेक्ट",
+        "syncing": "सिंक हो रहा है",
+        "syncingShare": "सिंक हो रहा है: {percent}%",
+        "connecting": "कनेक्ट हो रहा है",
+        "notProducing": "ब्लॉक नहीं बना रहा",
+        "connected": "कनेक्टेड",
+        "behind": "पीछे",
+        "live": "{word} · लाइव {percent}% · ब्लॉक ~{duration}"
+      },
+      "duration": {
+        "seconds": "{seconds} से",
+        "minutes": "{minutes} मि {seconds} से"
+      },
+      "otherChains": "अन्य चेन ({count})",
+      "lastBlocks": "अंतिम {count} ब्लॉक",
+      "separator": " · ",
+      "strip": {
+        "title": "अंतिम {count} ब्लॉक, नवीनतम दाईं ओर",
+        "label": "{chain}: अंतिम {count} ब्लॉक, नवीनतम दाईं ओर"
+      },
+      "block": {
+        "onTime": "{gap} से, समय पर",
+        "late": "{gap} से, {late} से देरी",
+        "label": "ब्लॉक {number}, {delay}",
+        "newest": "#{number, number}"
+      },
+      "peers": {
+        "count": "{count, plural, one {# पीयर} other {# पीयर}}",
+        "label": "{chain}: {peers} कनेक्टेड"
       }
     }
   },

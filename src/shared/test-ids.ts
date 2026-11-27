@@ -16,6 +16,25 @@ export const TEST_IDS = {
   quickChatPopover: 'quick-chat-popover',
   quickChatExpandButton: 'quick-chat-expand-button',
   chatSyncStatusBanner: 'chat-sync-status-banner',
+  networkStatusButton: 'network-status-button',
+  networkPanel: 'network-panel',
+  networkStatusDot: 'network-status-dot',
+  networkChainList: 'network-chain-list',
+  networkOtherChainList: 'network-other-chain-list',
+  networkOtherChains: 'network-other-chains',
+  networkOtherChainsSummary: 'network-other-chains-summary',
+  networkChainRow: 'network-chain-row',
+  networkChainRowHead: 'network-chain-row-head',
+  networkChainRowName: 'network-chain-row-name',
+  networkChainRowStatus: 'network-chain-row-status',
+  networkChainRowDetail: 'network-chain-row-detail',
+  networkChainRowPeers: 'network-chain-row-peers',
+  networkChainRowBlock: 'network-chain-row-block',
+  networkChainMark: 'network-chain-mark',
+  networkBlockStrip: 'network-block-strip',
+  networkBlockBar: 'network-block-bar',
+  networkBlockStub: 'network-block-stub',
+  networkBlockPending: 'network-block-pending',
 
   // Input modality spotlight surface
   inputModalitySurface: 'input-modality-surface',
@@ -102,11 +121,9 @@ export const TEST_IDS = {
 
   // User Manager
   userButton: 'user-button',
-  userConnectionStatus: 'user-connection-status',
   userLogoutButton: 'user-logout-button',
   userDisplayName: 'user-display-name',
   userSettingsAction: 'user-settings-action',
-  userPopoverBanner: 'user-popover-banner',
 
   // Navigation
   homeButton: 'home-button',
@@ -179,6 +196,8 @@ export const TEST_IDS = {
   chatNewRequestsCount: 'chat-new-requests-count',
   chatDeclineDialog: 'chat-decline-dialog',
   chatDeclineDialogConfirm: 'chat-decline-dialog-confirm',
+  chatCancelRequestDialog: 'chat-cancel-request-dialog',
+  chatCancelRequestDialogConfirm: 'chat-cancel-request-dialog-confirm',
   chatOutgoingRequestItem: 'chat-outgoing-request-item',
   chatOutgoingPendingRoom: 'chat-outgoing-pending-room',
   chatOutgoingPendingRoomMenuTrigger: 'chat-outgoing-pending-room-menu-trigger',
@@ -210,9 +229,6 @@ export const TEST_IDS = {
   contactSearchInput: 'contact-search-input',
   contactResultItem: 'contact-result-item',
   chatSearchEntryButton: 'chat-search-entry-button',
-  contactSearchMessageItem: 'contact-search-message-item',
-  contactSearchRecentItem: 'contact-search-recent-item',
-  contactSearchClearRecent: 'contact-search-clear-recent',
   contactSearchNoResults: 'contact-search-no-results',
 
   // Product Actions Menu
@@ -230,7 +246,6 @@ export const TEST_IDS = {
   offlineAccessUpdateButton: 'offline-access-update-button',
 
   // Browser tabs
-  tabHoverVersionPin: 'tab-hover-version-pin',
   browserTabStrip: 'browser-tab-strip',
   tabHoverCard: 'tab-hover-card',
   tabHoverRam: 'tab-hover-ram',
@@ -260,9 +275,7 @@ export const TEST_IDS = {
   callVideoButton: 'call-video-button',
 
   // Network connection settings
-  networkConnectionPreference: 'network-connection-preference',
   networkConnectionChainRow: 'network-connection-chain-row',
-  networkConnectionChainTabs: 'network-connection-chain-tabs',
   productLoadNotice: 'product-load-notice',
   productLoadReloadButton: 'product-load-reload-button',
   productLoadSwitchButton: 'product-load-switch-button',

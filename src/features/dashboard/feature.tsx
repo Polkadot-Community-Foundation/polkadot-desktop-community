@@ -1,13 +1,13 @@
-import { AppIcon } from '@novasamatech/tr-ui';
 import { Star } from 'lucide-react';
 import { FormattedMessage } from 'react-intl';
 
+import { AppIcon } from '@/shared/components';
 import { createFeature } from '@/shared/feature';
 import { TEST_IDS } from '@/shared/test-ids';
 import { type DashboardCardLayoutRules, FAVORITES_FOLDER_ID, cardsUseCase, dashboardLayoutService } from '@/domains/application';
 import { DASHBOARD_TAB_ID } from '@/aggregates/browser-tabs';
 import { persistentSlot, topBarLeadingSlot } from '@/features/app-shell';
-import { tabContentSlot, tabHoverSlot } from '@/features/browser';
+import { tabContentSlot } from '@/features/browser';
 
 import { isNativeAddableDashboardId, lookupAddableDashboardCardByGridId } from './addableDashboardCards';
 import {
@@ -23,7 +23,6 @@ import { AddToDashboardDialogHost } from './ui/AddToDashboardDialogHost';
 import { DashboardCardChrome } from './ui/DashboardCardChrome';
 import { DashboardTabBinding } from './ui/DashboardTabBinding';
 import { DashboardTabContent } from './ui/DashboardTabContent';
-import { DashboardTabHover } from './ui/DashboardTabHover';
 import { HomeButton } from './ui/HomeButton';
 import { NativeAddToDashboardModal } from './ui/NativeAddToDashboardModal';
 import { NativeAddWidgetPanelResolver } from './ui/add-widget/NativeAddWidgetPanelResolver';
@@ -42,7 +41,6 @@ dashboardFeature.inject(topBarLeadingSlot, {
 dashboardFeature.inject(tabContentSlot, ({ tab, isActive }) =>
   tab.type === DASHBOARD_TAB_ID ? <DashboardTabContent isActive={isActive} /> : null,
 );
-dashboardFeature.inject(tabHoverSlot, ({ tab }) => (tab.type === DASHBOARD_TAB_ID ? <DashboardTabHover /> : null));
 dashboardFeature.inject(persistentSlot, () => <DashboardTabBinding />);
 dashboardFeature.inject(persistentSlot, () => <AddToDashboardDialogHost />);
 
@@ -89,7 +87,7 @@ type FolderPayload = {
 
 const FOLDER_METADATA: DashboardCardMetadata = {
   icon: (
-    <AppIcon size="sm" alt="">
+    <AppIcon size="24" alt="">
       <Star className="size-4" aria-hidden />
     </AppIcon>
   ),

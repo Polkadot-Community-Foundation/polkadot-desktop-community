@@ -5,7 +5,6 @@ import {
   type CoreStorageRow,
   type DashboardLayoutRow,
   type DeclinedUpdateRow,
-  type DeviceIdentityRow,
   type LightClientDatabaseRow,
   type ProductExecutableCacheRow,
   type ProductPermissionsRow,
@@ -108,6 +107,15 @@ dexie.version(12).stores({ productStorage: 'key', productLocalStorage: null }).u
 // them. Index only. The bootstrap backfill describes rows that carry no owner yet; a
 // row that already holds a `productId` keeps it and is still swept by it.
 dexie.version(13).stores({ coreStorage: 'key, slotTag, productId, productLabel, [slotTag+productId]' });
+// v14: `deviceIdentity` is dropped. Since TrUAPI 0.32 the core serves this device's
+// statement and encryption keys, which the wallet registers at pairing; the host-minted
+// pair had no statement allowance, so nothing it signed was stored. `null` deletes it.
+dexie.version(14).stores({ deviceIdentity: null });
+// v15: warm-start blobs are keyed by stack and genesis hash. A provider that runs a stack hands
+// the store its stack, two stacks can share a genesis hash, and Dexie cannot change a primary
+// key in place, so the store is replaced. The stackless rows are dropped, which costs each
+// chain one cold sync.
+dexie.version(15).stores({ lightClientDatabases: null, lightClientStackDatabases: '[stack+genesisHash]' });
 
 export const appDatabase = dexie;
 
@@ -118,9 +126,8 @@ export const database = {
   productExecutableCache: dexie.table<ProductExecutableCacheRow, string>('productExecutableCache'),
   declinedUpdates: dexie.table<DeclinedUpdateRow, string>('declinedUpdates'),
   coreStorage: dexie.table<CoreStorageRow, string>('coreStorage'),
-  deviceIdentity: dexie.table<DeviceIdentityRow, string>('deviceIdentity'),
   themeSettings: dexie.table<ThemeSettingsRow, string>('themeSettings'),
-  lightClientDatabases: dexie.table<LightClientDatabaseRow, string>('lightClientDatabases'),
+  lightClientStackDatabases: dexie.table<LightClientDatabaseRow, [string, string]>('lightClientStackDatabases'),
 };
 
 export type AppTable<T> = Table<T, string>;

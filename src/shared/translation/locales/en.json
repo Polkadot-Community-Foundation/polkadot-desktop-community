@@ -22,7 +22,9 @@
       "all": "All",
       "electronics": "Electronics",
       "fashion": "Fashion",
-      "downloadLogs": "Download Logs"
+      "downloadLogs": "Download Logs",
+      "copied": "Copied",
+      "copyFailed": "Copy failed"
     },
     "label": {
       "signer": "Signer",
@@ -114,6 +116,7 @@
       "newTab": "New tab",
       "newTabPrompt": "Enter {tld} address",
       "closeTab": "Close tab",
+      "tabsAria": "Open tabs",
       "signTransaction": "Sign transaction",
       "signingRequestTitle": "{call} signing request",
       "operationTitle": {
@@ -189,28 +192,14 @@
       "clearRecent": "Clear"
     },
     "userManager": {
-      "connectionStatus": {
-        "connected": "Connected",
-        "reconnecting": "Reconnecting…",
-        "offline": "You are offline",
-        "noConnection": "Not connected — click to sign in"
-      },
       "aria": {
         "account": "Account",
         "connectAccount": "Connect account"
       },
-      "banner": {
-        "connectedTitle": "Connected to {networkName}",
-        "connectedSubtitle": "Desktop paired with Mobile",
-        "reconnectingTitle": "Reconnecting to {networkName}…",
-        "reconnectingSubtitle": "Attempting to reach the node again",
-        "offlineTitle": "You're offline",
-        "offlineSubtitle": "Check internet connection and try again",
-        "noConnectionTitle": "Not connected",
-        "noConnectionSubtitle": "Log in to pair your account"
-      },
       "popover": {
-        "settings": "Settings"
+        "settings": "Settings",
+        "signedInAs": "Signed in as",
+        "signedOut": "Not signed in"
       }
     },
     "chat": {
@@ -235,12 +224,21 @@
       "searchMessages": "Messages",
       "sayHelloOptional": "Say hello... (optional)",
       "sending": "Sending...",
+      "composer": {
+        "send": "Send"
+      },
       "sendRequest": "Send Request",
       "search": "Search",
+      "inChatSearch": {
+        "placeholder": "Search in chat...",
+        "noMatches": "No matching messages"
+      },
       "noResults": "No results found for \"{query}\"",
       "results": "Results ({count})",
       "recent": "Recent",
       "clear": "Clear",
+      "moreReactions": "More reactions",
+      "messageActions": "Message actions",
       "contacts": "Contacts",
       "noMessages": "No Messages Yet",
       "thisIsChat": "This is a chat",
@@ -295,7 +293,14 @@
         "inviteHint": "You can only send one message in this invitation",
         "inviteFailed": "Could not send the invitation. Check your connection and try again.",
         "waitForAccept": "Wait for <b>{name}</b> to accept your request message before sending the next message.",
-        "today": "Today"
+        "today": "Today",
+        "cancelRequest": "Cancel request",
+        "cancelTitle": "Cancel request?",
+        "cancelBody": "{name} will no longer see your request.",
+        "keepRequest": "Keep request",
+        "cancelledByPeer": "<b>{name}</b> cancelled this chat request.",
+        "declineTitle": "Decline Message Request?",
+        "declineBody": "Message request from {name}"
       },
       "contactSearch": {
         "searchEntry": "Search",
@@ -304,8 +309,6 @@
         "tabApps": "Apps",
         "groupChatsAndContacts": "Chats and contacts",
         "groupMessages": "Messages",
-        "recent": "Recent",
-        "clear": "Clear",
         "appsComingSoon": "App search is coming soon",
         "noResultsTitle": "No results",
         "noResultsHint": "Try to adjust your search"
@@ -367,6 +370,16 @@
           "tapToCallBack": "Tap to call back",
           "tapToCallAgain": "Tap to call again"
         }
+      },
+      "searchPrevious": "Previous match",
+      "searchNext": "Next match",
+      "roomActions": "Chat actions",
+      "scroll": {
+        "toBottom": "Scroll to latest",
+        "toReaction": "Scroll to reaction"
+      },
+      "reactions": {
+        "you": "You"
       }
     },
     "productActionsMenu": {
@@ -401,7 +414,8 @@
           "title": "Your account is still being set up",
           "subtitle": "Please try again later"
         }
-      }
+      },
+      "networkLabel": "Network"
     },
     "dashboard": {
       "title": "Dashboard",
@@ -492,7 +506,8 @@
         "cleanup": "Cleanup Dashboard",
         "reload": "Reload widget",
         "removeWidget": "Remove Widget"
-      }
+      },
+      "home": "Home"
     },
     "ticketApp": {
       "title": "Ticket App",
@@ -712,7 +727,6 @@
       "navItem": "Permissions",
       "heading": "Permissions",
       "subheading": "Review and manage app access to features and data",
-      "categoryHeading": "{name}:",
       "appCount": "{count, plural, =0 {No apps} one {# app} other {# apps}}",
       "category": {
         "device": "Device & System Access",
@@ -726,7 +740,7 @@
       },
       "detail": {
         "rulesTitle": "Rules & Safeguards",
-        "appsLabel": "Apps:",
+        "appsLabel": "Apps",
         "noApps": "No apps have requested this permission",
         "allowedFor": "Allowed for {modalities}",
         "appSubtitle": "{baseName} • {allowed}"
@@ -1100,6 +1114,57 @@
           "title": "Allow this app to access its account?",
           "subtitle": "Fetches this app's account from your paired device"
         }
+      }
+    },
+    "networkStatus": {
+      "title": "Network",
+      "health": {
+        "connected": "Connected",
+        "syncing": "Syncing",
+        "unstable": "Unstable",
+        "offline": "Offline",
+        "unused": "Not in use",
+        "unreachable": "Unreachable"
+      },
+      "role": {
+        "relay": "Relay",
+        "assetHub": "Hub",
+        "bulletin": "Storage",
+        "people": "Identity"
+      },
+      "status": {
+        "noInternet": "No internet",
+        "noEndpoint": "No endpoint",
+        "notInUse": "Not in use",
+        "disconnected": "Disconnected",
+        "syncing": "Syncing",
+        "syncingShare": "Syncing: {percent}%",
+        "connecting": "Connecting",
+        "notProducing": "Not producing blocks",
+        "connected": "Connected",
+        "behind": "Behind",
+        "live": "{word} · Live {percent}% · Block ~{duration}"
+      },
+      "duration": {
+        "seconds": "{seconds}s",
+        "minutes": "{minutes}m {seconds}s"
+      },
+      "otherChains": "Other chains ({count})",
+      "lastBlocks": "Last {count} blocks",
+      "separator": " · ",
+      "strip": {
+        "title": "Last {count} blocks, newest on the right",
+        "label": "{chain}: last {count} blocks, newest on the right"
+      },
+      "block": {
+        "onTime": "{gap}s, on time",
+        "late": "{gap}s, {late}s late",
+        "label": "Block {number}, {delay}",
+        "newest": "#{number, number}"
+      },
+      "peers": {
+        "count": "{count, plural, one {# peer} other {# peers}}",
+        "label": "{chain}: {peers} connected"
       }
     }
   },
